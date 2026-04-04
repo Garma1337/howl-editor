@@ -21,21 +21,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include=".gitignore" />
-    <Content Include="build\HowlEditor\Analysis-00.toc" />
-    <Content Include="build\HowlEditor\base_library.zip" />
-    <Content Include="build\HowlEditor\EXE-00.toc" />
-    <Content Include="build\HowlEditor\HowlEditor.pkg" />
-    <Content Include="build\HowlEditor\localpycs\pyimod01_archive.pyc" />
-    <Content Include="build\HowlEditor\localpycs\pyimod02_importers.pyc" />
-    <Content Include="build\HowlEditor\localpycs\pyimod03_ctypes.pyc" />
-    <Content Include="build\HowlEditor\localpycs\pyimod04_pywin32.pyc" />
-    <Content Include="build\HowlEditor\localpycs\struct.pyc" />
-    <Content Include="build\HowlEditor\PKG-00.toc" />
-    <Content Include="build\HowlEditor\PYZ-00.pyz" />
-    <Content Include="build\HowlEditor\PYZ-00.toc" />
-    <Content Include="build\HowlEditor\warn-HowlEditor.txt" />
-    <Content Include="build\HowlEditor\xref-HowlEditor.html" />
-    <Content Include="dist\HowlEditor.exe" />
     <Content Include="README.md" />
     <Content Include="requirements.txt" />
   </ItemGroup>
@@ -99,10 +84,6 @@
     <Compile Include="tests\__init__.py" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="build\" />
-    <Folder Include="build\HowlEditor\" />
-    <Folder Include="build\HowlEditor\localpycs\" />
-    <Folder Include="dist\" />
     <Folder Include="howl_editor" />
     <Folder Include="howl_editor\bank" />
     <Folder Include="howl_editor\core\" />
