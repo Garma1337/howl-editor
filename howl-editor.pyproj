@@ -12,6 +12,7 @@
     <ProjectTypeGuids>{888888a0-9f3d-457c-b088-3a5042f75d52}</ProjectTypeGuids>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
     <InterpreterId>MSBuild|.venv|$(MSBuildProjectFullPath)</InterpreterId>
+    <TestFramework>Pytest</TestFramework>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
   <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
@@ -19,6 +20,23 @@
     <VisualStudioVersion Condition=" '$(VisualStudioVersion)' == '' ">10.0</VisualStudioVersion>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include=".gitignore" />
+    <Content Include="build\HowlEditor\Analysis-00.toc" />
+    <Content Include="build\HowlEditor\base_library.zip" />
+    <Content Include="build\HowlEditor\EXE-00.toc" />
+    <Content Include="build\HowlEditor\HowlEditor.pkg" />
+    <Content Include="build\HowlEditor\localpycs\pyimod01_archive.pyc" />
+    <Content Include="build\HowlEditor\localpycs\pyimod02_importers.pyc" />
+    <Content Include="build\HowlEditor\localpycs\pyimod03_ctypes.pyc" />
+    <Content Include="build\HowlEditor\localpycs\pyimod04_pywin32.pyc" />
+    <Content Include="build\HowlEditor\localpycs\struct.pyc" />
+    <Content Include="build\HowlEditor\PKG-00.toc" />
+    <Content Include="build\HowlEditor\PYZ-00.pyz" />
+    <Content Include="build\HowlEditor\PYZ-00.toc" />
+    <Content Include="build\HowlEditor\warn-HowlEditor.txt" />
+    <Content Include="build\HowlEditor\xref-HowlEditor.html" />
+    <Content Include="dist\HowlEditor.exe" />
+    <Content Include="README.md" />
     <Content Include="requirements.txt" />
   </ItemGroup>
   <ItemGroup>
@@ -26,6 +44,8 @@
     <Compile Include="howl_editor\bank\reader.py" />
     <Compile Include="howl_editor\bank\__init__.py" />
     <Compile Include="howl_editor\constants.py" />
+    <Compile Include="howl_editor\core\container.py" />
+    <Compile Include="howl_editor\core\__init__.py" />
     <Compile Include="howl_editor\cseq\reader.py" />
     <Compile Include="howl_editor\cseq\writer.py" />
     <Compile Include="howl_editor\cseq\__init__.py" />
@@ -45,37 +65,60 @@
     <Compile Include="howl_editor\models\howl.py" />
     <Compile Include="howl_editor\models\vag.py" />
     <Compile Include="howl_editor\models\__init__.py" />
+    <Compile Include="howl_editor\services.py" />
     <Compile Include="howl_editor\vag\reader.py" />
     <Compile Include="howl_editor\vag\writer.py" />
     <Compile Include="howl_editor\vag\__init__.py" />
     <Compile Include="howl_editor\vlq.py" />
     <Compile Include="howl_editor\__init__.py" />
     <Compile Include="main.py" />
+    <Compile Include="tests\bank\test_builder.py" />
+    <Compile Include="tests\bank\test_reader.py" />
+    <Compile Include="tests\bank\__init__.py" />
     <Compile Include="tests\conftest.py" />
-    <Compile Include="tests\test_bank_builder.py" />
-    <Compile Include="tests\test_bank_reader.py" />
+    <Compile Include="tests\core\test_container.py" />
+    <Compile Include="tests\core\__init__.py" />
+    <Compile Include="tests\cseq\test_reader.py" />
+    <Compile Include="tests\cseq\test_writer.py" />
+    <Compile Include="tests\cseq\__init__.py" />
+    <Compile Include="tests\howl\test_editor.py" />
+    <Compile Include="tests\howl\test_reader.py" />
+    <Compile Include="tests\howl\test_roundtrip.py" />
+    <Compile Include="tests\howl\test_writer.py" />
+    <Compile Include="tests\howl\__init__.py" />
+    <Compile Include="tests\models\test_bank.py" />
+    <Compile Include="tests\models\test_cseq.py" />
+    <Compile Include="tests\models\test_howl.py" />
+    <Compile Include="tests\models\test_vag.py" />
+    <Compile Include="tests\models\__init__.py" />
     <Compile Include="tests\test_constants.py" />
-    <Compile Include="tests\test_cseq_reader.py" />
-    <Compile Include="tests\test_cseq_writer.py" />
-    <Compile Include="tests\test_howl_editor.py" />
-    <Compile Include="tests\test_howl_reader.py" />
-    <Compile Include="tests\test_howl_roundtrip.py" />
-    <Compile Include="tests\test_howl_writer.py" />
-    <Compile Include="tests\test_models.py" />
-    <Compile Include="tests\test_vag_io.py" />
     <Compile Include="tests\test_vlq.py" />
+    <Compile Include="tests\vag\test_reader.py" />
+    <Compile Include="tests\vag\test_writer.py" />
+    <Compile Include="tests\vag\__init__.py" />
     <Compile Include="tests\__init__.py" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="build\" />
+    <Folder Include="build\HowlEditor\" />
+    <Folder Include="build\HowlEditor\localpycs\" />
+    <Folder Include="dist\" />
     <Folder Include="howl_editor" />
     <Folder Include="howl_editor\bank" />
+    <Folder Include="howl_editor\core\" />
     <Folder Include="howl_editor\cseq" />
     <Folder Include="howl_editor\gui" />
     <Folder Include="howl_editor\howl" />
     <Folder Include="howl_editor\midi" />
     <Folder Include="howl_editor\models" />
     <Folder Include="howl_editor\vag" />
-    <Folder Include="tests" />
+    <Folder Include="tests\" />
+    <Folder Include="tests\bank\" />
+    <Folder Include="tests\core\" />
+    <Folder Include="tests\cseq\" />
+    <Folder Include="tests\howl\" />
+    <Folder Include="tests\models\" />
+    <Folder Include="tests\vag\" />
   </ItemGroup>
   <ItemGroup>
     <Interpreter Include=".venv\">
