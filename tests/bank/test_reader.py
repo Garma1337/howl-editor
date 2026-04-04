@@ -1,4 +1,4 @@
-"""Tests for BankReader."""
+# coding: utf-8
 
 import pytest
 from howl_editor.models import SpuAddrEntry, BankSample

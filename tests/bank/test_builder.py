@@ -1,7 +1,6 @@
-"""Tests for BankBuilder."""
+# coding: utf-8
 
-from struct import unpack_from
-
+import struct
 import pytest
 
 from howl_editor.models import SpuAddrEntry, VagSample, BankBuildResult
@@ -43,9 +42,9 @@ class TestBuildFromSamples:
         result = bank_builder.build_from_samples(samples, spu_addrs, start_index=0)
         blob = result.bank_data
         # Header: num_samples=1, sample_id=0
-        num = unpack_from("<H", blob, 0)[0]
+        num = struct.unpack_from("<H", blob, 0)[0]
         assert num == 1
-        sid = unpack_from("<h", blob, 2)[0]
+        sid = struct.unpack_from("<h", blob, 2)[0]
         assert sid == 0
         # Data starts at sector boundary
         assert blob[SECTOR_SIZE:SECTOR_SIZE + 80] == b"\xFF" * 80
@@ -54,10 +53,10 @@ class TestBuildFromSamples:
 class TestBuildFromRaw:
     def test_builds_blob(self, bank_builder):
         blob = bank_builder.build_from_raw([(10, b"\xAA" * 40), (20, b"\xBB" * 80)])
-        num = unpack_from("<H", blob, 0)[0]
+        num = struct.unpack_from("<H", blob, 0)[0]
         assert num == 2
-        id1 = unpack_from("<h", blob, 2)[0]
-        id2 = unpack_from("<h", blob, 4)[0]
+        id1 = struct.unpack_from("<h", blob, 2)[0]
+        id2 = struct.unpack_from("<h", blob, 4)[0]
         assert id1 == 10
         assert id2 == 20
         assert blob[SECTOR_SIZE:SECTOR_SIZE + 40] == b"\xAA" * 40

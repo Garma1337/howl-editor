@@ -30,6 +30,7 @@ class MidiMappingDialog(QDialog):
         form.addRow("Tracks:", QLabel(str(self.midi_info.num_tracks)))
         form.addRow("Ticks/Beat:", QLabel(str(self.midi_info.ticks_per_beat)))
         group.setLayout(form)
+
         return group
 
     def _build_bpm_row(self) -> QHBoxLayout:
@@ -40,6 +41,7 @@ class MidiMappingDialog(QDialog):
         self.bpm_spin.setValue(0)
         layout.addWidget(self.bpm_spin)
         layout.addStretch()
+
         return layout
 
     def _build_mapping_group(self) -> QGroupBox:
@@ -62,6 +64,7 @@ class MidiMappingDialog(QDialog):
         self.table.resizeColumnsToContents()
         layout.addWidget(self.table)
         group.setLayout(layout)
+        
         return group
 
     def _populate_row(self, row: int, track: MidiTrackInfo) -> None:
@@ -106,9 +109,11 @@ class MidiMappingDialog(QDialog):
             spu_spin = self.table.cellWidget(row, 2)
             freq_spin = self.table.cellWidget(row, 3)
             drum_check = self.table.cellWidget(row, 4)
+            
             settings.mappings[midi_idx] = InstrumentMapping(
                 sample_id=spu_spin.value(),
                 frequency=int(freq_spin.value() * 4096 / 44100),
                 is_drum=drum_check.isChecked(),
             )
+
         return settings
