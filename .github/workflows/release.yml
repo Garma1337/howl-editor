@@ -94,10 +94,11 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          mv artifacts/HowlEditor-windows/HowlEditor.exe artifacts/HowlEditor-windows.exe
-          mv artifacts/HowlEditor-linux/HowlEditor artifacts/HowlEditor-linux
-          mv artifacts/HowlEditor-macos/HowlEditor artifacts/HowlEditor-macos
-          chmod +x artifacts/HowlEditor-linux artifacts/HowlEditor-macos
+          mkdir -p release
+          cp artifacts/HowlEditor-windows/HowlEditor.exe release/HowlEditor-windows.exe
+          cp artifacts/HowlEditor-linux/HowlEditor release/HowlEditor-linux
+          cp artifacts/HowlEditor-macos/HowlEditor release/HowlEditor-macos
+          chmod +x release/HowlEditor-linux release/HowlEditor-macos
 
       - name: Create tag
         run: |
@@ -113,6 +114,6 @@ jobs:
           name: Howl Editor v${{ needs.version.outputs.version }}
           generate_release_notes: true
           files: |
-            artifacts/HowlEditor-windows.exe
-            artifacts/HowlEditor-linux
-            artifacts/HowlEditor-macos
+            release/HowlEditor-windows.exe
+            release/HowlEditor-linux
+            release/HowlEditor-macos
