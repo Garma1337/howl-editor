@@ -75,15 +75,15 @@ jobs:
       - name: Build executable
         run: pyinstaller --noconsole --name HowlEditor main.py
 
-      - name: Zip output
+      - name: Compress output
         shell: bash
-        run: cd dist && 7z a -tzip ../HowlEditor.zip HowlEditor/
+        run: cd dist && 7z a -t7z -mx=9 ../HowlEditor.7z HowlEditor/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: HowlEditor.zip
+          path: HowlEditor.7z
 
   release:
     needs: [version, build]
@@ -99,9 +99,9 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
-          cp artifacts/HowlEditor-windows/HowlEditor.zip release/HowlEditor-windows.zip
-          cp artifacts/HowlEditor-linux/HowlEditor.zip release/HowlEditor-linux.zip
-          cp artifacts/HowlEditor-macos/HowlEditor.zip release/HowlEditor-macos.zip
+          cp artifacts/HowlEditor-windows/HowlEditor.7z release/HowlEditor-windows.zip
+          cp artifacts/HowlEditor-linux/HowlEditor.7z release/HowlEditor-linux.zip
+          cp artifacts/HowlEditor-macos/HowlEditor.7z release/HowlEditor-macos.zip
 
       - name: Create tag
         run: |
