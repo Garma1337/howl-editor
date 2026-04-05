@@ -21,6 +21,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include=".gitignore" />
+    <Content Include="documentation\formats\bank.md" />
+    <Content Include="documentation\formats\cseq.md" />
+    <Content Include="documentation\formats\howl.md" />
+    <Content Include="documentation\formats\vag.md" />
     <Content Include="README.md" />
     <Content Include="requirements.txt" />
   </ItemGroup>
@@ -36,7 +40,8 @@
     <Compile Include="howl_editor\cseq\__init__.py" />
     <Compile Include="howl_editor\gui\detail_formatter.py" />
     <Compile Include="howl_editor\gui\main_window.py" />
-    <Compile Include="howl_editor\gui\midi_dialog.py" />
+    <Compile Include="howl_editor\gui\merge_bank_dialog.py" />
+    <Compile Include="howl_editor\gui\convert_midi_dialog.py" />
     <Compile Include="howl_editor\gui\__init__.py" />
     <Compile Include="howl_editor\howl\editor.py" />
     <Compile Include="howl_editor\howl\reader.py" />
@@ -84,6 +89,8 @@
     <Compile Include="tests\__init__.py" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="documentation\" />
+    <Folder Include="documentation\formats\" />
     <Folder Include="howl_editor" />
     <Folder Include="howl_editor\bank" />
     <Folder Include="howl_editor\core\" />
