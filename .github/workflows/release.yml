@@ -54,13 +54,8 @@ jobs:
         include:
           - os: windows-latest
             artifact: HowlEditor-windows
-            ext: .exe
           - os: ubuntu-latest
             artifact: HowlEditor-linux
-            ext: ""
-          - os: macos-latest
-            artifact: HowlEditor-macos
-            ext: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -101,7 +96,6 @@ jobs:
           mkdir -p release
           cp artifacts/HowlEditor-windows/HowlEditor.7z release/HowlEditor-windows.7z
           cp artifacts/HowlEditor-linux/HowlEditor.7z release/HowlEditor-linux.7z
-          cp artifacts/HowlEditor-macos/HowlEditor.7z release/HowlEditor-macos.7z
 
       - name: Create tag
         run: |
@@ -119,4 +113,3 @@ jobs:
           files: |
             release/HowlEditor-windows.7z
             release/HowlEditor-linux.7z
-            release/HowlEditor-macos.7z
