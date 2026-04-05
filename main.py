@@ -20,6 +20,9 @@ if __name__ == "__main__":
         bank_reader=container.resolve("bank_reader"),
         bank_builder=container.resolve("bank_builder"),
         midi_converter=container.resolve("midi_converter"),
+        vag_decoder=container.resolve("vag_decoder"),
+        cseq_renderer=container.resolve("cseq_renderer"),
+        audio_player=container.resolve("audio_player"),
     )
 
     window.show()

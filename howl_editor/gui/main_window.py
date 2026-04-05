@@ -4,9 +4,9 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QMainWindow, QTreeWidget, QTreeWidgetItem, QSplitter, QTextEdit,
-    QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox, QDialog,
-    QHeaderView, QInputDialog,
+    QApplication, QMainWindow, QTreeWidget, QTreeWidgetItem, QSplitter,
+    QTextEdit, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
+    QDialog, QHeaderView, QInputDialog,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
@@ -17,6 +17,9 @@ from howl_editor.cseq import CseqReader, CseqWriter
 from howl_editor.vag import VagReader, VagWriter
 from howl_editor.bank import BankReader, BankBuilder
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
+from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.audio.cseq_renderer import CseqRenderer
+from howl_editor.audio.player import AudioPlayer
 from howl_editor.gui.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.merge_bank_dialog import MergeBankDialog
 from howl_editor.gui.detail_formatter import DetailFormatter
@@ -30,6 +33,8 @@ NODE_BANKS = 4
 NODE_BANK = 5
 NODE_SONGS = 6
 NODE_SONG = 7
+NODE_SAMPLE = 8
+NODE_SEQUENCE = 9
 
 
 class MainWindow(QMainWindow):
@@ -46,6 +51,9 @@ class MainWindow(QMainWindow):
         bank_reader: BankReader | None = None,
         bank_builder: BankBuilder | None = None,
         midi_converter: MidiConverter | None = None,
+        vag_decoder: VagDecoder | None = None,
+        cseq_renderer: CseqRenderer | None = None,
+        audio_player: AudioPlayer | None = None,
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
@@ -61,6 +69,9 @@ class MainWindow(QMainWindow):
         self._bank_reader = bank_reader
         self._bank_builder = bank_builder
         self._midi_converter = midi_converter
+        self._vag_decoder = vag_decoder
+        self._cseq_renderer = cseq_renderer
+        self._audio_player = audio_player
         self._detail_fmt = DetailFormatter(self._cseq_reader, self._bank_reader)
 
         self.hwl: HowlFile | None = None
@@ -135,6 +146,8 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction("Add Bank").triggered.connect(self._add_bank)
         toolbar.addAction("Add Song").triggered.connect(self._add_song)
+        toolbar.addSeparator()
+        toolbar.addAction("Stop Playback").triggered.connect(self._stop_playback)
 
     def _new_file(self):
         if not self._check_unsaved():
@@ -231,7 +244,8 @@ class MainWindow(QMainWindow):
         for i, bank in enumerate(self.hwl.banks):
             info = self._detail_fmt.bank_summary(bank)
             label = self._item_label("Bank", i, self._bank_reader.get_name(i))
-            self._tree_item(banks_node, label, info, NODE_BANK, i)
+            bank_node = self._tree_item(banks_node, label, info, NODE_BANK, i)
+            self._populate_bank_samples(bank_node, i)
 
         songs_node = self._tree_item(root, "Songs", str(len(self.hwl.songs)), NODE_SONGS)
         songs_node.setExpanded(True)
@@ -239,21 +253,48 @@ class MainWindow(QMainWindow):
         for i, song in enumerate(self.hwl.songs):
             info = self._detail_fmt.song_summary(song)
             label = self._item_label("Song", i, self._cseq_reader.get_name(i))
-            self._tree_item(songs_node, label, info, NODE_SONG, i)
+            song_node = self._tree_item(songs_node, label, info, NODE_SONG, i)
+            self._populate_song_sequences(song_node, i)
 
     def _item_label(self, prefix: str, index: int, name: str) -> str:
         if name:
             return f"{prefix} {index} - {name}"
+
         return f"{prefix} {index}"
 
-    def _tree_item(self, parent, text, info, node_type, index=None):
+    def _tree_item(self, parent, text, info, node_type, index=None, sub_index=None):
         item = QTreeWidgetItem(parent or self.tree, [text, info])
         item.setData(0, Qt.UserRole, node_type)
 
         if index is not None:
             item.setData(0, Qt.UserRole + 1, index)
 
+        if sub_index is not None:
+            item.setData(0, Qt.UserRole + 2, sub_index)
+
         return item
+
+    def _populate_bank_samples(self, bank_node, bank_index: int) -> None:
+        try:
+            samples = self._bank_reader.parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
+
+            for j, sample in enumerate(samples):
+                label = f"SPU {sample.spu_index}"
+                info = f"{len(sample.data):,} bytes"
+                self._tree_item(bank_node, label, info, NODE_SAMPLE, bank_index, j)
+        except Exception:
+            pass
+
+    def _populate_song_sequences(self, song_node, song_index: int) -> None:
+        try:
+            cseq = self._cseq_reader.read(self.hwl.songs[song_index])
+
+            for j, seq in enumerate(cseq.songs):
+                label = f"Sequence {j}"
+                info = f"BPM={seq.bpm}, {len(seq.tracks)} tracks"
+                self._tree_item(song_node, label, info, NODE_SEQUENCE, song_index, j)
+        except Exception:
+            pass
 
     def _on_selection_changed(self, current, previous):
         if not current or not self.hwl:
@@ -262,6 +303,7 @@ class MainWindow(QMainWindow):
 
         node_type = current.data(0, Qt.UserRole)
         index = current.data(0, Qt.UserRole + 1)
+        sub_index = current.data(0, Qt.UserRole + 2)
 
         formatters = {
             NODE_ROOT: lambda: self._detail_fmt.howl_details(self.hwl, self.file_path),
@@ -275,7 +317,13 @@ class MainWindow(QMainWindow):
         }
 
         fn = formatters.get(node_type)
-        self.details.setPlainText(fn() if fn else "")
+        if fn:
+            self.details.setPlainText(fn())
+
+        if node_type == NODE_SAMPLE and index is not None and sub_index is not None:
+            self._play_sample(index, sub_index)
+        elif node_type == NODE_SEQUENCE and index is not None and sub_index is not None:
+            self._play_sequence(index, sub_index)
 
     def _on_context_menu(self, pos):
         item = self.tree.itemAt(pos)
@@ -484,6 +532,69 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"Converted MIDI and added as song {len(self.hwl.songs) - 1}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Conversion failed:\n{e}")
+
+    def _stop_playback(self) -> None:
+        if self._audio_player:
+            self._audio_player.stop()
+            self.status.showMessage("Playback stopped")
+
+    def _can_play(self) -> bool:
+        return self._audio_player is not None and self._audio_player.available
+
+    def _play_sample(self, bank_index: int, sample_index: int) -> None:
+        if not self.hwl or not self._can_play():
+            return
+
+        try:
+            samples = self._bank_reader.parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
+            if sample_index >= len(samples):
+                return
+
+            sample = samples[sample_index]
+            wav = self._vag_decoder.decode_to_wav(sample.data)
+            self._audio_player.play_wav(wav)
+            self.status.showMessage(f"Playing SPU {sample.spu_index}")
+        except Exception as e:
+            self.status.showMessage(f"Playback failed: {e}")
+
+    def _play_sequence(self, song_index: int, seq_index: int) -> None:
+        if not self.hwl or not self._can_play():
+            return
+
+        try:
+            cseq = self._cseq_reader.read(self.hwl.songs[song_index])
+            if seq_index >= len(cseq.songs):
+                return
+
+            sample_data = self._collect_song_samples(cseq)
+
+            self.status.showMessage(f"Rendering song {song_index} sequence {seq_index}...")
+            QApplication.processEvents()
+
+            wav = self._cseq_renderer.render_song_to_wav(cseq, seq_index, sample_data)
+            self._audio_player.play_wav(wav)
+            self.status.showMessage(f"Playing song {song_index} sequence {seq_index}")
+        except Exception as e:
+            self.status.showMessage(f"Playback failed: {e}")
+
+    def _collect_song_samples(self, cseq) -> dict[int, bytes]:
+        """Collect raw VAG data for all sample IDs referenced by a CSEQ."""
+        needed_ids = set()
+        for inst in cseq.instruments:
+            needed_ids.add(inst.sample_id)
+
+        for perc in cseq.percussions:
+            needed_ids.add(perc.sample_id)
+
+        sample_data: dict[int, bytes] = {}
+        for bank_blob in self.hwl.banks:
+            parsed = self._bank_reader.parse(bank_blob, self.hwl.spu_addrs)
+            
+            for s in parsed:
+                if s.spu_index in needed_ids and s.spu_index not in sample_data:
+                    sample_data[s.spu_index] = s.data
+
+        return sample_data
 
     def closeEvent(self, event):
         if self._check_unsaved():

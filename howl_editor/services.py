@@ -13,6 +13,9 @@ from howl_editor.vag.writer import VagWriter
 from howl_editor.bank.reader import BankReader
 from howl_editor.bank.builder import BankBuilder
 from howl_editor.midi.converter import MidiConverter
+from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.audio.cseq_renderer import CseqRenderer
+from howl_editor.audio.player import AudioPlayer
 
 container = Container()
 container.register("howl_reader", lambda c: HowlReader())
@@ -25,3 +28,6 @@ container.register("vag_writer", lambda c: VagWriter())
 container.register("bank_reader", lambda c: BankReader())
 container.register("bank_builder", lambda c: BankBuilder(c.resolve("vag_reader")))
 container.register("midi_converter", lambda c: MidiConverter(c.resolve("cseq_writer")))
+container.register("vag_decoder", lambda c: VagDecoder())
+container.register("cseq_renderer", lambda c: CseqRenderer(c.resolve("vag_decoder")))
+container.register("audio_player", lambda c: AudioPlayer())
