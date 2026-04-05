@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QTreeWidget, QTreeWidgetItem, QSplitter, QTextEdit,
     QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox, QDialog,
-    QHeaderView,
+    QHeaderView, QInputDialog,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
@@ -17,7 +17,8 @@ from howl_editor.cseq import CseqReader, CseqWriter
 from howl_editor.vag import VagReader, VagWriter
 from howl_editor.bank import BankReader, BankBuilder
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
-from howl_editor.gui.midi_dialog import MidiMappingDialog
+from howl_editor.gui.convert_midi_dialog import ConvertMidiDialog
+from howl_editor.gui.merge_bank_dialog import MergeBankDialog
 from howl_editor.gui.detail_formatter import DetailFormatter
 
 
@@ -60,7 +61,7 @@ class MainWindow(QMainWindow):
         self._bank_reader = bank_reader
         self._bank_builder = bank_builder
         self._midi_converter = midi_converter
-        self._detail_fmt = DetailFormatter(self._cseq_reader)
+        self._detail_fmt = DetailFormatter(self._cseq_reader, self._bank_reader)
 
         self.hwl: HowlFile | None = None
         self.file_path: str | None = None
@@ -111,7 +112,7 @@ class MainWindow(QMainWindow):
 
         tools_menu = menubar.addMenu("&Tools")
         self._add_action(tools_menu, "Build Bank from &VAGs...", self._build_bank_from_vags)
-        midi_text = "&MIDI to CSEQ..." if HAS_MIDO else "MIDI to CSEQ (mido not installed)"
+        midi_text = "&Convert MIDI to CSEQ..." if HAS_MIDO else "Convert MIDI to CSEQ (mido not installed)"
         self._add_action(tools_menu, midi_text, self._midi_to_cseq, enabled=HAS_MIDO)
 
     def _add_action(self, menu, text, slot, shortcut=None, enabled=True):
@@ -229,22 +230,29 @@ class MainWindow(QMainWindow):
 
         for i, bank in enumerate(self.hwl.banks):
             info = self._detail_fmt.bank_summary(bank)
-            self._tree_item(banks_node, f"Bank {i}", info, NODE_BANK, i)
+            label = self._item_label("Bank", i, self._bank_reader.get_name(i))
+            self._tree_item(banks_node, label, info, NODE_BANK, i)
 
         songs_node = self._tree_item(root, "Songs", str(len(self.hwl.songs)), NODE_SONGS)
         songs_node.setExpanded(True)
-        
+
         for i, song in enumerate(self.hwl.songs):
             info = self._detail_fmt.song_summary(song)
-            self._tree_item(songs_node, f"Song {i}", info, NODE_SONG, i)
+            label = self._item_label("Song", i, self._cseq_reader.get_name(i))
+            self._tree_item(songs_node, label, info, NODE_SONG, i)
+
+    def _item_label(self, prefix: str, index: int, name: str) -> str:
+        if name:
+            return f"{prefix} {index} - {name}"
+        return f"{prefix} {index}"
 
     def _tree_item(self, parent, text, info, node_type, index=None):
         item = QTreeWidgetItem(parent or self.tree, [text, info])
         item.setData(0, Qt.UserRole, node_type)
-        
+
         if index is not None:
             item.setData(0, Qt.UserRole + 1, index)
-        
+
         return item
 
     def _on_selection_changed(self, current, previous):
@@ -282,6 +290,7 @@ class MainWindow(QMainWindow):
             menu.addAction("Export Bank (.bnk)...", lambda: self._export_bank(index))
             menu.addAction("Export Samples as VAGs...", lambda: self._export_bank_samples(index))
             menu.addSeparator()
+            menu.addAction("Merge Bank...", lambda: self._merge_bank(index))
             menu.addAction("Replace Bank...", lambda: self._replace_bank(index))
             menu.addAction("Remove Bank", lambda: self._remove_bank(index))
         elif node_type == NODE_SONG and index is not None:
@@ -338,6 +347,48 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"Exported {len(samples)} samples from bank {index}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Export failed:\n{e}")
+
+    def _merge_bank(self, index: int):
+        if not self.hwl or len(self.hwl.banks) < 2:
+            QMessageBox.information(self, "Merge Bank", "Need at least two banks to merge.")
+            return
+
+        bank_indices = [i for i in range(len(self.hwl.banks)) if i != index]
+        bank_labels = [self._item_label("Bank", i, self._bank_reader.get_name(i)) for i in bank_indices]
+
+        label, ok = QInputDialog.getItem(
+            self, "Select Source Bank",
+            f"Merge into Bank {index} from:",
+            bank_labels, 0, False,
+        )
+
+        if not ok:
+            return
+
+        source_index = bank_indices[bank_labels.index(label)]
+
+        try:
+            target_samples = self._bank_reader.parse(self.hwl.banks[index], self.hwl.spu_addrs)
+            source_samples = self._bank_reader.parse(self.hwl.banks[source_index], self.hwl.spu_addrs)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to parse banks:\n{e}")
+            return
+
+        dialog = MergeBankDialog(
+            self, target_samples, source_samples, self.hwl.spu_addrs,
+            target_label=f"Bank {index}", source_label=f"Bank {source_index}",
+        )
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        result = dialog.get_result()
+        new_blob = self._bank_builder.merge(result)
+
+        self._editor.replace_bank(self.hwl, index, new_blob)
+        self._mark_modified()
+        self._rebuild_tree()
+        self.status.showMessage(f"Merged {len(result)} samples into bank {index}")
 
     def _replace_bank(self, index: int):
         path, _ = QFileDialog.getOpenFileName(self, f"Replace Bank {index}", "", "Bank Files (*.bnk);;All Files (*)")
@@ -421,7 +472,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Cannot read MIDI:\n{e}")
             return
 
-        dialog = MidiMappingDialog(self, info, len(self.hwl.spu_addrs))
+        dialog = ConvertMidiDialog(self, info, len(self.hwl.spu_addrs))
         if dialog.exec() != QDialog.Accepted:
             return
 

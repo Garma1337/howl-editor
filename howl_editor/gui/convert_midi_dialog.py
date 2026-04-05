@@ -10,11 +10,11 @@ from PySide6.QtCore import Qt
 from howl_editor.midi.models import MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping
 
 
-class MidiMappingDialog(QDialog):
+class ConvertMidiDialog(QDialog):
 
     def __init__(self, parent, midi_info: MidiInfo, max_spu_index: int):
         super().__init__(parent)
-        self.setWindowTitle("MIDI to CSEQ - Instrument Mapping")
+        self.setWindowTitle("Convert MIDI to CSEQ - Instrument Mapping")
         self.resize(650, 500)
         self.midi_info = midi_info
 

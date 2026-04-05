@@ -4,7 +4,7 @@ from struct import pack
 from pathlib import Path
 
 from howl_editor.constants import SECTOR_SIZE, bytes_to_sectors
-from howl_editor.models import SpuAddrEntry, VagSample, BankBuildResult
+from howl_editor.models import SpuAddrEntry, VagSample, BankSample, BankBuildResult
 from howl_editor.vag.reader import VagReader
 
 
@@ -50,6 +50,13 @@ class BankBuilder:
         indices = [sid for sid, _ in sample_data]
         datas = [d for _, d in sample_data]
         return self._assemble_blob(indices, datas)
+
+    def merge(self, samples: list[BankSample]) -> bytes:
+        """Build a bank blob from an ordered list of BankSamples."""
+        return self._assemble_blob(
+            [s.spu_index for s in samples],
+            [s.data for s in samples],
+        )
 
     def _ensure_spu_addr(self, spu_addrs: list[SpuAddrEntry], index: int, data_len: int) -> None:
         while len(spu_addrs) <= index:

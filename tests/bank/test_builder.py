@@ -3,7 +3,7 @@
 import struct
 import pytest
 
-from howl_editor.models import SpuAddrEntry, VagSample, BankBuildResult
+from howl_editor.models import SpuAddrEntry, VagSample, BankSample, BankBuildResult
 from howl_editor.bank.builder import BankBuilder
 from howl_editor.vag.reader import VagReader
 from howl_editor.constants import SECTOR_SIZE
@@ -76,6 +76,38 @@ class TestBuildFromFiles:
         assert result.new_spu_indices == [0]
         assert spu_addrs[0].size == 4  # 32 / 8
         assert vag_data in result.bank_data
+
+
+class TestMerge:
+    def test_builds_from_bank_samples(self, bank_builder):
+        samples = [
+            BankSample(spu_index=10, data=b"\xAA" * 80),
+            BankSample(spu_index=5, data=b"\xBB" * 40),
+        ]
+        blob = bank_builder.merge(samples)
+        num = struct.unpack_from("<H", blob, 0)[0]
+        assert num == 2
+        id0 = struct.unpack_from("<h", blob, 2)[0]
+        id1 = struct.unpack_from("<h", blob, 4)[0]
+        assert id0 == 10
+        assert id1 == 5
+        assert blob[SECTOR_SIZE:SECTOR_SIZE + 80] == b"\xAA" * 80
+        assert blob[SECTOR_SIZE + 80:SECTOR_SIZE + 120] == b"\xBB" * 40
+
+    def test_preserves_order(self, bank_builder):
+        samples = [
+            BankSample(spu_index=99, data=b"\x01" * 16),
+            BankSample(spu_index=2, data=b"\x02" * 16),
+            BankSample(spu_index=50, data=b"\x03" * 16),
+        ]
+        blob = bank_builder.merge(samples)
+        ids = [struct.unpack_from("<h", blob, 2 + i * 2)[0] for i in range(3)]
+        assert ids == [99, 2, 50]
+
+    def test_empty_list(self, bank_builder):
+        blob = bank_builder.merge([])
+        num = struct.unpack_from("<H", blob, 0)[0]
+        assert num == 0
 
 
 class TestPadToSector:

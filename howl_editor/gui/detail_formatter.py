@@ -4,12 +4,14 @@ from struct import unpack_from
 
 from howl_editor.models import HowlFile, CseqInfo
 from howl_editor.cseq.reader import CseqReader
+from howl_editor.bank.reader import BankReader
 
 
 class DetailFormatter:
 
-    def __init__(self, cseq_reader: CseqReader):
+    def __init__(self, cseq_reader: CseqReader, bank_reader: BankReader):
         self._cseq_reader = cseq_reader
+        self._bank_reader = bank_reader
 
     def howl_details(self, hwl: HowlFile, file_path: str | None) -> str:
         lines = [
@@ -63,22 +65,28 @@ class DetailFormatter:
     def banks_summary(self, hwl: HowlFile) -> str:
         total = sum(len(b) for b in hwl.banks)
         lines = [f"Banks ({len(hwl.banks)})", "=" * 50, f"Total: {total:,} bytes ({total / 1024:.1f} KB)", ""]
-        lines.append(f"{'Idx':>4}  {'Samples':>8}  {'Size':>10}")
-        lines.append("-" * 30)
-        
+        lines.append(f"{'Idx':>4}  {'Samples':>8}  {'Size':>10}  Name")
+        lines.append("-" * 50)
+
         for i, bank in enumerate(hwl.banks):
             ns = self._bank_sample_count(bank)
-            lines.append(f"{i:>4}  {ns:>8}  {len(bank):>10,}")
-        
+            name = self._bank_reader.get_name(i)
+            label = f"  {name}" if name else ""
+            lines.append(f"{i:>4}  {ns:>8}  {len(bank):>10,}{label}")
+
         return "\n".join(lines)
 
     def bank_summary(self, bank_data: bytes) -> str:
         ns = self._bank_sample_count(bank_data)
-        return f"{ns} samples, {len(bank_data)} bytes" if ns > 0 else f"{len(bank_data)} bytes"
+        if ns > 0:
+            return f"{ns} samples, {len(bank_data):,} bytes"
+        return f"{len(bank_data):,} bytes"
 
     def bank_details(self, hwl: HowlFile, index: int) -> str:
         bank = hwl.banks[index]
-        lines = [f"Bank {index}", "=" * 50, f"Size: {len(bank):,} bytes"]
+        name = self._bank_reader.get_name(index)
+        header = f"Bank {index}" + (f" - {name}" if name else "")
+        lines = [header, "=" * 50, f"Size: {len(bank):,} bytes"]
         
         if len(bank) >= 2:
             ns = unpack_from("<H", bank, 0)[0]
@@ -103,25 +111,28 @@ class DetailFormatter:
     def songs_summary(self, hwl: HowlFile) -> str:
         total = sum(len(s) for s in hwl.songs)
         lines = [f"Songs ({len(hwl.songs)})", "=" * 50, f"Total: {total:,} bytes ({total / 1024:.1f} KB)", ""]
-        lines.append(f"{'Idx':>4}  {'Inst':>5}  {'Perc':>5}  {'Seqs':>5}  {'Size':>8}")
-        lines.append("-" * 35)
-        
+        lines.append(f"{'Idx':>4}  {'Inst':>5}  {'Perc':>5}  {'Seqs':>5}  {'Size':>8}  Name")
+        lines.append("-" * 55)
+
         for i, song in enumerate(hwl.songs):
             info = self._cseq_reader.get_info(song)
-            lines.append(f"{i:>4}  {info.num_instruments:>5}  {info.num_percussions:>5}  {info.num_songs:>5}  {info.file_size:>8}")
-        
+            name = self._cseq_reader.get_name(i)
+            label = f"  {name}" if name else ""
+            lines.append(f"{i:>4}  {info.num_instruments:>5}  {info.num_percussions:>5}  {info.num_songs:>5}  {info.file_size:>8}{label}")
+
         return "\n".join(lines)
 
     def song_summary(self, song_data: bytes) -> str:
         info = self._cseq_reader.get_info(song_data)
         if info.file_size == 0:
-            return f"{len(song_data)} bytes"
-        
+            return f"{len(song_data):,} bytes"
         return f"{info.num_instruments}i/{info.num_percussions}p, {info.num_songs} seq"
 
     def song_details(self, hwl: HowlFile, index: int) -> str:
         data = hwl.songs[index]
-        lines = [f"Song {index}", "=" * 50, f"Raw size: {len(data):,} bytes"]
+        name = self._cseq_reader.get_name(index)
+        header = f"Song {index}" + (f" - {name}" if name else "")
+        lines = [header, "=" * 50, f"Raw size: {len(data):,} bytes"]
         
         try:
             parsed = self._cseq_reader.read(data)
