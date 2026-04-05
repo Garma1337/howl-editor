@@ -73,13 +73,17 @@ jobs:
         run: pip install PySide6 mido pyinstaller
 
       - name: Build executable
-        run: pyinstaller --onefile --noconsole --name HowlEditor main.py
+        run: pyinstaller --noconsole --name HowlEditor main.py
+
+      - name: Zip output
+        shell: bash
+        run: cd dist && 7z a -tzip ../HowlEditor.zip HowlEditor/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/HowlEditor${{ matrix.ext }}
+          path: HowlEditor.zip
 
   release:
     needs: [version, build]
@@ -95,10 +99,9 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
-          cp artifacts/HowlEditor-windows/HowlEditor.exe release/HowlEditor-windows.exe
-          cp artifacts/HowlEditor-linux/HowlEditor release/HowlEditor-linux
-          cp artifacts/HowlEditor-macos/HowlEditor release/HowlEditor-macos
-          chmod +x release/HowlEditor-linux release/HowlEditor-macos
+          cp artifacts/HowlEditor-windows/HowlEditor.zip release/HowlEditor-windows.zip
+          cp artifacts/HowlEditor-linux/HowlEditor.zip release/HowlEditor-linux.zip
+          cp artifacts/HowlEditor-macos/HowlEditor.zip release/HowlEditor-macos.zip
 
       - name: Create tag
         run: |
@@ -114,6 +117,6 @@ jobs:
           name: Howl Editor v${{ needs.version.outputs.version }}
           generate_release_notes: true
           files: |
-            release/HowlEditor-windows.exe
-            release/HowlEditor-linux
-            release/HowlEditor-macos
+            release/HowlEditor-windows.zip
+            release/HowlEditor-linux.zip
+            release/HowlEditor-macos.zip

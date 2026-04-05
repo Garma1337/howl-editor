@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._on_context_menu)
         self.tree.currentItemChanged.connect(self._on_selection_changed)
+        self.tree.itemClicked.connect(self._on_item_clicked)
 
         self.details = QTextEdit()
         self.details.setReadOnly(True)
@@ -320,6 +321,14 @@ class MainWindow(QMainWindow):
         if fn:
             self.details.setPlainText(fn())
 
+    def _on_item_clicked(self, item, column):
+        if not item or not self.hwl:
+            return
+
+        node_type = item.data(0, Qt.UserRole)
+        index = item.data(0, Qt.UserRole + 1)
+        sub_index = item.data(0, Qt.UserRole + 2)
+
         if node_type == NODE_SAMPLE and index is not None and sub_index is not None:
             self._play_sample(index, sub_index)
         elif node_type == NODE_SEQUENCE and index is not None and sub_index is not None:
@@ -542,7 +551,11 @@ class MainWindow(QMainWindow):
         return self._audio_player is not None and self._audio_player.available
 
     def _play_sample(self, bank_index: int, sample_index: int) -> None:
-        if not self.hwl or not self._can_play():
+        if not self.hwl:
+            return
+
+        if not self._can_play():
+            self.status.showMessage("Audio playback not available (QtMultimedia not found)")
             return
 
         try:
@@ -558,7 +571,11 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"Playback failed: {e}")
 
     def _play_sequence(self, song_index: int, seq_index: int) -> None:
-        if not self.hwl or not self._can_play():
+        if not self.hwl:
+            return
+
+        if not self._can_play():
+            self.status.showMessage("Audio playback not available (QtMultimedia not found)")
             return
 
         try:
