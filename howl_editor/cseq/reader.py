@@ -106,10 +106,11 @@ class CseqReader:
 
     def _parse_track(self, data: bytes, tracks_start: int, offset: int) -> CseqTrack:
         pos = tracks_start + offset
-        track_type, = unpack_from("<H", data, pos)
+        flags = data[pos]
+        unk = data[pos + 1]
         pos += 2
 
-        track = CseqTrack(track_type=track_type)
+        track = CseqTrack(flags=flags, unk=unk)
         while pos < len(data):
             event, pos = self._parse_event(data, pos)
             

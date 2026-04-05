@@ -27,6 +27,8 @@ VAG_HEADER_SIZE = 48
 VAG_HEADER_STRUCT = Struct(">4sIIII")  # magic, version, reserved, data_size, sample_rate
 
 # CSEQ header
+# Decompile defines numSongs as char+filler (2 x u8), but the filler is always 0,
+# so reading as s16 produces the same result and simplifies the API.
 CSEQ_HEADER_STRUCT = Struct("<IBBh")
 CSEQ_HEADER_SIZE = CSEQ_HEADER_STRUCT.size  # 8 bytes
 

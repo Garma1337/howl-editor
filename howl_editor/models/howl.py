@@ -38,8 +38,8 @@ class HowlHeader:
     """Parsed representation of the 40-byte HWL header."""
     magic: int = 0
     version: int = HWL_VERSION_RELEASE
-    unk1: int = 0
-    unk2: int = 0
+    reserved1: int = 0
+    reserved2: int = 0
     num_spu: int = 0
     num_other: int = 0
     num_engine: int = 0
@@ -51,8 +51,8 @@ class HowlHeader:
 @dataclass
 class HowlFile:
     version: int = HWL_VERSION_RELEASE
-    unk1: int = 0
-    unk2: int = 0
+    reserved1: int = 0
+    reserved2: int = 0
     spu_addrs: list[SpuAddrEntry] = field(default_factory=list)
     other_fx: list[OtherFX] = field(default_factory=list)
     engine_fx: list[EngineFX] = field(default_factory=list)

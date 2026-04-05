@@ -52,6 +52,8 @@ python -m pytest tests/ -v
 ## Project Structure
 
 ```
+documentation/      Documentation files
+    
 howl_editor/
     core/           Application Core
     models/         Pure data models (HowlFile, CseqFile, VagSample, BankSample, ...)
@@ -68,25 +70,12 @@ howl_editor/
 tests/              Mirrors the source structure
 ```
 
-## HWL Format Overview
+## Format Documentation
 
-A `.HWL` (HOWL) file is the audio container used by CTR. It contains:
+Detailed format specifications are in the `documentation/` directory:
 
-| Section | Description |
-|---------|-------------|
-| Header (40 bytes) | Magic (`HOWL`), version, table counts |
-| SPU Address Table | Sample size entries (4 bytes each) |
-| OtherFX Table | Sound effect definitions (8 bytes each) |
-| EngineFX Table | Engine sound definitions (8 bytes each) |
-| Bank Offsets | Sector offsets to bank data (2 bytes each) |
-| Song Offsets | Sector offsets to song data (2 bytes each) |
-| Bank Data | Sector-aligned sample collections |
-| Song Data | Sector-aligned CSEQ sequences |
-
-All data is sector-aligned (0x800 / 2048 bytes).
-
-## Related Formats
-
-- **CSEQ** - CTR's sequence format (similar to MIDI), contains instrument definitions and note/event data
-- **VAG** - PlayStation ADPCM audio samples, 16 bytes per frame
-- **Bank** - Header with sample indices + concatenated VAG data, loaded into SPU memory
+- **[HOWL Format](documentation/formats/howl.md)** - Master audio container (.HWL), header structure, SPU address table, OtherFX/EngineFX definitions, bank/song offset tables, runtime loading sequence
+- **[CSEQ Format](documentation/formats/cseq.md)** - Music sequence format, instrument/percussion definitions, song structure, track events and opcodes, VLQ delta time encoding
+- **[Bank Format](documentation/formats/bank.md)** - Sample bank structure, SPU memory management, runtime loading pipeline
+- **[VAG Format](documentation/formats/vag.md)** - PlayStation ADPCM audio samples, header structure, frame encoding, decoding algorithm
+- **[Audio Loading](documentation/formats/audio_loading.md)** - How CTR loads audio at runtime: level/character/boss bank selection, song mapping, loading pipeline

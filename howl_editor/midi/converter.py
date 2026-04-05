@@ -124,7 +124,7 @@ class MidiConverter:
         self, midi_track, track_idx: int, instrument_map: dict, drum_set: set,
     ) -> CseqTrack:
         is_drum = track_idx in drum_set
-        cseq_track = CseqTrack(track_type=1 if is_drum else 0)
+        cseq_track = CseqTrack(flags=1 if is_drum else 0)
         patch_idx = instrument_map.get(track_idx, 0)
 
         cseq_track.events.append(CseqEvent(

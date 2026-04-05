@@ -72,7 +72,7 @@ class HowlWriter:
     def _write_header(self, buf: bytearray, hwl: HowlFile) -> None:
         HEADER_STRUCT.pack_into(
             buf, 0,
-            HWL_MAGIC, hwl.version, hwl.unk1, hwl.unk2,
+            HWL_MAGIC, hwl.version, hwl.reserved1, hwl.reserved2,
             len(hwl.spu_addrs), len(hwl.other_fx), len(hwl.engine_fx),
             len(hwl.banks), len(hwl.songs), hwl.header_data_size,
         )

@@ -36,8 +36,8 @@ class HowlReader:
 
         return HowlFile(
             version=header.version,
-            unk1=header.unk1,
-            unk2=header.unk2,
+            reserved1=header.reserved1,
+            reserved2=header.reserved2,
             spu_addrs=spu_addrs,
             other_fx=other_fx,
             engine_fx=engine_fx,
@@ -62,8 +62,8 @@ class HowlReader:
         return HowlHeader(
             magic=fields[0],
             version=fields[1],
-            unk1=fields[2],
-            unk2=fields[3],
+            reserved1=fields[2],
+            reserved2=fields[3],
             num_spu=fields[4],
             num_other=fields[5],
             num_engine=fields[6],

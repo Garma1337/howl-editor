@@ -88,11 +88,11 @@ class TestCseqRoundTrip:
         assert events[2].event_type == CseqEventType.NOTE_OFF
 
     def test_multiple_tracks_roundtrip(self, cseq_reader, cseq_writer):
-        t1 = CseqTrack(track_type=0, events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
-        t2 = CseqTrack(track_type=1, events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
+        t1 = CseqTrack(flags=0, events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
+        t2 = CseqTrack(flags=1, events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
         original = CseqFile(songs=[CseqSong(tracks=[t1, t2])])
         data = cseq_writer.serialize(original)
         parsed = cseq_reader.read(data)
         assert len(parsed.songs[0].tracks) == 2
-        assert parsed.songs[0].tracks[0].track_type == 0
-        assert parsed.songs[0].tracks[1].track_type == 1
+        assert not parsed.songs[0].tracks[0].is_drum
+        assert parsed.songs[0].tracks[1].is_drum

@@ -81,7 +81,7 @@ class CseqWriter:
             pack_into("<H", out, track_ptr_pos + i * 2, t_off)
 
     def _write_track(self, out: bytearray, track: CseqTrack) -> None:
-        out += pack("<H", track.track_type)
+        out += pack("BB", track.flags, track.unk)
 
         for evt in track.events:
             self._write_event(out, evt)

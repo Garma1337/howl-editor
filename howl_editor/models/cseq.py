@@ -82,9 +82,14 @@ class CseqEvent:
 
 @dataclass
 class CseqTrack:
-    track_type: int = 0  # 0=melodic, 1=drum
+    flags: int = 0   # Bit 0: 1=percussion/drum, 0=melodic
+    unk: int = 0     # Unknown parameter (preserved from original data)
     events: list[CseqEvent] = field(default_factory=list)
     instrument: int = 0
+
+    @property
+    def is_drum(self) -> bool:
+        return (self.flags & 1) != 0
 
 
 @dataclass

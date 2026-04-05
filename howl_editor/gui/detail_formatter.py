@@ -15,8 +15,8 @@ class DetailFormatter:
         lines = [
             "HOWL File", "=" * 40,
             f"Version:     {hwl.version} ({hwl.version:#x})",
-            f"Unknown 1:   {hwl.unk1}",
-            f"Unknown 2:   {hwl.unk2}",
+            f"Reserved 1:  {hwl.reserved1}",
+            f"Reserved 2:  {hwl.reserved2}",
             f"SPU Entries:  {len(hwl.spu_addrs)}",
             f"Effects:     {len(hwl.other_fx)}",
             f"Engine FX:   {len(hwl.engine_fx)}",
@@ -147,7 +147,7 @@ class DetailFormatter:
                 lines.append(f"\nSequence {si}: BPM={song.bpm}, TPQN={song.tpqn}, {len(song.tracks)} tracks")
             
                 for ti, t in enumerate(song.tracks):
-                    kind = "drum" if t.track_type == 1 else "melodic"
+                    kind = "drum" if t.is_drum else "melodic"
                     lines.append(f"  Track {ti} ({kind}): {len(t.events)} events, inst={t.instrument}")
         except Exception as e:
             lines.append(f"\nParse error: {e}")
