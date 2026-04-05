@@ -58,6 +58,25 @@ class BankBuilder:
             [s.data for s in samples],
         )
 
+    def replace_sample(
+        self,
+        bank_data: bytes,
+        spu_addrs: list[SpuAddrEntry],
+        sample_index: int,
+        new_data: bytes,
+        bank_reader: 'BankReader',
+    ) -> bytes:
+        """Replace a single sample in a bank and rebuild the blob.
+        Also updates the SPU address table entry with the new size."""
+        samples = bank_reader.parse(bank_data, spu_addrs)
+        if sample_index < 0 or sample_index >= len(samples):
+            raise IndexError(f"Sample index {sample_index} out of range (0..{len(samples) - 1})")
+
+        spu_id = samples[sample_index].spu_index
+        samples[sample_index] = BankSample(spu_index=spu_id, data=new_data)
+        self._ensure_spu_addr(spu_addrs, spu_id, len(new_data))
+        return self.merge(samples)
+
     def _ensure_spu_addr(self, spu_addrs: list[SpuAddrEntry], index: int, data_len: int) -> None:
         while len(spu_addrs) <= index:
             spu_addrs.append(SpuAddrEntry(0, 0))

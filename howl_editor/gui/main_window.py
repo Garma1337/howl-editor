@@ -341,9 +341,13 @@ class MainWindow(QMainWindow):
 
         node_type = item.data(0, Qt.UserRole)
         index = item.data(0, Qt.UserRole + 1)
+        sub_index = item.data(0, Qt.UserRole + 2)
 
         menu = QMenu(self)
-        if node_type == NODE_BANK and index is not None:
+        if node_type == NODE_SAMPLE and index is not None and sub_index is not None:
+            menu.addAction("Export Sample (.vag)...", lambda: self._export_sample(index, sub_index))
+            menu.addAction("Replace Sample (.vag)...", lambda: self._replace_sample(index, sub_index))
+        elif node_type == NODE_BANK and index is not None:
             menu.addAction("Export Bank (.bnk)...", lambda: self._export_bank(index))
             menu.addAction("Export Samples as VAGs...", lambda: self._export_bank_samples(index))
             menu.addSeparator()
@@ -404,6 +408,51 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"Exported {len(samples)} samples from bank {index}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Export failed:\n{e}")
+
+    def _export_sample(self, bank_index: int, sample_index: int):
+        if not self.hwl:
+            return
+
+        try:
+            samples = self._bank_reader.parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
+            if sample_index >= len(samples):
+                return
+
+            sample = samples[sample_index]
+            path, _ = QFileDialog.getSaveFileName(
+                self, f"Export Sample SPU {sample.spu_index}",
+                f"sample_{sample.spu_index}.vag", "VAG Files (*.vag)",
+            )
+
+            if path:
+                self._vag_writer.write_file(VagSample(data=sample.data), path)
+                self.status.showMessage(f"Exported SPU {sample.spu_index}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Export failed:\n{e}")
+
+    def _replace_sample(self, bank_index: int, sample_index: int):
+        if not self.hwl:
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Replace Sample", "", "VAG Files (*.vag);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            vag = self._vag_reader.read_file(path)
+            new_blob = self._bank_builder.replace_sample(
+                self.hwl.banks[bank_index], self.hwl.spu_addrs,
+                sample_index, vag.data, self._bank_reader,
+            )
+
+            self._editor.replace_bank(self.hwl, bank_index, new_blob)
+            self._mark_modified()
+            self._rebuild_tree()
+            self.status.showMessage(f"Replaced sample {sample_index} in bank {bank_index}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Replace failed:\n{e}")
 
     def _merge_bank(self, index: int):
         if not self.hwl or len(self.hwl.banks) < 2:
