@@ -4,37 +4,29 @@ CSEQ is CTR's music sequence format, similar to MIDI. Each CSEQ blob (stored as 
 
 ## File Layout
 
-```
-+------------------------------------+
-| CSEQ Header (8 bytes)              |
-+------------------------------------+
-| Instrument Table                   |
-| (numInstruments x 12 bytes)        |
-+------------------------------------+
-| Percussion Table                   |
-| (numPercussions x 8 bytes)         |
-+------------------------------------+
-| Song Offset Table                  |
-| (numSongs x 2 bytes)              |
-+------------------------------------+
-| [padding to 4-byte alignment]     |
-+------------------------------------+
-| Song Data (variable length)        |
-|   Song 0                           |
-|   Song 1                           |
-|   ...                              |
-+------------------------------------+
+```mermaid
+block-beta
+  columns 1
+  A["CSEQ Header (8 bytes)"]
+  B["Instrument Table\n(numInstruments x 12 bytes)"]
+  C["Percussion Table\n(numPercussions x 8 bytes)"]
+  D["Song Offset Table\n(numSongs x 2 bytes)"]
+  E["Padding to 4-byte alignment"]
+  F["Song Data (variable length)\nSong 0, Song 1, ..."]
+
+  style E fill:#555,stroke:#888
 ```
 
 ## CSEQ Header (8 bytes)
 
-| Offset | Size | Type | Field           | Description                                |
-|--------|------|------|-----------------|--------------------------------------------|
-| 0x00   | 4    | u32  | fileSize        | Total CSEQ size including this field       |
-| 0x04   | 1    | u8   | numInstruments  | Number of instrument (long sample) entries |
-| 0x05   | 1    | u8   | numPercussions  | Number of percussion (short sample) entries|
-| 0x06   | 1    | u8   | numSongs        | Number of sequences in this CSEQ           |
-| 0x07   | 1    | u8   | padding         | Filler byte (always 0)                     |
+```mermaid
+packet-beta
+  0-31: "fileSize (u32)"
+  32-39: "numInstruments (u8)"
+  40-47: "numPercussions (u8)"
+  48-55: "numSongs (u8)"
+  56-63: "padding (u8, always 0)"
+```
 
 Note: `numSongs` and `padding` occupy the same 2 bytes that could be read as a single `u16`. Both interpretations produce the same result since `padding` is always 0.
 
@@ -42,19 +34,28 @@ Note: `numSongs` and `padding` occupy the same 2 bytes that could be read as a s
 
 Each instrument entry is 12 bytes. These define melodic instruments used by tracks.
 
-| Offset | Size | Type | Field       | Description                                          |
-|--------|------|------|-------------|------------------------------------------------------|
-| 0x00   | 1    | u8   | flags       | Always 1 in original data. Bit meanings: 1=music sample, 2=looped, 4=voice clip |
-| 0x01   | 1    | u8   | volume      | Sample volume (0-255)                                |
-| 0x02   | 2    | s16  | timeToPlay  | Delay before NoteOff. 0 for music, ~300 for ~1 sec  |
-| 0x04   | 2    | u16  | frequency   | Base pitch. 4096 = 44100 Hz (see frequency encoding) |
-| 0x06   | 2    | u16  | sampleID    | Index into HOWL SPU Address Table                    |
-| 0x08   | 2    | u16  | ad          | PSX SPU ADSR Attack/Decay register value             |
-| 0x0A   | 2    | u16  | sr          | PSX SPU ADSR Sustain/Release register value          |
+```mermaid
+packet-beta
+  0-7: "flags (u8)"
+  8-15: "volume (u8)"
+  16-31: "timeToPlay (s16)"
+  32-47: "frequency (u16)"
+  48-63: "sampleID (u16)"
+  64-79: "ad (u16)"
+  80-95: "sr (u16)"
+```
 
-The `ad` and `sr` fields are raw PSX SPU ADSR register values passed directly to the hardware. Common values: `ad = 0x80FF`, `sr = 0x1FC2`.
+| Field      | Description                                                           |
+|------------|-----------------------------------------------------------------------|
+| flags      | Always 1 in original data. 1=music sample, 2=looped, 4=voice clip    |
+| volume     | Sample volume (0-255)                                                 |
+| timeToPlay | Delay before NoteOff. 0 for music, ~300 for ~1 sec                   |
+| frequency  | Base pitch. 4096 = 44100 Hz (see [howl.md](howl.md#frequency-encoding)) |
+| sampleID   | Index into HOWL SPU Address Table                                     |
+| ad         | PSX SPU ADSR Attack/Decay register value                              |
+| sr         | PSX SPU ADSR Sustain/Release register value                           |
 
-These can be stored as a single 32-bit value: `adsr = (sr << 16) | ad`.
+Common ADSR values: `ad = 0x80FF`, `sr = 0x1FC2`. These can be stored as a single 32-bit value: `adsr = (sr << 16) | ad`.
 
 ### Instrument Volume Calculation (Runtime)
 
@@ -66,15 +67,16 @@ final_volume = (masterVolMusic * songVol * seqVol * instrument.volume) >> 10
 
 Each percussion entry is 8 bytes. These define drum/percussion instruments.
 
-| Offset | Size | Type | Field       | Description                                          |
-|--------|------|------|-------------|------------------------------------------------------|
-| 0x00   | 1    | u8   | flags       | Always 1 in original data                            |
-| 0x01   | 1    | u8   | volume      | Sample volume (0-255)                                |
-| 0x02   | 2    | u16  | frequency   | Base pitch. 4096 = 44100 Hz                          |
-| 0x04   | 2    | u16  | sampleID    | Index into HOWL SPU Address Table                    |
-| 0x06   | 2    | s16  | timeToPlay  | Delay parameter (usually 0)                          |
+```mermaid
+packet-beta
+  0-7: "flags (u8)"
+  8-15: "volume (u8)"
+  16-31: "frequency (u16)"
+  32-47: "sampleID (u16)"
+  48-63: "timeToPlay (s16)"
+```
 
-Note: Percussion uses **fixed ADSR** values: `ad = 0x80FF`, `sr = 0x1FC2`. These are not stored in the file.
+Note: Percussion uses **fixed ADSR** values (`ad = 0x80FF`, `sr = 0x1FC2`) that are not stored in the file.
 
 Note: The field order differs from instruments. In instruments, `timeToPlay` is at offset 0x02 and `sampleID` at 0x06. In percussion, `sampleID` is at offset 0x04 and `timeToPlay` at 0x06.
 
@@ -84,31 +86,43 @@ Note: The field order differs from instruments. In instruments, `timeToPlay` is 
 
 ## Song Data
 
+### Song Structure
+
+```mermaid
+block-beta
+  columns 1
+  A["Song Header (6 bytes)\nunk | numSeqs | bpm | tpqn"]
+  B["Track Offset Table\n(numSeqs x 2 bytes)"]
+  C["Padding to 4-byte alignment"]
+  D["Track 0: flags | unk | events..."]
+  E["Track 1: flags | unk | events..."]
+  F["..."]
+
+  style C fill:#555,stroke:#888
+```
+
 ### Song Header (6 bytes)
 
-Each song begins at its offset within the song data section:
-
-| Offset | Size | Type | Field    | Description                              |
-|--------|------|------|----------|------------------------------------------|
-| 0x00   | 1    | u8   | unk      | Unknown byte (preserved during playback) |
-| 0x01   | 1    | u8   | numSeqs  | Number of tracks/sequences               |
-| 0x02   | 2    | s16  | bpm      | Beats per minute                         |
-| 0x04   | 2    | s16  | tpqn     | Ticks per quarter note                   |
-
-### Track Offset Table
-
-Immediately after the song header: `numSeqs` entries, each a little-endian **unsigned 16-bit** byte offset relative to the start of the track data area.
-
-After the track offset table, padding is applied to align to a 4-byte boundary.
+```mermaid
+packet-beta
+  0-7: "unk (u8)"
+  8-15: "numSeqs (u8)"
+  16-31: "bpm (s16)"
+  32-47: "tpqn (s16)"
+```
 
 ### Track Structure
 
 Each track starts with a 2-byte header:
 
-| Offset | Size | Type | Field | Description                                         |
-|--------|------|------|-------|-----------------------------------------------------|
-| 0x00   | 1    | u8   | flags | Bit 0: 1 = percussion/drum track, 0 = melodic track|
-| 0x01   | 1    | u8   | unk   | Unknown parameter (copied to sequence state)        |
+```mermaid
+packet-beta
+  0-7: "flags (u8)"
+  8-15: "unk (u8)"
+```
+
+- **flags** bit 0: 1 = percussion/drum track, 0 = melodic track
+- **unk**: Unknown parameter (copied to sequence state at runtime)
 
 Followed by a variable-length sequence of events.
 
@@ -116,9 +130,12 @@ Followed by a variable-length sequence of events.
 
 Each event consists of:
 
-1. **Delta time** - Variable-length quantity (VLQ), see below
-2. **Opcode** - Single byte (0x00-0x0A)
-3. **Parameters** - 0-2 bytes depending on opcode
+```mermaid
+packet-beta
+  0-13: "delta time (VLQ, 1-4 bytes)"
+  14-21: "opcode (1 byte)"
+  22-37: "params (0-2 bytes)"
+```
 
 ### Opcodes
 

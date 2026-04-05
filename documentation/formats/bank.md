@@ -4,31 +4,29 @@ A bank is a collection of audio samples stored as a sector-aligned blob within t
 
 ## Bank Layout
 
-```
-+-------------------------------+
-| Sample Count (2 bytes)        |
-+-------------------------------+
-| Sample ID Array               |
-| (numSamples x 2 bytes)       |
-+-------------------------------+
-| [padding to sector boundary]  |
-+-------------------------------+
-| Sample Data                   |
-| (concatenated VAG frames)     |
-+-------------------------------+
+```mermaid
+block-beta
+  columns 1
+  A["Sample Count (2 bytes)"]
+  B["Sample ID Array\n(numSamples x 2 bytes)"]
+  C["Padding to sector boundary"]
+  D["Sample Data\n(concatenated headerless VAG frames)"]
+
+  style C fill:#555,stroke:#888
 ```
 
 ## Bank Header
 
-| Offset | Size | Type | Field       | Description                                      |
-|--------|------|------|-------------|--------------------------------------------------|
-| 0x00   | 2    | s16  | numSamples  | Number of samples in this bank (max ~1023)       |
+```mermaid
+packet-beta
+  0-15: "numSamples (s16)"
+  16-31: "sampleID[0] (s16)"
+  32-47: "sampleID[1] (s16)"
+  48-63: "... (s16)"
+```
 
-Followed by the sample ID array:
-
-| Offset          | Size | Type | Field       | Description                                |
-|-----------------|------|------|-------------|--------------------------------------------|
-| 0x02 + i*2      | 2    | s16  | sampleID[i] | Global SPU Address Table index for sample i|
+- **numSamples**: Number of samples in this bank (max ~1023)
+- **sampleID[i]**: Global SPU Address Table index for sample `i`
 
 ## Padding
 
@@ -47,11 +45,50 @@ Starting at the sector boundary, samples are stored **sequentially without gaps*
 sample_byte_size = spu_addrs[sampleID].spuSize * 8
 ```
 
-The sample data is raw VAG ADPCM frames (headerless). See [vag_format.md](vag_format.md) for the frame encoding.
+The sample data is raw VAG ADPCM frames (headerless). See [vag.md](vag.md) for the frame encoding.
+
+## How Banks Reference Samples
+
+```mermaid
+flowchart LR
+  subgraph Bank
+    H["Header\nnumSamples=3"]
+    ID0["sampleID[0] = 10"]
+    ID1["sampleID[1] = 25"]
+    ID2["sampleID[2] = 42"]
+  end
+
+  subgraph SPU["SPU Address Table"]
+    E10["[10] spuSize=120"]
+    E25["[25] spuSize=200"]
+    E42["[42] spuSize=80"]
+  end
+
+  subgraph Data["Bank Sample Data"]
+    D0["VAG data\n(120 * 8 bytes)"]
+    D1["VAG data\n(200 * 8 bytes)"]
+    D2["VAG data\n(80 * 8 bytes)"]
+  end
+
+  ID0 --> E10
+  ID1 --> E25
+  ID2 --> E42
+  E10 -. "size" .-> D0
+  E25 -. "size" .-> D1
+  E42 -. "size" .-> D2
+```
 
 ## Runtime Loading
 
 The game loads banks through a 4-stage asynchronous pipeline:
+
+```mermaid
+flowchart TD
+  S0["Stage 0: Read header\n(first sector from CD)"] --> S1
+  S1["Stage 1: Assign SPU addresses\n(skip samples already loaded)"] --> S2
+  S2["Stage 2: DMA transfer\n(RAM → SPU memory)"] --> S3
+  S3["Stage 3: Verify transfer\n(mark bank loaded, free RAM)"]
+```
 
 ### Stage 0: Load Header
 - Read the first sector of the bank from CD into RAM

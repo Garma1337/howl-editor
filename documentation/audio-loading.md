@@ -4,13 +4,17 @@ This document describes how CTR selects and loads audio data from the HOWL file 
 
 ## Overview
 
-When a level loads, the game goes through a multi-stage process:
-
-1. Load the **universal SFX bank** (once, kept across levels)
-2. Load the **level FX bank** (ambient sounds, level-specific effects)
-3. Optionally load the **8-driver shared bank** (combined character audio)
-4. Load **per-character banks** (engine sounds, voice clips)
-5. Load the **level song** (CSEQ music sequence)
+```mermaid
+flowchart TD
+  Start[Level Load] --> SFX[Load universal SFX bank\nBank 0 - kept across levels]
+  SFX --> FX[Load level FX bank\nAmbient sounds, level-specific effects]
+  FX --> Eight{Full 8-driver\nrace?}
+  Eight -->|Yes| B54[Load 8-driver shared bank\nBank 54]
+  Eight -->|No| Char
+  B54 --> Char[Load per-character banks\nEngine sounds, voice clips]
+  Char --> Song[Load level song\nCSEQ music sequence]
+  Song --> Done[Audio ready]
+```
 
 The entire pipeline runs asynchronously across multiple frames. Each bank goes through its own sub-pipeline (read from disc, assign SPU addresses, DMA transfer, verify). A maximum of **8 banks** can be resident in SPU memory at any time.
 
@@ -93,7 +97,14 @@ Characters with IDs 8+ (Pinstripe, Papu, Ripper Roo, Komodo Joe, N. Tropy, Penta
 
 For races with a full 8-driver grid, bank 54 is loaded as an optimization. This single bank contains the audio samples for all 8 original characters (IDs 0-7), avoiding the need to load 8 individual character banks.
 
-When bank 54 is loaded, individual character banks for original characters (IDs 0-7) are **skipped** since their samples are already in SPU memory. Characters beyond the original 8 (ID >= 8, i.e. Pinstripe and later) still get their individual banks loaded even when bank 54 is present.
+```mermaid
+flowchart TD
+  B54{Bank 54\nloaded?}
+  B54 -->|Yes| Check{Character\nID < 8?}
+  B54 -->|No| Load[Load individual\ncharacter bank]
+  Check -->|Yes| Skip[Skip - samples already\nin SPU memory]
+  Check -->|No| Load
+```
 
 Bank 54 is loaded in:
 - **Arcade Mode** races
@@ -200,20 +211,19 @@ These levels destroy all banks (including bank 0) and load a single dedicated ba
 
 ## Loading Pipeline Detail
 
-The async pipeline progresses one stage per frame. Each stage waits for the previous bank's SPU transfer to complete before starting the next:
-
-```
-Stage 0: Load level FX bank
-         ↓ (wait for SPU transfer)
-Stage 1: Load 8-driver bank (if applicable)
-         ↓ (wait for SPU transfer)
-Stage 2: Load character banks (one per frame, loops until all loaded)
-         ↓ (wait for SPU transfer)
-Stage 3: Select and begin loading song (CSEQ) from disc
-         ↓ (wait for disc read)
-Stage 4: Finish song load and parse CSEQ header
-         ↓
-         Complete
+```mermaid
+flowchart TD
+  S0["Stage 0: Load level FX bank"]
+  S0 -->|wait for SPU transfer| S1
+  S1["Stage 1: Load 8-driver bank\n(if applicable)"]
+  S1 -->|wait for SPU transfer| S2
+  S2["Stage 2: Load character banks\n(one per frame, loops)"]
+  S2 -->|"more characters?"| S2
+  S2 -->|"all loaded"| S3
+  S3["Stage 3: Begin loading CSEQ\nfrom disc"]
+  S3 -->|wait for disc read| S4
+  S4["Stage 4: Parse CSEQ header"]
+  S4 --> Done["Complete"]
 ```
 
 Stage 2 is the only stage that can loop - it loads one character bank per iteration, incrementing a counter until all required character banks are loaded.
@@ -222,10 +232,12 @@ Stage 2 is the only stage that can loop - it loads one character bank per iterat
 
 Each individual bank load goes through 4 stages:
 
-1. **Read header** - Read the first sector from disc (contains sample count and ID array)
-2. **Assign SPU addresses** - Calculate total size, assign SPU memory addresses for samples not already loaded (spuAddr == 0 means not loaded)
-3. **DMA transfer** - Transfer sample data from RAM to SPU memory
-4. **Verify** - Confirm transfer completion, mark bank as loaded, free temporary RAM
+```mermaid
+flowchart LR
+  R["Read header\n(1 sector)"] --> A["Assign SPU\naddresses"]
+  A --> D["DMA transfer\n(RAM → SPU)"]
+  D --> V["Verify\ncomplete"]
+```
 
 ### Sample Deduplication
 

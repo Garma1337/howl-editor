@@ -10,15 +10,16 @@ When stored as a standalone `.vag` file, a 48-byte header precedes the sample da
 
 All header fields are **big-endian** (unlike most PS1 data which is little-endian).
 
-| Offset | Size | Type   | Field       | Description                          |
-|--------|------|--------|-------------|--------------------------------------|
-| 0x00   | 4    | bytes  | magic       | `VAGp` (0x56414770)                 |
-| 0x04   | 4    | u32 BE | version     | Always 3                             |
-| 0x08   | 4    | u32 BE | reserved    | Always 0                             |
-| 0x0C   | 4    | u32 BE | dataSize    | Size of sample data in bytes         |
-| 0x10   | 4    | u32 BE | sampleRate  | Sample rate in Hz (e.g., 11025)      |
-| 0x14   | 12   | bytes  | reserved    | Always 0                             |
-| 0x20   | 16   | ASCII  | name        | Sample name, null-padded             |
+```mermaid
+packet-beta
+  0-31: "magic ('VAGp' = 0x56414770)"
+  32-63: "version (BE u32, always 3)"
+  64-95: "reserved (BE u32, always 0)"
+  96-127: "dataSize (BE u32)"
+  128-159: "sampleRate (BE u32, e.g. 11025)"
+  160-255: "reserved (12 bytes, always 0)"
+  256-383: "name (16 bytes, ASCII, null-padded)"
+```
 
 Sample data starts at offset 0x30 (48 bytes).
 
@@ -30,11 +31,18 @@ When stored inside a HOWL bank, VAG data has **no header**. It is raw ADPCM fram
 
 Each VAG frame is **16 bytes** and decodes to **28 audio samples** (56 bytes of 16-bit PCM).
 
-| Offset | Size | Type | Field    | Description                              |
-|--------|------|------|----------|------------------------------------------|
-| 0x00   | 1    | u8   | control  | Upper 4 bits: predict_nr, Lower 4 bits: shift_factor |
-| 0x01   | 1    | u8   | flags    | Frame flags (see below)                  |
-| 0x02   | 14   | bytes| data     | 28 ADPCM nibbles (2 samples per byte, low nibble first) |
+```mermaid
+packet-beta
+  0-3: "predict_nr"
+  4-7: "shift_factor"
+  8-15: "flags"
+  16-127: "data (14 bytes = 28 ADPCM nibbles)"
+```
+
+- **predict_nr** (upper 4 bits of byte 0): Selects filter coefficient pair (0-4)
+- **shift_factor** (lower 4 bits of byte 0): Bit shift for decompression (0-15)
+- **flags** (byte 1): Frame control flags
+- **data** (bytes 2-15): 28 ADPCM nibbles, 2 per byte, low nibble first
 
 ### Frame Flags
 

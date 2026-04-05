@@ -6,33 +6,20 @@ The file used in-game is `SOUNDS\KART.HWL`.
 
 ## File Layout
 
-```
-+-------------------------------+
-| HOWL Header (40 bytes)        |
-+-------------------------------+
-| SPU Address Table             |
-| (numSpuAddrs x 4 bytes)      |
-+-------------------------------+
-| OtherFX Table                 |
-| (numOtherFX x 8 bytes)       |
-+-------------------------------+
-| EngineFX Table                |
-| (numEngineFX x 8 bytes)      |
-+-------------------------------+
-| Bank Offset Table             |
-| (numBanks x 2 bytes)         |
-+-------------------------------+
-| Song Offset Table             |
-| (numSongs x 2 bytes)         |
-+-------------------------------+
-| [padding to sector boundary]  |
-+-------------------------------+
-| Bank Data Blobs               |
-| (sector-aligned)              |
-+-------------------------------+
-| Song Data Blobs (CSEQ)        |
-| (sector-aligned)              |
-+-------------------------------+
+```mermaid
+block-beta
+  columns 1
+  A["HOWL Header (40 bytes)"]
+  B["SPU Address Table\n(numSpuAddrs x 4 bytes)"]
+  C["OtherFX Table\n(numOtherFX x 8 bytes)"]
+  D["EngineFX Table\n(numEngineFX x 8 bytes)"]
+  E["Bank Offset Table\n(numBanks x 2 bytes)"]
+  F["Song Offset Table\n(numSongs x 2 bytes)"]
+  G["Padding to sector boundary"]
+  H["Bank Data Blobs\n(sector-aligned)"]
+  I["Song Data Blobs / CSEQ\n(sector-aligned)"]
+
+  style G fill:#555,stroke:#888
 ```
 
 All data blobs are aligned to **sector boundaries** (0x800 = 2048 bytes).
@@ -41,18 +28,19 @@ All data blobs are aligned to **sector boundaries** (0x800 = 2048 bytes).
 
 10 little-endian 32-bit integers:
 
-| Offset | Size | Type | Field            | Description                                         |
-|--------|------|------|------------------|-----------------------------------------------------|
-| 0x00   | 4    | u32  | magic            | `0x4C574F48` = ASCII "HOWL" (little-endian)         |
-| 0x04   | 4    | u32  | version          | Format version. Release = `0x80`                    |
-| 0x08   | 4    | u32  | reserved1        | Always 0                                            |
-| 0x0C   | 4    | u32  | reserved2        | Always 0                                            |
-| 0x10   | 4    | u32  | numSpuAddrs      | Number of SPU address table entries                 |
-| 0x14   | 4    | u32  | numOtherFX       | Number of OtherFX (sound effect) entries            |
-| 0x18   | 4    | u32  | numEngineFX      | Number of EngineFX (engine sound) entries           |
-| 0x1C   | 4    | u32  | numBanks         | Number of sample banks                              |
-| 0x20   | 4    | u32  | numSongs         | Number of CSEQ music sequences                     |
-| 0x24   | 4    | u32  | headerDataSize   | Total byte size of all tables after this header     |
+```mermaid
+packet-beta
+  0-31: "magic (0x4C574F48 = 'HOWL')"
+  32-63: "version (release = 0x80)"
+  64-95: "reserved1 (always 0)"
+  96-127: "reserved2 (always 0)"
+  128-159: "numSpuAddrs"
+  160-191: "numOtherFX"
+  192-223: "numEngineFX"
+  224-255: "numBanks"
+  256-287: "numSongs"
+  288-319: "headerDataSize"
+```
 
 The `headerDataSize` field equals:
 ```
@@ -74,10 +62,14 @@ numSpuAddrs * 4 + numOtherFX * 8 + numEngineFX * 8 + numBanks * 2 + numSongs * 2
 
 Immediately follows the header. Each entry is 4 bytes:
 
-| Offset | Size | Type | Field    | Description                                      |
-|--------|------|------|----------|--------------------------------------------------|
-| 0x00   | 2    | u16  | spuAddr  | SPU RAM address (in 8-byte units). Always 0 in file; populated at runtime when bank is loaded |
-| 0x02   | 2    | u16  | spuSize  | Sample data size in 8-byte units. Multiply by 8 to get byte count |
+```mermaid
+packet-beta
+  0-15: "spuAddr (u16)"
+  16-31: "spuSize (u16)"
+```
+
+- **spuAddr**: SPU RAM address in 8-byte units. Always 0 in the file; populated at runtime when the bank is loaded.
+- **spuSize**: Sample data size in 8-byte units. Multiply by 8 for byte count.
 
 The table index serves as the **global sample ID** referenced by banks, instruments, and sound effects.
 
@@ -90,28 +82,39 @@ The table index serves as the **global sample ID** referenced by banks, instrume
 
 ## OtherFX Table (Sound Effects)
 
-Sound effects triggered during gameplay (pickups, crashes, menu sounds, voice clips, etc.).
+Sound effects triggered during gameplay (pickups, crashes, menu sounds, voice clips, etc.). Each entry is 8 bytes:
 
-Each entry is 8 bytes:
+```mermaid
+packet-beta
+  0-7: "flags (u8)"
+  8-15: "volume (u8)"
+  16-31: "pitch (u16)"
+  32-47: "spuIndex (u16)"
+  48-63: "duration (u16)"
+```
 
-| Offset | Size | Type | Field     | Description                                      |
-|--------|------|------|-----------|--------------------------------------------------|
-| 0x00   | 1    | u8   | flags     | Bit 2: voice clip, Bit 1: looping               |
-| 0x01   | 1    | u8   | volume    | Base volume (0-255)                              |
-| 0x02   | 2    | u16  | pitch     | Base pitch value                                 |
-| 0x04   | 2    | u16  | spuIndex  | Index into SPU Address Table (sample ID)         |
-| 0x06   | 2    | u16  | duration  | Sound duration in game frames                    |
+| Field    | Description                                |
+|----------|--------------------------------------------|
+| flags    | Bit 2: voice clip, Bit 1: looping          |
+| volume   | Base volume (0-255)                        |
+| pitch    | Base pitch value                           |
+| spuIndex | Index into SPU Address Table (sample ID)   |
+| duration | Sound duration in game frames              |
 
 ### Playback Parameters
 
 When a sound effect is triggered, the caller passes a flags word:
 
-| Bits  | Field      | Description                              |
-|-------|------------|------------------------------------------|
-| 7:0   | volume     | Playback volume (0-255)                  |
-| 15:8  | distortion | Pitch distortion (0x80 = none)           |
-| 23:16 | pan        | Left/Right pan (0x80 = center)           |
-| 31:24 | reverb     | Echo/reverb amount                       |
+```mermaid
+packet-beta
+  0-7: "volume"
+  8-15: "distortion"
+  16-23: "pan (L/R)"
+  24-31: "reverb"
+```
+
+- **distortion**: 0x80 = none
+- **pan**: 0x80 = center
 
 Volume calculation: `(masterVolFX * entry.volume * callVolume) >> 10`
 
@@ -119,17 +122,16 @@ ADSR is fixed at: Attack/Decay = `0x80FF`, Sustain/Release = `0x1FC2`
 
 ## EngineFX Table (Engine Sounds)
 
-Vehicle engine audio. Different from OtherFX in field layout.
+Vehicle engine audio. Each entry is 8 bytes:
 
-Each entry is 8 bytes:
-
-| Offset | Size | Type | Field     | Description                                      |
-|--------|------|------|-----------|--------------------------------------------------|
-| 0x00   | 1    | u8   | flags     | Engine sound flags                               |
-| 0x01   | 1    | u8   | volume    | Base volume (0-255)                              |
-| 0x02   | 2    | u16  | pitch     | Base pitch value                                 |
-| 0x04   | 2    | u16  | unk       | Unknown parameter                                |
-| 0x06   | 2    | u16  | spuIndex  | Index into SPU Address Table (sample ID)         |
+```mermaid
+packet-beta
+  0-7: "flags (u8)"
+  8-15: "volume (u8)"
+  16-31: "pitch (u16)"
+  32-47: "unk (u16)"
+  48-63: "spuIndex (u16)"
+```
 
 Note: The field order differs from OtherFX. In OtherFX, `spuIndex` is at offset 0x04 and `duration` at 0x06. In EngineFX, `unk` is at 0x04 and `spuIndex` at 0x06.
 
@@ -153,11 +155,11 @@ The offset is relative to the start of the HOWL file. A value of 0 indicates an 
 song_byte_offset = song_sector_offset * 0x800
 ```
 
-Song data at the referenced offset contains a CSEQ sequence. See [cseq_format.md](cseq_format.md).
+Song data at the referenced offset contains a CSEQ sequence. See [cseq.md](cseq.md).
 
 ## Bank Data
 
-Each bank blob starts at a sector boundary. See [bank_format.md](bank_format.md).
+Each bank blob starts at a sector boundary. See [bank.md](bank.md).
 
 ## KART.HWL Statistics (NTSC-U Release)
 
@@ -197,16 +199,18 @@ Each bank blob starts at a sector boundary. See [bank_format.md](bank_format.md)
 
 ## Loading Sequence (Runtime)
 
-1. **Initialize audio system** - Enable audio hardware, initialize SPU subsystem and reverb modes
-2. **Load HOWL header** - Read the first sector(s) from CD into RAM, then parse the header to set up pointer arrays for the SPU table, FX tables, and offset tables
-3. **Per-level loading** (5 asynchronous stages):
-   - Stage 0: Load level sound effects bank
-   - Stage 1: Load default 8-driver bank (shared across all levels)
-   - Stage 2: Load per-character voice/sound banks
-   - Stage 3: Load level music bank
-   - Stage 4: Load and parse CSEQ sequence data
-4. **Bank loading** - 4-stage async pipeline per bank: read bank header from disc, assign SPU addresses for each sample, DMA transfer sample data to SPU RAM, verify transfer completion
-5. **Song loading** - Read CSEQ data from disc, parse the CSEQ header and instrument tables, set up playback structures
+```mermaid
+flowchart TD
+  A[Initialize audio system] --> B[Load HOWL header from CD]
+  B --> C[Parse header: set up SPU table,\nFX tables, offset tables]
+  C --> D{Level load}
+  D --> E[Stage 0: Load level FX bank]
+  E --> F[Stage 1: Load 8-driver bank\nif applicable]
+  F --> G[Stage 2: Load character banks\none per frame, loops]
+  G --> H[Stage 3: Load CSEQ song from disc]
+  H --> I[Stage 4: Parse CSEQ header]
+  I --> J[Audio ready]
+```
 
 ## Channel Types
 
