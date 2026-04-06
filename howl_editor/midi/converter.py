@@ -15,6 +15,12 @@ try:
 except ImportError:
     HAS_MIDO = False
 
+_MIDI_CC_VOLUME = 7
+_MIDI_CC_PAN = 10
+_MIDI_PITCH_BEND_CENTER = 8192
+_MIDI_PITCH_BEND_RANGE = 16384
+_CSEQ_MAX_PITCH_BEND = 255
+
 
 class MidiConverter:
 
@@ -36,7 +42,7 @@ class MidiConverter:
                 note_count=note_count,
                 channels=channels,
             ))
-        
+
         return MidiInfo(
             midi_type=mid.type,
             ticks_per_beat=mid.ticks_per_beat,
@@ -92,32 +98,32 @@ class MidiConverter:
     ) -> tuple[dict[int, int], set[int]]:
         instrument_map: dict[int, int] = {}
         drum_set: set[int] = set()
-        
+
         for track_idx, (midi_idx, _) in enumerate(midi_tracks):
             mapping = settings.mappings[midi_idx] if midi_idx < len(settings.mappings) else InstrumentMapping()
 
             if mapping.is_drum:
                 drum_set.add(track_idx)
-                
+
                 cseq.percussions.append(CseqPercussion(
-                    flags=1, 
+                    flags=1,
                     volume=mapping.volume,
-                    frequency=mapping.frequency, 
+                    frequency=mapping.frequency,
                     sample_id=mapping.sample_id,
                 ))
-            
+
                 instrument_map[track_idx] = len(cseq.percussions) - 1
             else:
                 cseq.instruments.append(CseqInstrument(
-                    flags=1, 
+                    flags=1,
                     volume=mapping.volume,
-                    frequency=mapping.frequency, 
+                    frequency=mapping.frequency,
                     sample_id=mapping.sample_id,
                     adsr=mapping.adsr,
                 ))
-                
+
                 instrument_map[track_idx] = len(cseq.instruments) - 1
-        
+
         return instrument_map, drum_set
 
     def _convert_track(
@@ -128,8 +134,8 @@ class MidiConverter:
         patch_idx = instrument_map.get(track_idx, 0)
 
         cseq_track.events.append(CseqEvent(
-            delta=0, 
-            event_type=CseqEventType.CHANGE_PATCH, 
+            delta=0,
+            event_type=CseqEventType.CHANGE_PATCH,
             pitch=patch_idx,
         ))
 
@@ -137,11 +143,11 @@ class MidiConverter:
 
         last_tick = 0
         current_tick = 0
-        
+
         for msg in midi_track:
             current_tick += msg.time
             event = self._convert_message(msg, current_tick, last_tick)
-            
+
             if event:
                 cseq_track.events.append(event)
                 last_tick = current_tick
@@ -162,14 +168,18 @@ class MidiConverter:
             return CseqEvent(delta=delta, event_type=CseqEventType.NOTE_OFF, pitch=msg.note)
 
         if msg.type == "control_change":
-            if msg.control == 7:
+            if msg.control == _MIDI_CC_VOLUME:
                 return CseqEvent(delta=delta, event_type=CseqEventType.VELOCITY, pitch=msg.value)
 
-            if msg.control == 10:
+            if msg.control == _MIDI_CC_PAN:
                 return CseqEvent(delta=delta, event_type=CseqEventType.PAN, pitch=msg.value)
 
         if msg.type == "pitchwheel":
-            bend = max(0, min(255, int((msg.pitch + 8192) / 16384 * 255)))
+            bend = self._midi_bend_to_cseq(msg.pitch)
             return CseqEvent(delta=delta, event_type=CseqEventType.PITCH_BEND, pitch=bend)
 
         return None
+
+    def _midi_bend_to_cseq(self, midi_pitch: int) -> int:
+        return max(0, min(_CSEQ_MAX_PITCH_BEND,
+            int((midi_pitch + _MIDI_PITCH_BEND_CENTER) / _MIDI_PITCH_BEND_RANGE * _CSEQ_MAX_PITCH_BEND)))

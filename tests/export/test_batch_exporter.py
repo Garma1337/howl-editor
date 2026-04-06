@@ -3,8 +3,10 @@
 import pytest
 
 from howl_editor.analysis.sample_classifier import SampleClassifier
-from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.audio.decoder.vag_decoder import VagDecoder
+from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.bank.reader import BankReader
+from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.export.batch_exporter import BatchExporter
 from howl_editor.midi.exporter import CseqMidiExporter
@@ -18,12 +20,12 @@ from tests.conftest import build_cseq_bytes, build_bank_blob
 
 @pytest.fixture
 def batch_exporter():
-    cseq_reader = CseqReader()
+    cseq_reader = CseqReader(VlqCodec())
     return BatchExporter(
         bank_reader=BankReader(),
         cseq_reader=cseq_reader,
         vag_writer=VagWriter(),
-        vag_decoder=VagDecoder(),
+        vag_decoder=VagDecoder(WavWriter()),
         sample_classifier=SampleClassifier(cseq_reader),
         midi_exporter=CseqMidiExporter(),
     )

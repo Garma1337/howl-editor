@@ -6,7 +6,10 @@ from howl_editor.models.cseq import (
     CseqInstrument, CseqPercussion, CseqInfo,
     CSEQ_EVENT_PARAMS, CSEQ_TERMINAL_EVENTS,
 )
-from howl_editor.models.howl import HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX
+from howl_editor.models.howl import (
+    HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX,
+    SECTOR_SIZE, bytes_to_sectors,
+)
 from howl_editor.models.vag import VagSample
 
 __all__ = [
@@ -15,6 +18,8 @@ __all__ = [
     "SpuAddrEntry",
     "OtherFX",
     "EngineFX",
+    "SECTOR_SIZE",
+    "bytes_to_sectors",
     "CseqFile",
     "CseqSong",
     "CseqTrack",

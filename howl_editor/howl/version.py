@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from struct import unpack_from
 
-from howl_editor.constants import HWL_MAGIC, HEADER_SIZE
+from howl_editor.models import HowlHeader
 
 _KNOWN_VERSIONS: dict[int, str] = {
     0x6F: "Demo (Test Drive)",
@@ -26,12 +26,12 @@ class VersionInfo:
 class HowlVersionDetector:
 
     def detect(self, data: bytes) -> VersionInfo:
-        if len(data) < HEADER_SIZE:
+        if len(data) < HowlHeader.SIZE:
             return VersionInfo(0, "Invalid", False, False)
 
         magic = unpack_from("<I", data, 0)[0]
         version = unpack_from("<I", data, 4)[0]
-        magic_valid = magic == HWL_MAGIC
+        magic_valid = magic == HowlHeader.MAGIC
         name = _KNOWN_VERSIONS.get(version, f"Unknown (0x{version:02X})")
 
         return VersionInfo(

@@ -2,12 +2,19 @@
 
 from struct import pack, pack_into
 
-from howl_editor.constants import CSEQ_INSTRUMENT_STRUCT, CSEQ_PERCUSSION_STRUCT
-from howl_editor.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CSEQ_EVENT_PARAMS
-from howl_editor.vlq import write_vlq
+from howl_editor.core.vlq import VlqCodec
+from howl_editor.models import CseqFile, CseqInstrument, CseqPercussion, CseqSong, CseqTrack, CseqEvent, \
+    CSEQ_EVENT_PARAMS
+
+_OFFSET_SIZE = 2
+_SONG_HEADER_SIZE = 6
+_ALIGNMENT = 4
 
 
 class CseqWriter:
+
+    def __init__(self, vlq_codec: VlqCodec):
+        self._vlq = vlq_codec
 
     def serialize(self, cseq: CseqFile) -> bytes:
         """Serialize a CseqFile to raw bytes."""
@@ -17,7 +24,7 @@ class CseqWriter:
         self._write_percussions(out, cseq)
         song_ptr_pos = len(out)
         self._reserve_song_offsets(out, cseq)
-        self._pad_to_alignment(out, 4)
+        self._pad_to_alignment(out)
         seq_start = len(out)
         song_offsets = self._write_songs(out, cseq, seq_start)
         self._patch_song_offsets(out, song_ptr_pos, song_offsets)
@@ -30,25 +37,25 @@ class CseqWriter:
 
     def _write_instruments(self, out: bytearray, cseq: CseqFile) -> None:
         for inst in cseq.instruments:
-            out += CSEQ_INSTRUMENT_STRUCT.pack(
+            out += CseqInstrument.STRUCT.pack(
                 inst.flags, inst.volume, inst.time_to_play,
                 inst.frequency, inst.sample_id, inst.adsr,
             )
 
     def _write_percussions(self, out: bytearray, cseq: CseqFile) -> None:
         for perc in cseq.percussions:
-            out += CSEQ_PERCUSSION_STRUCT.pack(
+            out += CseqPercussion.STRUCT.pack(
                 perc.flags, perc.volume, perc.frequency,
                 perc.sample_id, perc.time_to_play,
             )
 
     def _reserve_song_offsets(self, out: bytearray, cseq: CseqFile) -> None:
-        out += b"\x00" * (len(cseq.songs) * 2)
+        out += b"\x00" * (len(cseq.songs) * _OFFSET_SIZE)
 
-    def _pad_to_alignment(self, out: bytearray, alignment: int) -> None:
-        remainder = len(out) % alignment
+    def _pad_to_alignment(self, out: bytearray) -> None:
+        remainder = len(out) % _ALIGNMENT
         if remainder:
-            out += b"\x00" * (alignment - remainder)
+            out += b"\x00" * (_ALIGNMENT - remainder)
 
     def _write_songs(self, out: bytearray, cseq: CseqFile, seq_start: int) -> list[int]:
         offsets = []
@@ -62,13 +69,13 @@ class CseqWriter:
     def _write_song(self, out: bytearray, song: CseqSong) -> None:
         out += pack("<BBhh", song.unk0, len(song.tracks), song.bpm, song.tpqn)
         track_ptr_pos = len(out)
-        out += b"\x00" * (len(song.tracks) * 2)
+        out += b"\x00" * (len(song.tracks) * _OFFSET_SIZE)
 
-        header_total = 6 + len(song.tracks) * 2
-        remainder = header_total % 4
+        header_total = _SONG_HEADER_SIZE + len(song.tracks) * _OFFSET_SIZE
+        remainder = header_total % _ALIGNMENT
 
         if remainder:
-            out += b"\x00" * (4 - remainder)
+            out += b"\x00" * (_ALIGNMENT - remainder)
 
         tracks_start = len(out)
         track_offsets = []
@@ -78,7 +85,7 @@ class CseqWriter:
             self._write_track(out, track)
 
         for i, t_off in enumerate(track_offsets):
-            pack_into("<H", out, track_ptr_pos + i * 2, t_off)
+            pack_into("<H", out, track_ptr_pos + i * _OFFSET_SIZE, t_off)
 
     def _write_track(self, out: bytearray, track: CseqTrack) -> None:
         out += pack("BB", track.flags, track.unk)
@@ -87,7 +94,7 @@ class CseqWriter:
             self._write_event(out, evt)
 
     def _write_event(self, out: bytearray, evt: CseqEvent) -> None:
-        out += write_vlq(evt.delta)
+        out += self._vlq.write(evt.delta)
         out += pack("B", evt.event_type)
         num_params = CSEQ_EVENT_PARAMS.get(evt.event_type, 0)
         

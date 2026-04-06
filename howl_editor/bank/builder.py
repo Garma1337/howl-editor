@@ -3,8 +3,8 @@
 from pathlib import Path
 from struct import pack
 
-from howl_editor.constants import SECTOR_SIZE, bytes_to_sectors
 from howl_editor.models import SpuAddrEntry, VagSample, BankSample, BankBuildResult
+from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
 from howl_editor.vag.reader import VagReader
 
 

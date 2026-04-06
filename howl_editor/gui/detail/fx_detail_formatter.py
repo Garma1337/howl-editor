@@ -1,5 +1,6 @@
 # coding: utf-8
 
+from howl_editor.audio.ps1 import PS1_SAMPLE_RATE, PS1_FREQUENCY_UNIT
 from howl_editor.models import HowlFile
 
 
@@ -29,7 +30,7 @@ class FxDetailFormatter:
 
     def format_other_fx_details(self, hwl: HowlFile, index: int) -> str:
         fx = hwl.other_fx[index]
-        freq_hz = int(fx.pitch / 4096 * 44100) if fx.pitch > 0 else 0
+        freq_hz = self._pitch_to_hz(fx.pitch)
         lines = [
             f"OtherFX {index}", "=" * 40,
             f"Flags:      {fx.flags} ({fx.flags:#04x})",
@@ -43,7 +44,7 @@ class FxDetailFormatter:
 
     def format_engine_fx_details(self, hwl: HowlFile, index: int) -> str:
         fx = hwl.engine_fx[index]
-        freq_hz = int(fx.pitch / 4096 * 44100) if fx.pitch > 0 else 0
+        freq_hz = self._pitch_to_hz(fx.pitch)
         lines = [
             f"EngineFX {index}", "=" * 40,
             f"Flags:      {fx.flags} ({fx.flags:#04x})",
@@ -54,3 +55,9 @@ class FxDetailFormatter:
         ]
 
         return "\n".join(lines)
+
+    def _pitch_to_hz(self, pitch: int) -> int:
+        if pitch <= 0:
+            return 0
+
+        return int(pitch / PS1_FREQUENCY_UNIT * PS1_SAMPLE_RATE)

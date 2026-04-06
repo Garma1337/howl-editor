@@ -4,14 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from struct import pack_into
 
-from howl_editor.constants import (
-    HEADER_STRUCT, HEADER_SIZE, HWL_MAGIC,
-    SPU_ADDR_STRUCT, SPU_ADDR_SIZE,
-    OTHER_FX_STRUCT, OTHER_FX_SIZE,
-    ENGINE_FX_STRUCT, ENGINE_FX_SIZE,
-    SECTOR_SIZE, bytes_to_sectors,
-)
-from howl_editor.models import HowlFile
+from howl_editor.models import HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX
+from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
 
 
 @dataclass
@@ -29,8 +23,9 @@ class HowlWriter:
         """Serialize a HowlFile to raw bytes."""
         layout = self._calculate_layout(hwl)
         buf = self._allocate_buffer(layout)
+
         self._write_header(buf, hwl)
-        pos = HEADER_SIZE
+        pos = HowlHeader.SIZE
         pos = self._write_spu_addrs(buf, pos, hwl)
         pos = self._write_other_fx(buf, pos, hwl)
         pos = self._write_engine_fx(buf, pos, hwl)
@@ -38,6 +33,7 @@ class HowlWriter:
         pos = self._write_offset_table(buf, pos, layout.song_offsets)
         self._write_blobs(buf, hwl.banks, layout.bank_offsets)
         self._write_blobs(buf, hwl.songs, layout.song_offsets)
+
         return bytes(buf)
 
     def write_file(self, hwl: HowlFile, path: str | Path) -> None:
@@ -45,7 +41,7 @@ class HowlWriter:
         Path(path).write_bytes(self.serialize(hwl))
 
     def _calculate_layout(self, hwl: HowlFile) -> HowlLayout:
-        header_bytes = HEADER_SIZE + hwl.header_data_size
+        header_bytes = HowlHeader.SIZE + hwl.header_data_size
         header_sectors = bytes_to_sectors(header_bytes)
         current = header_sectors
 
@@ -70,31 +66,31 @@ class HowlWriter:
         return bytearray(layout.total_sectors * SECTOR_SIZE)
 
     def _write_header(self, buf: bytearray, hwl: HowlFile) -> None:
-        HEADER_STRUCT.pack_into(
+        HowlHeader.STRUCT.pack_into(
             buf, 0,
-            HWL_MAGIC, hwl.version, hwl.reserved1, hwl.reserved2,
+            HowlHeader.MAGIC, hwl.version, hwl.reserved1, hwl.reserved2,
             len(hwl.spu_addrs), len(hwl.other_fx), len(hwl.engine_fx),
             len(hwl.banks), len(hwl.songs), hwl.header_data_size,
         )
 
     def _write_spu_addrs(self, buf: bytearray, pos: int, hwl: HowlFile) -> int:
         for entry in hwl.spu_addrs:
-            SPU_ADDR_STRUCT.pack_into(buf, pos, entry.ptr, entry.size)
-            pos += SPU_ADDR_SIZE
+            SpuAddrEntry.STRUCT.pack_into(buf, pos, entry.ptr, entry.size)
+            pos += SpuAddrEntry.SIZE
 
         return pos
 
     def _write_other_fx(self, buf: bytearray, pos: int, hwl: HowlFile) -> int:
         for fx in hwl.other_fx:
-            OTHER_FX_STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.spu_index, fx.duration)
-            pos += OTHER_FX_SIZE
+            OtherFX.STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.spu_index, fx.duration)
+            pos += OtherFX.SIZE
         
         return pos
 
     def _write_engine_fx(self, buf: bytearray, pos: int, hwl: HowlFile) -> int:
         for fx in hwl.engine_fx:
-            ENGINE_FX_STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.unk, fx.spu_index)
-            pos += ENGINE_FX_SIZE
+            EngineFX.STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.unk, fx.spu_index)
+            pos += EngineFX.SIZE
         
         return pos
 

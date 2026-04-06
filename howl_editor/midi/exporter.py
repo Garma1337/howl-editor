@@ -12,6 +12,12 @@ except ImportError:
     HAS_MIDO = False
 
 _DRUM_CHANNEL = 9
+_MAX_MIDI_CHANNEL = 15
+_MIDI_CC_VOLUME = 7
+_MIDI_CC_PAN = 10
+_CSEQ_MAX_PITCH_BEND = 255
+_MIDI_PITCH_BEND_RANGE = 16384
+_MIDI_PITCH_BEND_CENTER = 8192
 
 
 class CseqMidiExporter:
@@ -23,7 +29,7 @@ class CseqMidiExporter:
         if song_index >= len(cseq.songs):
             raise ValueError(f"Song index {song_index} out of range (0..{len(cseq.songs) - 1})")
 
-        mid = self._build_midi(cseq, cseq.songs[song_index])
+        mid = self._build_midi(cseq.songs[song_index])
         buf = io.BytesIO()
         mid.save(file=buf)
         return buf.getvalue()
@@ -31,7 +37,7 @@ class CseqMidiExporter:
     def export_to_file(self, cseq: CseqFile, path: str | Path, song_index: int = 0) -> None:
         Path(path).write_bytes(self.export(cseq, song_index))
 
-    def _build_midi(self, cseq: CseqFile, song: CseqSong) -> 'mido.MidiFile':
+    def _build_midi(self, song: CseqSong) -> 'mido.MidiFile':
         mid = mido.MidiFile(type=1, ticks_per_beat=song.tpqn)
 
         tempo_track = mido.MidiTrack()
@@ -41,20 +47,25 @@ class CseqMidiExporter:
 
         next_channel = 0
         for track in song.tracks:
-            if track.is_drum:
-                channel = _DRUM_CHANNEL
-            else:
-                channel = next_channel
-                if next_channel == _DRUM_CHANNEL:
-                    next_channel += 1
-                next_channel += 1
-                if next_channel > 15:
-                    next_channel = 0
-
+            channel, next_channel = self._assign_channel(track.is_drum, next_channel)
             midi_track = self._convert_track(track, channel)
             mid.tracks.append(midi_track)
 
         return mid
+
+    def _assign_channel(self, is_drum: bool, next_channel: int) -> tuple[int, int]:
+        if is_drum:
+            return _DRUM_CHANNEL, next_channel
+
+        channel = next_channel
+        if next_channel == _DRUM_CHANNEL:
+            next_channel += 1
+        next_channel += 1
+
+        if next_channel > _MAX_MIDI_CHANNEL:
+            next_channel = 0
+
+        return channel, next_channel
 
     def _convert_track(self, track: CseqTrack, channel: int) -> 'mido.MidiTrack':
         midi_track = mido.MidiTrack()
@@ -81,18 +92,18 @@ class CseqMidiExporter:
 
             elif event.event_type == CseqEventType.VELOCITY:
                 midi_track.append(mido.Message(
-                    "control_change", control=7, value=event.pitch,
+                    "control_change", control=_MIDI_CC_VOLUME, value=event.pitch,
                     channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.PAN:
                 midi_track.append(mido.Message(
-                    "control_change", control=10, value=event.pitch,
+                    "control_change", control=_MIDI_CC_PAN, value=event.pitch,
                     channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.PITCH_BEND:
-                pitch_val = int(event.pitch / 255 * 16383) - 8192
+                pitch_val = self._cseq_bend_to_midi(event.pitch)
                 midi_track.append(mido.Message(
                     "pitchwheel", pitch=pitch_val,
                     channel=channel, time=delta,
@@ -110,3 +121,6 @@ class CseqMidiExporter:
             midi_track.append(mido.MetaMessage("end_of_track", time=0))
 
         return midi_track
+
+    def _cseq_bend_to_midi(self, cseq_value: int) -> int:
+        return int(cseq_value / _CSEQ_MAX_PITCH_BEND * _MIDI_PITCH_BEND_RANGE) - _MIDI_PITCH_BEND_CENTER

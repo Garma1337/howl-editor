@@ -1,12 +1,22 @@
 # coding: utf-8
 
 from dataclasses import dataclass, field
+from struct import Struct
 
-from howl_editor.constants import HWL_VERSION_RELEASE, SPU_ADDR_SIZE, OTHER_FX_SIZE, ENGINE_FX_SIZE
+
+SECTOR_SIZE = 0x800
+
+
+def bytes_to_sectors(n: int) -> int:
+    """Round up byte count to sector count."""
+    return (n + SECTOR_SIZE - 1) // SECTOR_SIZE
 
 
 @dataclass
 class SpuAddrEntry:
+    STRUCT = Struct("<HH")
+    SIZE = STRUCT.size
+
     ptr: int = 0
     size: int = 0
 
@@ -17,6 +27,9 @@ class SpuAddrEntry:
 
 @dataclass
 class OtherFX:
+    STRUCT = Struct("<BBHHH")
+    SIZE = STRUCT.size
+
     flags: int = 0
     volume: int = 0
     pitch: int = 0
@@ -26,6 +39,9 @@ class OtherFX:
 
 @dataclass
 class EngineFX:
+    STRUCT = Struct("<BBHHH")
+    SIZE = STRUCT.size
+
     flags: int = 0
     volume: int = 0
     pitch: int = 0
@@ -36,8 +52,13 @@ class EngineFX:
 @dataclass
 class HowlHeader:
     """Parsed representation of the 40-byte HWL header."""
+    MAGIC = 0x4C574F48  # "HOWL" little-endian
+    VERSION_RELEASE = 0x80
+    STRUCT = Struct("<IIIIIIIIII")
+    SIZE = STRUCT.size
+
     magic: int = 0
-    version: int = HWL_VERSION_RELEASE
+    version: int = VERSION_RELEASE
     reserved1: int = 0
     reserved2: int = 0
     num_spu: int = 0
@@ -50,7 +71,7 @@ class HowlHeader:
 
 @dataclass
 class HowlFile:
-    version: int = HWL_VERSION_RELEASE
+    version: int = HowlHeader.VERSION_RELEASE
     reserved1: int = 0
     reserved2: int = 0
     spu_addrs: list[SpuAddrEntry] = field(default_factory=list)
@@ -63,9 +84,9 @@ class HowlFile:
     def header_data_size(self) -> int:
         """Size of all metadata tables after the fixed header."""
         return (
-            len(self.spu_addrs) * SPU_ADDR_SIZE
-            + len(self.other_fx) * OTHER_FX_SIZE
-            + len(self.engine_fx) * ENGINE_FX_SIZE
+            len(self.spu_addrs) * SpuAddrEntry.SIZE
+            + len(self.other_fx) * OtherFX.SIZE
+            + len(self.engine_fx) * EngineFX.SIZE
             + len(self.banks) * 2
             + len(self.songs) * 2
         )

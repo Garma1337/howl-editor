@@ -2,7 +2,8 @@
 
 from struct import unpack_from
 
-from howl_editor.constants import HWL_MAGIC, SECTOR_SIZE, HEADER_SIZE
+from howl_editor.models import HowlHeader
+from howl_editor.models.howl import SECTOR_SIZE
 from howl_editor.howl.writer import HowlLayout
 from howl_editor.models import HowlFile, SpuAddrEntry, OtherFX
 
@@ -17,7 +18,7 @@ class TestSerializeEmpty:
         hwl = HowlFile()
         data = howl_writer.serialize(hwl)
         magic = unpack_from("<I", data, 0)[0]
-        assert magic == HWL_MAGIC
+        assert magic == HowlHeader.MAGIC
 
     def test_has_version(self, howl_writer):
         hwl = HowlFile(version=0x80)
@@ -31,7 +32,7 @@ class TestSerializeWithData:
         hwl = HowlFile(spu_addrs=[SpuAddrEntry(0, 42)])
         data = howl_writer.serialize(hwl)
         # SPU table at offset 40
-        ptr, size = unpack_from("<HH", data, HEADER_SIZE)
+        ptr, size = unpack_from("<HH", data, HowlHeader.SIZE)
         assert ptr == 0
         assert size == 42
 

@@ -2,17 +2,12 @@
 
 from struct import unpack_from
 
-from howl_editor.constants import (
-    CSEQ_HEADER_STRUCT, CSEQ_HEADER_SIZE,
-    CSEQ_INSTRUMENT_STRUCT, CSEQ_INSTRUMENT_SIZE,
-    CSEQ_PERCUSSION_STRUCT, CSEQ_PERCUSSION_SIZE,
-)
+from howl_editor.core.vlq import VlqCodec
 from howl_editor.models import (
     CseqFile, CseqInstrument, CseqPercussion, CseqInfo,
     CseqSong, CseqTrack, CseqEvent, CseqEventType,
     CSEQ_EVENT_PARAMS, CSEQ_TERMINAL_EVENTS,
 )
-from howl_editor.vlq import read_vlq
 
 # Missing indices are songs without names
 _SONG_NAMES: dict[int, str] = {
@@ -52,9 +47,16 @@ _SONG_NAMES: dict[int, str] = {
 }
 
 _FIRST_CUSTOM_SONG = 33
+_OFFSET_SIZE = 2
+_SONG_HEADER_SIZE = 6
+_TRACK_HEADER_SIZE = 2
+_ALIGNMENT = 4
 
 
 class CseqReader:
+
+    def __init__(self, vlq_codec: VlqCodec):
+        self._vlq = vlq_codec
 
     def get_name(self, index: int) -> str:
         if index >= _FIRST_CUSTOM_SONG:
@@ -66,12 +68,12 @@ class CseqReader:
         """Parse raw CSEQ bytes into a CseqFile."""
         self._validate_min_size(data)
         file_size, num_inst, num_perc, num_songs = self._parse_header(data)
-        pos = CSEQ_HEADER_SIZE
+        pos = CseqInfo.HEADER_SIZE
 
         instruments, pos = self._parse_instruments(data, pos, num_inst)
         percussions, pos = self._parse_percussions(data, pos, num_perc)
         song_offsets, pos = self._parse_song_offsets(data, pos, num_songs)
-        pos = self._align_to(pos, 4)
+        pos = self._align_to(pos, _ALIGNMENT)
 
         seq_start = pos
         songs = [self._parse_song(data, seq_start, offset) for offset in song_offsets]
@@ -80,7 +82,7 @@ class CseqReader:
 
     def get_info(self, data: bytes) -> CseqInfo:
         """Get lightweight summary without full parse."""
-        if len(data) < CSEQ_HEADER_SIZE:
+        if len(data) < CseqInfo.HEADER_SIZE:
             return CseqInfo()
 
         file_size, num_inst, num_perc, num_songs = self._parse_header(data)
@@ -93,18 +95,18 @@ class CseqReader:
         )
 
     def _validate_min_size(self, data: bytes) -> None:
-        if len(data) < CSEQ_HEADER_SIZE:
-            raise ValueError(f"CSEQ data too small: {len(data)} < {CSEQ_HEADER_SIZE}")
+        if len(data) < CseqInfo.HEADER_SIZE:
+            raise ValueError(f"CSEQ data too small: {len(data)} < {CseqInfo.HEADER_SIZE}")
 
     def _parse_header(self, data: bytes) -> tuple[int, int, int, int]:
-        return CSEQ_HEADER_STRUCT.unpack_from(data, 0)
+        return CseqInfo.HEADER_STRUCT.unpack_from(data, 0)
 
     def _parse_instruments(self, data: bytes, pos: int, count: int) -> tuple[list[CseqInstrument], int]:
         instruments = []
         for _ in range(count):
-            flags, volume, ttp, freq, sid, adsr = CSEQ_INSTRUMENT_STRUCT.unpack_from(data, pos)
+            flags, volume, ttp, freq, sid, adsr = CseqInstrument.STRUCT.unpack_from(data, pos)
             instruments.append(CseqInstrument(flags, volume, ttp, freq, sid, adsr))
-            pos += CSEQ_INSTRUMENT_SIZE
+            pos += CseqInstrument.SIZE
         
         return instruments, pos
 
@@ -112,9 +114,9 @@ class CseqReader:
         percussions = []
         
         for _ in range(count):
-            flags, volume, freq, sid, ttp = CSEQ_PERCUSSION_STRUCT.unpack_from(data, pos)
+            flags, volume, freq, sid, ttp = CseqPercussion.STRUCT.unpack_from(data, pos)
             percussions.append(CseqPercussion(flags, volume, freq, sid, ttp))
-            pos += CSEQ_PERCUSSION_SIZE
+            pos += CseqPercussion.SIZE
         
         return percussions, pos
 
@@ -124,7 +126,7 @@ class CseqReader:
         for _ in range(count):
             offset, = unpack_from("<h", data, pos)
             offsets.append(offset)
-            pos += 2
+            pos += _OFFSET_SIZE
         
         return offsets, pos
 
@@ -135,16 +137,16 @@ class CseqReader:
     def _parse_song(self, data: bytes, seq_start: int, offset: int) -> CseqSong:
         pos = seq_start + offset
         unk0, track_num, bpm, tpqn = unpack_from("<BBhh", data, pos)
-        pos += 6
+        pos += _SONG_HEADER_SIZE
 
         track_offsets = []
         for _ in range(track_num):
             t_off, = unpack_from("<H", data, pos)
             track_offsets.append(t_off)
-            pos += 2
+            pos += _OFFSET_SIZE
 
-        header_total = 6 + track_num * 2
-        tracks_start = self._align_to(seq_start + offset + header_total, 4)
+        header_total = _SONG_HEADER_SIZE + track_num * _OFFSET_SIZE
+        tracks_start = self._align_to(seq_start + offset + header_total, _ALIGNMENT)
 
         tracks = [self._parse_track(data, tracks_start, t_off) for t_off in track_offsets]
         return CseqSong(unk0=unk0, bpm=bpm, tpqn=tpqn, tracks=tracks)
@@ -153,7 +155,7 @@ class CseqReader:
         pos = tracks_start + offset
         flags = data[pos]
         unk = data[pos + 1]
-        pos += 2
+        pos += _TRACK_HEADER_SIZE
 
         track = CseqTrack(flags=flags, unk=unk)
         while pos < len(data):
@@ -169,7 +171,7 @@ class CseqReader:
         return track
 
     def _parse_event(self, data: bytes, pos: int) -> tuple[CseqEvent, int]:
-        delta, pos = read_vlq(data, pos)
+        delta, pos = self._vlq.read(data, pos)
         evt_byte = data[pos]
         pos += 1
 

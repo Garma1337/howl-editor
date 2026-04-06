@@ -2,7 +2,6 @@
 
 from struct import unpack_from
 
-from howl_editor.constants import VAG_MAGIC, VAG_HEADER_SIZE
 from howl_editor.models import VagSample
 
 
@@ -10,8 +9,8 @@ class TestVagWriter:
     def test_produces_header(self, vag_writer):
         sample = VagSample(sample_rate=11025, name="snare", data=b"\x01" * 16)
         data = vag_writer.serialize(sample)
-        assert data[:4] == VAG_MAGIC
-        assert len(data) == VAG_HEADER_SIZE + 16
+        assert data[:4] == VagSample.MAGIC
+        assert len(data) == VagSample.HEADER_SIZE + 16
 
     def test_header_fields(self, vag_writer):
         sample = VagSample(sample_rate=22050, data=b"\x00" * 32)

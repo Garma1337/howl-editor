@@ -2,7 +2,7 @@
 
 import pytest
 
-from howl_editor.constants import HEADER_SIZE
+from howl_editor.models import HowlHeader
 from howl_editor.models import SpuAddrEntry, OtherFX, EngineFX
 from tests.conftest import build_hwl_bytes
 
@@ -14,7 +14,7 @@ class TestValidateMinSize:
 
     def test_exact_header_size_invalid_magic(self, howl_reader):
         with pytest.raises(ValueError, match="magic"):
-            howl_reader.read(b"\x00" * HEADER_SIZE)
+            howl_reader.read(b"\x00" * HowlHeader.SIZE)
 
 
 class TestParseMagic:

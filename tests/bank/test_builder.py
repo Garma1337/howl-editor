@@ -2,7 +2,7 @@
 
 import struct
 
-from howl_editor.constants import SECTOR_SIZE
+from howl_editor.models.howl import SECTOR_SIZE
 from howl_editor.models import SpuAddrEntry, VagSample, BankSample, BankBuildResult
 
 

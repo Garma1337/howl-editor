@@ -4,12 +4,13 @@ from struct import unpack_from
 
 import pytest
 
-from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.audio.decoder.vag_decoder import VagDecoder
+from howl_editor.audio.wav_writer import WavWriter
 
 
 @pytest.fixture
 def decoder():
-    return VagDecoder()
+    return VagDecoder(WavWriter())
 
 
 class TestDecode:

@@ -1,9 +1,7 @@
 # coding: utf-8
 
-from howl_editor.constants import (
-    bytes_to_sectors, SECTOR_SIZE,
-    HEADER_SIZE, SPU_ADDR_SIZE, OTHER_FX_SIZE, ENGINE_FX_SIZE,
-)
+from howl_editor.models import HowlHeader, SpuAddrEntry, OtherFX, EngineFX
+from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
 
 
 class TestBytesToSectors:
@@ -25,13 +23,13 @@ class TestBytesToSectors:
 
 class TestStructSizes:
     def test_header_size(self):
-        assert HEADER_SIZE == 40
+        assert HowlHeader.SIZE == 40
 
     def test_spu_addr_size(self):
-        assert SPU_ADDR_SIZE == 4
+        assert SpuAddrEntry.SIZE == 4
 
     def test_other_fx_size(self):
-        assert OTHER_FX_SIZE == 8
+        assert OtherFX.SIZE == 8
 
     def test_engine_fx_size(self):
-        assert ENGINE_FX_SIZE == 8
+        assert EngineFX.SIZE == 8

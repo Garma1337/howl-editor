@@ -1,0 +1,4 @@
+# coding: utf-8
+
+PS1_SAMPLE_RATE = 44100.0
+PS1_FREQUENCY_UNIT = 4096.0

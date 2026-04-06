@@ -2,6 +2,7 @@
 
 import pytest
 
+from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.editor import CseqEditor
 from howl_editor.cseq.writer import CseqWriter
 from howl_editor.models import (
@@ -25,7 +26,7 @@ def _make_song(bpm: int = 120, num_tracks: int = 1) -> CseqSong:
 
 def _make_cseq_blob(*songs: CseqSong) -> bytes:
     cseq = CseqFile(songs=list(songs))
-    return CseqWriter().serialize(cseq)
+    return CseqWriter(VlqCodec()).serialize(cseq)
 
 
 class TestReplaceSequence:
@@ -68,7 +69,7 @@ class TestReplaceSequence:
             instruments=[CseqInstrument(sample_id=42)],
             songs=[_make_song(bpm=100)],
         )
-        blob = CseqWriter().serialize(cseq)
+        blob = CseqWriter(VlqCodec()).serialize(cseq)
         new_blob = cseq_editor_svc.replace_sequence(blob, 0, _make_song(bpm=200))
         parsed = cseq_reader.read(new_blob)
 

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import IntEnum
+from struct import Struct
 
 
 class CseqEventType(IntEnum):
@@ -42,6 +43,9 @@ CSEQ_TERMINAL_EVENTS = frozenset({
 @dataclass
 class CseqInstrument:
     """Long instrument definition (12 bytes in file)."""
+    STRUCT = Struct("<BBhHHI")
+    SIZE = STRUCT.size
+
     flags: int = 1
     volume: int = 255
     time_to_play: int = 0
@@ -61,6 +65,9 @@ class CseqInstrument:
 @dataclass
 class CseqPercussion:
     """Short instrument/percussion definition (8 bytes in file)."""
+    STRUCT = Struct("<BBHHh")
+    SIZE = STRUCT.size
+
     flags: int = 1
     volume: int = 255
     frequency: int = 0x1000
@@ -110,6 +117,9 @@ class CseqFile:
 @dataclass
 class CseqInfo:
     """Lightweight summary of a CSEQ, parsed from the header only."""
+    HEADER_STRUCT = Struct("<IBBh")
+    HEADER_SIZE = HEADER_STRUCT.size
+
     file_size: int = 0
     num_instruments: int = 0
     num_percussions: int = 0

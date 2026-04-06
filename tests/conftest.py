@@ -6,14 +6,11 @@ import pytest
 
 from howl_editor.analysis.sample_classifier import SampleClassifier
 from howl_editor.analysis.validator import BankCseqValidator
-from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.audio.decoder.vag_decoder import VagDecoder
+from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.bank.builder import BankBuilder
 from howl_editor.bank.reader import BankReader
-from howl_editor.constants import (
-    HEADER_STRUCT, HEADER_SIZE, HWL_MAGIC, HWL_VERSION_RELEASE,
-    SPU_ADDR_STRUCT, OTHER_FX_STRUCT, ENGINE_FX_STRUCT,
-    SECTOR_SIZE, bytes_to_sectors, VAG_MAGIC, VAG_HEADER_SIZE,
-)
+from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.cseq.writer import CseqWriter
 from howl_editor.howl.editor import HowlEditor
@@ -21,9 +18,10 @@ from howl_editor.howl.reader import HowlReader
 from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.howl.writer import HowlWriter
 from howl_editor.models import (
-    HowlFile, SpuAddrEntry, OtherFX, EngineFX,
+    HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX, VagSample,
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
 )
+from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
 from howl_editor.vag.reader import VagReader
 from howl_editor.vag.writer import VagWriter
 
@@ -41,12 +39,16 @@ def howl_editor():
     return HowlEditor()
 
 @pytest.fixture
-def cseq_reader():
-    return CseqReader()
+def vlq_codec():
+    return VlqCodec()
 
 @pytest.fixture
-def cseq_writer():
-    return CseqWriter()
+def cseq_reader(vlq_codec):
+    return CseqReader(vlq_codec)
+
+@pytest.fixture
+def cseq_writer(vlq_codec):
+    return CseqWriter(vlq_codec)
 
 @pytest.fixture
 def vag_reader():
@@ -70,7 +72,7 @@ def version_detector():
 
 @pytest.fixture
 def vag_decoder():
-    return VagDecoder()
+    return VagDecoder(WavWriter())
 
 @pytest.fixture
 def sample_classifier(cseq_reader):
@@ -101,7 +103,7 @@ def build_hwl_bytes(
     num_spu=0, num_other=0, num_engine=0,
     banks=None, songs=None,
     spu_addrs=None, other_fx=None, engine_fx=None,
-    version=HWL_VERSION_RELEASE,
+    version=HowlHeader.VERSION_RELEASE,
 ) -> bytes:
     """Build minimal valid HWL binary data from components."""
     banks = banks or []
@@ -120,7 +122,7 @@ def build_hwl_bytes(
         num_spu * 4 + num_other * 8 + num_engine * 8
         + num_banks * 2 + num_songs * 2
     )
-    header_bytes = HEADER_SIZE + header_data_size
+    header_bytes = HowlHeader.SIZE + header_data_size
     header_sectors = bytes_to_sectors(header_bytes)
 
     current_sector = header_sectors
@@ -137,20 +139,20 @@ def build_hwl_bytes(
     total_bytes = current_sector * SECTOR_SIZE
     buf = bytearray(total_bytes)
 
-    HEADER_STRUCT.pack_into(buf, 0,
-        HWL_MAGIC, version, 0, 0,
+    HowlHeader.STRUCT.pack_into(buf, 0,
+        HowlHeader.MAGIC, version, 0, 0,
         num_spu, num_other, num_engine,
         num_banks, num_songs, header_data_size)
 
-    pos = HEADER_SIZE
+    pos = HowlHeader.SIZE
     for e in spu_addrs:
-        SPU_ADDR_STRUCT.pack_into(buf, pos, e.ptr, e.size)
+        SpuAddrEntry.STRUCT.pack_into(buf, pos, e.ptr, e.size)
         pos += 4
     for fx in other_fx:
-        OTHER_FX_STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.spu_index, fx.duration)
+        OtherFX.STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.spu_index, fx.duration)
         pos += 8
     for fx in engine_fx:
-        ENGINE_FX_STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.unk, fx.spu_index)
+        EngineFX.STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.unk, fx.spu_index)
         pos += 8
     for off in bank_offsets:
         pack_into("<H", buf, pos, off)
@@ -184,14 +186,14 @@ def build_cseq_bytes(
         ])]
 
     cseq = CseqFile(instruments=instruments, percussions=percussions, songs=songs)
-    writer = CseqWriter()
+    writer = CseqWriter(VlqCodec())
     return writer.serialize(cseq)
 
 
 def build_vag_bytes(data: bytes = b"\x00" * 16, sample_rate: int = 44100, name: str = "test") -> bytes:
     """Build VAG file bytes with header."""
-    header = bytearray(VAG_HEADER_SIZE)
-    pack_into(">4sIIII", header, 0, VAG_MAGIC, 3, 0, len(data), sample_rate)
+    header = bytearray(VagSample.HEADER_SIZE)
+    pack_into(">4sIIII", header, 0, VagSample.MAGIC, 3, 0, len(data), sample_rate)
     name_bytes = name.encode("ascii")[:16]
     header[0x20:0x20 + len(name_bytes)] = name_bytes
     return bytes(header) + data

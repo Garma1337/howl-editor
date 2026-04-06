@@ -3,14 +3,8 @@
 from pathlib import Path
 from struct import unpack_from
 
-from howl_editor.constants import (
-    HEADER_STRUCT, HEADER_SIZE, HWL_MAGIC,
-    SPU_ADDR_STRUCT, SPU_ADDR_SIZE,
-    OTHER_FX_STRUCT, OTHER_FX_SIZE,
-    ENGINE_FX_STRUCT, ENGINE_FX_SIZE,
-    SECTOR_SIZE, bytes_to_sectors,
-)
 from howl_editor.models import HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX
+from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
 
 
 class HowlReader:
@@ -20,7 +14,7 @@ class HowlReader:
         self._validate_min_size(data)
         header = self._parse_header(data)
         self._validate_magic(header)
-        pos = HEADER_SIZE
+        pos = HowlHeader.SIZE
 
         spu_addrs, pos = self._parse_spu_addrs(data, pos, header.num_spu)
         other_fx, pos = self._parse_other_fx(data, pos, header.num_other)
@@ -50,15 +44,15 @@ class HowlReader:
         return self.read(Path(path).read_bytes())
 
     def _validate_min_size(self, data: bytes) -> None:
-        if len(data) < HEADER_SIZE:
-            raise ValueError(f"Data too small for HWL header: {len(data)} < {HEADER_SIZE}")
+        if len(data) < HowlHeader.SIZE:
+            raise ValueError(f"Data too small for HWL header: {len(data)} < {HowlHeader.SIZE}")
 
     def _validate_magic(self, header: HowlHeader) -> None:
-        if header.magic != HWL_MAGIC:
-            raise ValueError(f"Invalid HWL magic: {header.magic:#010x}, expected {HWL_MAGIC:#010x}")
+        if header.magic != HowlHeader.MAGIC:
+            raise ValueError(f"Invalid HWL magic: {header.magic:#010x}, expected {HowlHeader.MAGIC:#010x}")
 
     def _parse_header(self, data: bytes) -> HowlHeader:
-        fields = HEADER_STRUCT.unpack_from(data, 0)
+        fields = HowlHeader.STRUCT.unpack_from(data, 0)
         return HowlHeader(
             magic=fields[0],
             version=fields[1],
@@ -76,9 +70,9 @@ class HowlReader:
         entries = []
 
         for _ in range(count):
-            ptr, size = SPU_ADDR_STRUCT.unpack_from(data, pos)
+            ptr, size = SpuAddrEntry.STRUCT.unpack_from(data, pos)
             entries.append(SpuAddrEntry(ptr, size))
-            pos += SPU_ADDR_SIZE
+            pos += SpuAddrEntry.SIZE
         
         return entries, pos
 
@@ -86,9 +80,9 @@ class HowlReader:
         entries = []
         
         for _ in range(count):
-            flags, volume, pitch, spu_index, duration = OTHER_FX_STRUCT.unpack_from(data, pos)
+            flags, volume, pitch, spu_index, duration = OtherFX.STRUCT.unpack_from(data, pos)
             entries.append(OtherFX(flags, volume, pitch, spu_index, duration))
-            pos += OTHER_FX_SIZE
+            pos += OtherFX.SIZE
         
         return entries, pos
 
@@ -96,9 +90,9 @@ class HowlReader:
         entries = []
         
         for _ in range(count):
-            flags, volume, pitch, unk, spu_index = ENGINE_FX_STRUCT.unpack_from(data, pos)
+            flags, volume, pitch, unk, spu_index = EngineFX.STRUCT.unpack_from(data, pos)
             entries.append(EngineFX(flags, volume, pitch, unk, spu_index))
-            pos += ENGINE_FX_SIZE
+            pos += EngineFX.SIZE
         
         return entries, pos
 

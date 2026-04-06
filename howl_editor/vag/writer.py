@@ -1,9 +1,12 @@
-"""Writes VagSample models to VAG file format."""
+# coding: utf-8
 
 from pathlib import Path
 
-from howl_editor.constants import VAG_MAGIC, VAG_HEADER_SIZE, VAG_HEADER_STRUCT
 from howl_editor.models import VagSample
+
+_VAG_VERSION = 3
+_MAX_NAME_LENGTH = 16
+_NAME_OFFSET = 0x20
 
 
 class VagWriter:
@@ -18,8 +21,10 @@ class VagWriter:
         Path(path).write_bytes(self.serialize(sample))
 
     def _build_header(self, sample: VagSample) -> bytes:
-        header = bytearray(VAG_HEADER_SIZE)
-        VAG_HEADER_STRUCT.pack_into(header, 0, VAG_MAGIC, 3, 0, len(sample.data), sample.sample_rate)
-        name_bytes = sample.name.encode("ascii")[:16]
-        header[0x20:0x20 + len(name_bytes)] = name_bytes
+        header = bytearray(VagSample.HEADER_SIZE)
+        VagSample.HEADER_STRUCT.pack_into(
+            header, 0, VagSample.MAGIC, _VAG_VERSION, 0, len(sample.data), sample.sample_rate,
+        )
+        name_bytes = sample.name.encode("ascii")[:_MAX_NAME_LENGTH]
+        header[_NAME_OFFSET:_NAME_OFFSET + len(name_bytes)] = name_bytes
         return bytes(header)
