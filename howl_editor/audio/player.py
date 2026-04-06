@@ -1,7 +1,8 @@
 # coding: utf-8
 
-import os
+import hashlib
 import tempfile
+from pathlib import Path
 
 try:
     from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -10,19 +11,22 @@ try:
 except ImportError:
     HAS_MULTIMEDIA = False
 
+_CACHE_DIR = Path(tempfile.gettempdir()) / "howl-editor"
+
 
 class AudioPlayer:
-    """Plays WAV audio data using Qt Multimedia."""
+    """Plays WAV audio data using Qt Multimedia with file caching."""
 
     def __init__(self):
         self._player: QMediaPlayer | None = None
         self._audio_output: QAudioOutput | None = None
-        self._temp_path: str | None = None
 
         if HAS_MULTIMEDIA:
             self._audio_output = QAudioOutput()
             self._player = QMediaPlayer()
             self._player.setAudioOutput(self._audio_output)
+
+        _CACHE_DIR.mkdir(exist_ok=True)
 
     @property
     def available(self) -> bool:
@@ -33,24 +37,27 @@ class AudioPlayer:
             return
 
         self.stop()
-        self._cleanup_temp()
 
-        fd, self._temp_path = tempfile.mkstemp(suffix=".wav")
-        with os.fdopen(fd, "wb") as f:
-            f.write(wav_data)
+        checksum = hashlib.md5(wav_data).hexdigest()
+        cached_path = _CACHE_DIR / f"{checksum}.wav"
 
-        self._player.setSource(QUrl.fromLocalFile(self._temp_path))
+        if not cached_path.exists():
+            cached_path.write_bytes(wav_data)
+
+        self._player.setSource(QUrl.fromLocalFile(str(cached_path)))
         self._player.play()
 
     def stop(self) -> None:
         if self._player:
             self._player.stop()
 
-    def _cleanup_temp(self) -> None:
-        if self._temp_path and os.path.exists(self._temp_path):
+    def clear_cache(self) -> int:
+        """Remove all cached WAV files. Returns number of files removed."""
+        count = 0
+        for f in _CACHE_DIR.glob("*.wav"):
             try:
-                os.unlink(self._temp_path)
+                f.unlink()
+                count += 1
             except OSError:
                 pass
-
-            self._temp_path = None
+        return count

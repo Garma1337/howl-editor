@@ -159,6 +159,8 @@ class MainWindow(QMainWindow):
         midi_text = "&Convert MIDI to CSEQ..." if HAS_MIDO else "Convert MIDI to CSEQ (mido not installed)"
         self._add_action(tools_menu, midi_text, self._tools.midi_to_cseq, enabled=HAS_MIDO)
         self._add_action(tools_menu, "&Validate Bank/Song...", self._tools.validate_bank_song, requires_file=True)
+        tools_menu.addSeparator()
+        self._add_action(tools_menu, "Clear Audio &Cache", self._clear_audio_cache)
 
     def _add_action(self, menu, text, slot, shortcut=None, enabled=True, requires_file=False):
         action = QAction(text, self)
@@ -193,6 +195,12 @@ class MainWindow(QMainWindow):
 
         for action in self._file_actions:
             action.setEnabled(False)
+
+    def _clear_audio_cache(self):
+        if self._audio_player:
+            self._audio_player.stop()
+            count = self._audio_player.clear_cache()
+            self.status.showMessage(f"Cleared {count} cached audio file(s)")
 
     def _close_file(self):
         if not self._check_unsaved():
