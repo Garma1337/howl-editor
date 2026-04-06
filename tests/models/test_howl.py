@@ -41,8 +41,17 @@ class TestHowlFile:
         assert hwl.header_data_size == expected
 
 
+class TestHowlFileReserved:
+    def test_reserved_defaults(self):
+        hwl = HowlFile()
+        assert hwl.reserved1 == 0
+        assert hwl.reserved2 == 0
+
+
 class TestHowlHeader:
     def test_defaults(self):
         h = HowlHeader()
         assert h.magic == 0
         assert h.version == 0x80
+        assert h.reserved1 == 0
+        assert h.reserved2 == 0

@@ -107,6 +107,80 @@ class TestMerge:
         assert num == 0
 
 
+class TestRemoveSample:
+    def test_removes_by_index(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 2)] * 31
+        blob = bank_builder.merge([
+            BankSample(spu_index=10, data=b"\xAA" * 16),
+            BankSample(spu_index=20, data=b"\xBB" * 16),
+            BankSample(spu_index=30, data=b"\xCC" * 16),
+        ])
+        new_blob = bank_builder.remove_sample(blob, spu, 1, bank_reader)
+        parsed = bank_reader.parse(new_blob, spu)
+        assert len(parsed) == 2
+        assert parsed[0].spu_index == 10
+        assert parsed[1].spu_index == 30
+
+    def test_out_of_range_raises(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 2)] * 5
+        blob = bank_builder.merge([BankSample(spu_index=0, data=b"\x00" * 16)])
+        import pytest
+        with pytest.raises(IndexError):
+            bank_builder.remove_sample(blob, spu, 5, bank_reader)
+
+
+class TestAddSample:
+    def test_appends_sample(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 2)] * 5
+        blob = bank_builder.merge([BankSample(spu_index=0, data=b"\xAA" * 16)])
+        new_blob = bank_builder.add_sample(blob, spu, b"\xBB" * 32, bank_reader)
+        parsed = bank_reader.parse(new_blob, spu)
+        assert len(parsed) == 2
+        assert parsed[0].spu_index == 0
+        assert parsed[1].data == b"\xBB" * 32
+
+    def test_creates_spu_entry(self, bank_builder, bank_reader):
+        spu: list[SpuAddrEntry] = []
+        blob = bank_builder.merge([])
+        bank_builder.add_sample(blob, spu, b"\x00" * 24, bank_reader)
+        assert len(spu) == 1
+        assert spu[0].byte_size == 24
+
+    def test_explicit_spu_index(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 0)] * 10
+        blob = bank_builder.merge([])
+        new_blob = bank_builder.add_sample(blob, spu, b"\x00" * 16, bank_reader, spu_index=5)
+        parsed = bank_reader.parse(new_blob, spu)
+        assert len(parsed) == 1
+        assert parsed[0].spu_index == 5
+
+
+class TestReplaceSample:
+    def test_replaces_data(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 2)] * 5
+        blob = bank_builder.merge([
+            BankSample(spu_index=3, data=b"\xAA" * 16),
+        ])
+        new_blob = bank_builder.replace_sample(blob, spu, 0, b"\xBB" * 32, bank_reader)
+        parsed = bank_reader.parse(new_blob, spu)
+        assert len(parsed) == 1
+        assert parsed[0].spu_index == 3
+        assert parsed[0].data == b"\xBB" * 32
+
+    def test_updates_spu_size(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 2)] * 5
+        blob = bank_builder.merge([BankSample(spu_index=2, data=b"\x00" * 16)])
+        bank_builder.replace_sample(blob, spu, 0, b"\x00" * 48, bank_reader)
+        assert spu[2].byte_size == 48
+
+    def test_out_of_range_raises(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 2)] * 5
+        blob = bank_builder.merge([BankSample(spu_index=0, data=b"\x00" * 16)])
+        import pytest
+        with pytest.raises(IndexError):
+            bank_builder.replace_sample(blob, spu, 3, b"\x00" * 16, bank_reader)
+
+
 class TestPadToSector:
     def test_pads_short_data(self, bank_builder):
         padded = bank_builder._pad_to_sector(b"\x00" * 10)

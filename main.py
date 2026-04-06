@@ -30,6 +30,7 @@ if __name__ == "__main__":
         sample_classifier=container.resolve("sample_classifier"),
         validator=container.resolve("validator"),
         batch_exporter=container.resolve("batch_exporter"),
+        detail_formatter=container.resolve("detail_formatter"),
     )
 
     window.show()

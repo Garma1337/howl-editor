@@ -20,6 +20,11 @@ from howl_editor.midi.converter import MidiConverter
 from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.vag.reader import VagReader
 from howl_editor.vag.writer import VagWriter
+from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
+from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
+from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
+from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
+from howl_editor.gui.detail.detail_formatter import DetailFormatter
 
 container = Container()
 container.register("howl_reader", lambda c: HowlReader())
@@ -43,10 +48,20 @@ container.register("validator", lambda c: BankCseqValidator(
     c.resolve("bank_reader"), 
     c.resolve("cseq_reader")))
 container.register("batch_exporter", lambda c: BatchExporter(
-    c.resolve("bank_reader"), 
-    c.resolve("cseq_reader"), 
+    c.resolve("bank_reader"),
+    c.resolve("cseq_reader"),
     c.resolve("vag_writer"),
-    c.resolve("vag_decoder"), 
-    c.resolve("sample_classifier"), 
+    c.resolve("vag_decoder"),
+    c.resolve("sample_classifier"),
     c.resolve("midi_exporter"),
+))
+container.register("howl_detail_formatter", lambda c: HowlDetailFormatter(c.resolve("version_detector")))
+container.register("fx_detail_formatter", lambda c: FxDetailFormatter())
+container.register("bank_detail_formatter", lambda c: BankDetailFormatter(c.resolve("bank_reader")))
+container.register("song_detail_formatter", lambda c: SongDetailFormatter(c.resolve("cseq_reader")))
+container.register("detail_formatter", lambda c: DetailFormatter(
+    c.resolve("howl_detail_formatter"),
+    c.resolve("fx_detail_formatter"),
+    c.resolve("bank_detail_formatter"),
+    c.resolve("song_detail_formatter"),
 ))

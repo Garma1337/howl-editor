@@ -1,7 +1,7 @@
 # coding: utf-8
 
 from howl_editor.models import (
-    CseqInstrument, CseqPercussion, CseqEventType, CseqInfo,
+    CseqInstrument, CseqPercussion, CseqTrack, CseqEventType, CseqInfo,
     CSEQ_EVENT_PARAMS, CSEQ_TERMINAL_EVENTS,
 )
 
@@ -27,6 +27,27 @@ class TestCseqPercussion:
     def test_freq_hz(self):
         perc = CseqPercussion(frequency=2048)
         assert perc.freq_hz == int(2048 / 4096 * 44100)
+
+
+class TestCseqTrack:
+    def test_is_drum_when_flag_set(self):
+        track = CseqTrack(flags=1)
+        assert track.is_drum is True
+
+    def test_not_drum_when_flag_clear(self):
+        track = CseqTrack(flags=0)
+        assert track.is_drum is False
+
+    def test_is_drum_checks_bit_0(self):
+        track = CseqTrack(flags=3)
+        assert track.is_drum is True
+
+    def test_defaults(self):
+        track = CseqTrack()
+        assert track.flags == 0
+        assert track.unk == 0
+        assert track.instrument == 0
+        assert track.is_drum is False
 
 
 class TestCseqEventParams:

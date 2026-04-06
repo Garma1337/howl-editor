@@ -52,4 +52,5 @@ class AudioPlayer:
                 os.unlink(self._temp_path)
             except OSError:
                 pass
+
             self._temp_path = None

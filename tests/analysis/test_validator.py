@@ -72,6 +72,20 @@ class TestValidateMulti:
         assert 9 in result.missing_ids
 
 
+class TestGetBankIds:
+    def test_returns_sample_ids(self, validator):
+        spu = [SpuAddrEntry(0, 2)] * 10
+        bank = build_bank_blob([3, 7, 1], [b"\x00" * 16] * 3)
+        ids = validator.get_bank_ids(bank, spu)
+        assert ids == {3, 7, 1}
+
+    def test_empty_bank(self, validator):
+        spu = [SpuAddrEntry(0, 2)] * 5
+        bank = build_bank_blob([], [])
+        ids = validator.get_bank_ids(bank, spu)
+        assert ids == set()
+
+
 class TestGetRequiredIds:
     def test_collects_from_instruments_and_percussions(self, validator, cseq_reader):
         song = build_cseq_bytes(
