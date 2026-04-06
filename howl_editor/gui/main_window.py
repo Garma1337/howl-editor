@@ -6,7 +6,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QTreeWidget, QTreeWidgetItem, QSplitter,
+    QApplication, QMainWindow, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
+    QSplitter,
     QTextEdit, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QDialog, QHeaderView, QInputDialog,
 )
@@ -117,7 +118,7 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(self.tree)
         splitter.addWidget(self.details)
-        splitter.setSizes([450, 650])
+        splitter.setSizes([660, 440])
         self.setCentralWidget(splitter)
 
         self.status = QStatusBar()
@@ -186,6 +187,9 @@ class MainWindow(QMainWindow):
     def _close_file(self):
         if not self._check_unsaved():
             return
+
+        if self._audio_player:
+            self._audio_player.stop()
 
         self.hwl = None
         self.file_path = None
@@ -270,6 +274,10 @@ class MainWindow(QMainWindow):
         
         self.setWindowTitle(title)
 
+    def _notify(self, message: str) -> None:
+        self.status.showMessage(message)
+        QMessageBox.information(self, "HOWL Editor", message)
+
     def _set_file_actions_enabled(self, enabled: bool):
         for action in self._file_actions:
             action.setEnabled(enabled)
@@ -278,7 +286,69 @@ class MainWindow(QMainWindow):
         self.modified = True
         self._update_title()
 
+    def _save_tree_state(self) -> tuple[set[str], str | None]:
+        expanded: set[str] = set()
+        selected_path: str | None = None
+
+        current = self.tree.currentItem()
+        if current:
+            selected_path = self._get_item_path(current)
+
+        iterator = QTreeWidgetItemIterator(self.tree)
+
+        while iterator.value():
+            item = iterator.value()
+            
+            if item.isExpanded():
+                expanded.add(self._get_item_path(item))
+
+            iterator += 1
+
+        return expanded, selected_path
+
+    def _restore_tree_state(self, expanded: set[str], selected_path: str | None) -> None:
+        if not expanded and not selected_path:
+            return
+
+        self.tree.blockSignals(True)
+
+        iterator = QTreeWidgetItemIterator(self.tree)
+
+        while iterator.value():
+            item = iterator.value()
+            path = self._get_item_path(item)
+            item.setExpanded(path in expanded)
+
+            if path == selected_path:
+                self.tree.setCurrentItem(item)
+
+            iterator += 1
+
+        self.tree.blockSignals(False)
+
+    def _get_item_path(self, item) -> str:
+        parts = []
+
+        while item:
+            node_type = item.data(0, Qt.UserRole)
+            index = item.data(0, Qt.UserRole + 1)
+            sub_index = item.data(0, Qt.UserRole + 2)
+            key = str(node_type)
+
+            if index is not None:
+                key += f".{index}"
+
+            if sub_index is not None:
+                key += f".{sub_index}"
+
+            parts.append(key)
+            item = item.parent()
+
+        return "/".join(reversed(parts))
+
     def _rebuild_tree(self):
+        expanded, selected_path = self._save_tree_state()
+
         self.tree.clear()
         self.details.clear()
 
@@ -314,6 +384,8 @@ class MainWindow(QMainWindow):
             label = self._item_label("Song", i, self._cseq_reader.get_name(i))
             song_node = self._tree_item(songs_node, label, info, NODE_SONG, i)
             self._populate_song_sequences(song_node, i)
+
+        self._restore_tree_state(expanded, selected_path)
 
     def _item_label(self, prefix: str, index: int, name: str) -> str:
         if name:
@@ -413,6 +485,7 @@ class MainWindow(QMainWindow):
             menu.addAction("Export as WAV...", lambda: self._export_sample_as_wav(index, sub_index))
             menu.addSeparator()
             menu.addAction("Replace Sample (.vag)...", lambda: self._replace_sample(index, sub_index))
+            menu.addAction("Remove Sample", lambda: self._remove_sample(index, sub_index))
         elif node_type == NODE_BANK and index is not None:
             menu.addAction("Export Bank (.bnk)...", lambda: self._export_bank(index))
             menu.addAction("Export Samples as VAGs...", lambda: self._export_bank_samples(index))
@@ -421,6 +494,8 @@ class MainWindow(QMainWindow):
             menu.addAction("Merge Bank...", lambda: self._merge_bank(index))
             menu.addAction("Replace Bank...", lambda: self._replace_bank(index))
             menu.addAction("Remove Bank", lambda: self._remove_bank(index))
+            menu.addSeparator()
+            menu.addAction("Add Sample (.vag)...", lambda: self._add_sample_to_bank(index))
         elif node_type == NODE_SEQUENCE and index is not None and sub_index is not None:
             menu.addAction("Export as MIDI...", lambda: self._export_sequence_as_midi(index, sub_index))
             menu.addSeparator()
@@ -455,7 +530,7 @@ class MainWindow(QMainWindow):
         self._editor.add_bank(self.hwl, Path(path).read_bytes())
         self._mark_modified()
         self._rebuild_tree()
-        self.status.showMessage(f"Added bank from {Path(path).name}")
+        self._notify(f"Added bank from {Path(path).name}")
 
     def _export_bank(self, index: int):
         path, _ = QFileDialog.getSaveFileName(self, f"Export Bank {index}", f"bank_{index}.bnk", "Bank Files (*.bnk)")
@@ -624,9 +699,7 @@ class MainWindow(QMainWindow):
             self._mark_modified()
             self._rebuild_tree()
 
-            self.status.showMessage(
-                f"Replaced sequence {seq_index} in song {song_index}"
-            )
+            self._notify(f"Replaced sequence {seq_index} in song {song_index}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Replace failed:\n{e}")
 
@@ -645,7 +718,7 @@ class MainWindow(QMainWindow):
             self._editor.replace_song(self.hwl, song_index, new_blob)
             self._mark_modified()
             self._rebuild_tree()
-            self.status.showMessage(f"Removed sequence {seq_index} from song {song_index}")
+            self._notify(f"Removed sequence {seq_index} from song {song_index}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Remove failed:\n{e}")
 
@@ -703,6 +776,54 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Batch export failed:\n{e}")
 
+    def _remove_sample(self, bank_index: int, sample_index: int):
+        if not self.hwl:
+            return
+
+        if QMessageBox.question(
+            self, "Remove Sample",
+            f"Remove sample {sample_index} from bank {bank_index}?",
+        ) != QMessageBox.Yes:
+            return
+
+        try:
+            new_blob = self._bank_builder.remove_sample(
+                self.hwl.banks[bank_index], self.hwl.spu_addrs,
+                sample_index, self._bank_reader,
+            )
+
+            self._editor.replace_bank(self.hwl, bank_index, new_blob)
+            self._mark_modified()
+            self._rebuild_tree()
+            self._notify(f"Removed sample {sample_index} from bank {bank_index}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Remove failed:\n{e}")
+
+    def _add_sample_to_bank(self, bank_index: int):
+        if not self.hwl:
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Add Sample to Bank", "", "VAG Files (*.vag);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            vag = self._vag_reader.read_file(path)
+            new_blob = self._bank_builder.add_sample(
+                self.hwl.banks[bank_index], self.hwl.spu_addrs,
+                vag.data, self._bank_reader,
+            )
+
+            self._editor.replace_bank(self.hwl, bank_index, new_blob)
+            self._mark_modified()
+            self._rebuild_tree()
+            spu_index = len(self.hwl.spu_addrs) - 1
+            self._notify(f"Added sample SPU {spu_index} to bank {bank_index}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Add sample failed:\n{e}")
+
     def _replace_sample(self, bank_index: int, sample_index: int):
         if not self.hwl:
             return
@@ -723,7 +844,7 @@ class MainWindow(QMainWindow):
             self._editor.replace_bank(self.hwl, bank_index, new_blob)
             self._mark_modified()
             self._rebuild_tree()
-            self.status.showMessage(f"Replaced sample {sample_index} in bank {bank_index}")
+            self._notify(f"Replaced sample {sample_index} in bank {bank_index}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Replace failed:\n{e}")
 
@@ -767,7 +888,7 @@ class MainWindow(QMainWindow):
         self._editor.replace_bank(self.hwl, index, new_blob)
         self._mark_modified()
         self._rebuild_tree()
-        self.status.showMessage(f"Merged {len(result)} samples into bank {index}")
+        self._notify(f"Merged {len(result)} samples into bank {index}")
 
     def _replace_bank(self, index: int):
         path, _ = QFileDialog.getOpenFileName(self, f"Replace Bank {index}", "", "Bank Files (*.bnk);;All Files (*)")
@@ -777,12 +898,14 @@ class MainWindow(QMainWindow):
         self._editor.replace_bank(self.hwl, index, Path(path).read_bytes())
         self._mark_modified()
         self._rebuild_tree()
+        self._notify(f"Replaced bank {index} with {Path(path).name}")
 
     def _remove_bank(self, index: int):
         if QMessageBox.question(self, "Remove Bank", f"Remove bank {index}?") == QMessageBox.Yes:
             self._editor.remove_bank(self.hwl, index)
             self._mark_modified()
             self._rebuild_tree()
+            self._notify(f"Removed bank {index}")
 
     def _add_song(self):
         if not self.hwl:
@@ -795,6 +918,7 @@ class MainWindow(QMainWindow):
         self._editor.add_song(self.hwl, Path(path).read_bytes())
         self._mark_modified()
         self._rebuild_tree()
+        self._notify(f"Added song {len(self.hwl.songs) - 1} from {Path(path).name}")
 
     def _export_song(self, index: int):
         path, _ = QFileDialog.getSaveFileName(self, f"Export Song {index}", f"song_{index}.cseq", "CSEQ Files (*.cseq)")
@@ -810,12 +934,14 @@ class MainWindow(QMainWindow):
         self._editor.replace_song(self.hwl, index, Path(path).read_bytes())
         self._mark_modified()
         self._rebuild_tree()
+        self._notify(f"Replaced song {index} with {Path(path).name}")
 
     def _remove_song(self, index: int):
         if QMessageBox.question(self, "Remove Song", f"Remove song {index}?") == QMessageBox.Yes:
             self._editor.remove_song(self.hwl, index)
             self._mark_modified()
             self._rebuild_tree()
+            self._notify(f"Removed song {index}")
 
     def _build_bank_from_vags(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select VAG Files", "", "VAG Files (*.vag);;All Files (*)")
@@ -830,12 +956,12 @@ class MainWindow(QMainWindow):
                 self._editor.add_bank(self.hwl, result.bank_data)
                 self._mark_modified()
                 self._rebuild_tree()
-                self.status.showMessage(f"Added bank {len(self.hwl.banks) - 1} with {len(files)} samples")
+                self._notify(f"Added bank {len(self.hwl.banks) - 1} with {len(files)} samples")
             else:
                 path, _ = QFileDialog.getSaveFileName(self, "Save Bank", "bank.bnk", "Bank Files (*.bnk)")
                 if path:
                     Path(path).write_bytes(result.bank_data)
-                    self.status.showMessage(f"Saved bank to {Path(path).name}")
+                    self._notify(f"Saved bank to {Path(path).name}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed:\n{e}\n{traceback.format_exc()}")
 
@@ -866,13 +992,13 @@ class MainWindow(QMainWindow):
                 self._editor.add_song(self.hwl, cseq_data)
                 self._mark_modified()
                 self._rebuild_tree()
-                self.status.showMessage(f"Added song {len(self.hwl.songs) - 1}")
+                self._notify(f"Added song {len(self.hwl.songs) - 1}")
             else:
                 save_path, _ = QFileDialog.getSaveFileName(self, "Save CSEQ", "song.cseq", "CSEQ Files (*.cseq)")
 
                 if save_path:
                     Path(save_path).write_bytes(cseq_data)
-                    self.status.showMessage(f"Saved CSEQ to {Path(save_path).name}")
+                    self._notify(f"Saved CSEQ to {Path(save_path).name}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Conversion failed:\n{e}")
 

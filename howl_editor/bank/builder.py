@@ -58,6 +58,40 @@ class BankBuilder:
             [s.data for s in samples],
         )
 
+    def remove_sample(
+        self,
+        bank_data: bytes,
+        spu_addrs: list[SpuAddrEntry],
+        sample_index: int,
+        bank_reader: 'BankReader',
+    ) -> bytes:
+        """Remove a sample from a bank by index and rebuild the blob."""
+        samples = bank_reader.parse(bank_data, spu_addrs)
+        if sample_index < 0 or sample_index >= len(samples):
+            raise IndexError(f"Sample index {sample_index} out of range (0..{len(samples) - 1})")
+
+        del samples[sample_index]
+        return self.merge(samples)
+
+    def add_sample(
+        self,
+        bank_data: bytes,
+        spu_addrs: list[SpuAddrEntry],
+        new_data: bytes,
+        bank_reader: 'BankReader',
+        spu_index: int | None = None,
+    ) -> bytes:
+        """Add a sample to an existing bank and rebuild the blob.
+        If spu_index is None, appends a new SPU entry. Returns the new bank blob."""
+        samples = bank_reader.parse(bank_data, spu_addrs)
+
+        if spu_index is None:
+            spu_index = len(spu_addrs)
+
+        self._ensure_spu_addr(spu_addrs, spu_index, len(new_data))
+        samples.append(BankSample(spu_index=spu_index, data=new_data))
+        return self.merge(samples)
+
     def replace_sample(
         self,
         bank_data: bytes,
