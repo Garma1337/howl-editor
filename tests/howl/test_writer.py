@@ -2,11 +2,9 @@
 
 from struct import unpack_from
 
-import pytest
-
-from howl_editor.models import HowlFile, SpuAddrEntry, OtherFX, EngineFX
-from howl_editor.howl.writer import HowlWriter, HowlLayout
 from howl_editor.constants import HWL_MAGIC, SECTOR_SIZE, HEADER_SIZE
+from howl_editor.howl.writer import HowlLayout
+from howl_editor.models import HowlFile, SpuAddrEntry, OtherFX
 
 
 class TestSerializeEmpty:

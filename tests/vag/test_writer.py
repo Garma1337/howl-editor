@@ -2,8 +2,8 @@
 
 from struct import unpack_from
 
-from howl_editor.models import VagSample
 from howl_editor.constants import VAG_MAGIC, VAG_HEADER_SIZE
+from howl_editor.models import VagSample
 
 
 class TestVagWriter:

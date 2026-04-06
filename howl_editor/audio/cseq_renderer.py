@@ -3,7 +3,7 @@
 from struct import pack
 
 from howl_editor.audio.vag_decoder import VagDecoder
-from howl_editor.models import CseqFile, CseqSong, CseqEventType, SpuAddrEntry, BankSample
+from howl_editor.models import CseqFile, CseqSong, CseqEventType
 
 
 class _Voice:

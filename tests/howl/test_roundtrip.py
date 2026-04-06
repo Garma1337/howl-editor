@@ -1,10 +1,6 @@
 # coding: utf-8
 
-import pytest
-
 from howl_editor.models import HowlFile, SpuAddrEntry, OtherFX, EngineFX
-from howl_editor.howl.reader import HowlReader
-from howl_editor.howl.writer import HowlWriter
 from tests.conftest import build_hwl_bytes
 
 

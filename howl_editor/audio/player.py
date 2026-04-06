@@ -1,8 +1,7 @@
 # coding: utf-8
 
-import io
-import tempfile
 import os
+import tempfile
 
 try:
     from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput

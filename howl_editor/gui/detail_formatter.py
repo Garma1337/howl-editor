@@ -2,10 +2,10 @@
 
 from struct import unpack_from
 
-from howl_editor.models import HowlFile, CseqInfo
-from howl_editor.cseq.reader import CseqReader
 from howl_editor.bank.reader import BankReader
+from howl_editor.cseq.reader import CseqReader
 from howl_editor.howl.version import HowlVersionDetector
+from howl_editor.models import HowlFile
 
 
 class DetailFormatter:

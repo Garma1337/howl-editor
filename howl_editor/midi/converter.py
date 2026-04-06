@@ -2,12 +2,12 @@
 
 from pathlib import Path
 
+from howl_editor.cseq.writer import CseqWriter
+from howl_editor.midi.models import MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping
 from howl_editor.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
     CseqInstrument, CseqPercussion,
 )
-from howl_editor.cseq.writer import CseqWriter
-from howl_editor.midi.models import MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping
 
 try:
     import mido

@@ -3,8 +3,9 @@
 import sys
 
 from PySide6.QtWidgets import QApplication
-from howl_editor.services import container
+
 from howl_editor.gui.main_window import MainWindow
+from howl_editor.services import container
 
 
 def main():

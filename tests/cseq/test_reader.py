@@ -6,7 +6,6 @@ from howl_editor.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
     CseqInstrument, CseqPercussion, CseqInfo,
 )
-from howl_editor.cseq.reader import CseqReader
 from tests.conftest import build_cseq_bytes
 
 

@@ -2,13 +2,10 @@
 
 from struct import unpack_from
 
-import pytest
-
 from howl_editor.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
     CseqInstrument, CseqPercussion,
 )
-from howl_editor.cseq.writer import CseqWriter
 
 
 class TestSerializeMinimal:

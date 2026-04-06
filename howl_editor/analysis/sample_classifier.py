@@ -2,8 +2,8 @@
 
 from enum import Enum
 
-from howl_editor.models import HowlFile
 from howl_editor.cseq.reader import CseqReader
+from howl_editor.models import HowlFile
 
 
 class SampleType(Enum):

@@ -6,7 +6,6 @@ import pytest
 
 from howl_editor.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
-    CseqInstrument, CseqPercussion,
 )
 
 try:

@@ -2,9 +2,8 @@
 
 import pytest
 
-from howl_editor.models import SpuAddrEntry, OtherFX, EngineFX
-from howl_editor.howl.reader import HowlReader
 from howl_editor.constants import HEADER_SIZE
+from howl_editor.models import SpuAddrEntry, OtherFX, EngineFX
 from tests.conftest import build_hwl_bytes
 
 

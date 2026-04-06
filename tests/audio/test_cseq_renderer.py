@@ -2,12 +2,11 @@
 
 from struct import unpack_from
 
+from howl_editor.audio.cseq_renderer import CseqRenderer
+from howl_editor.audio.vag_decoder import VagDecoder
 from howl_editor.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
-    CseqInstrument, CseqPercussion,
-)
-from howl_editor.audio.vag_decoder import VagDecoder
-from howl_editor.audio.cseq_renderer import CseqRenderer
+    CseqInstrument, )
 
 
 def _renderer():

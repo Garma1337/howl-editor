@@ -4,31 +4,28 @@ from struct import pack, pack_into
 
 import pytest
 
+from howl_editor.analysis.sample_classifier import SampleClassifier
+from howl_editor.analysis.validator import BankCseqValidator
+from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.bank.builder import BankBuilder
+from howl_editor.bank.reader import BankReader
 from howl_editor.constants import (
     HEADER_STRUCT, HEADER_SIZE, HWL_MAGIC, HWL_VERSION_RELEASE,
     SPU_ADDR_STRUCT, OTHER_FX_STRUCT, ENGINE_FX_STRUCT,
     SECTOR_SIZE, bytes_to_sectors, VAG_MAGIC, VAG_HEADER_SIZE,
-    CSEQ_INSTRUMENT_STRUCT, CSEQ_PERCUSSION_STRUCT,
 )
+from howl_editor.cseq.reader import CseqReader
+from howl_editor.cseq.writer import CseqWriter
+from howl_editor.howl.editor import HowlEditor
+from howl_editor.howl.reader import HowlReader
+from howl_editor.howl.version import HowlVersionDetector
+from howl_editor.howl.writer import HowlWriter
 from howl_editor.models import (
     HowlFile, SpuAddrEntry, OtherFX, EngineFX,
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
-    CseqInstrument, CseqPercussion,
-    VagSample, BankSample,
 )
-from howl_editor.howl.reader import HowlReader
-from howl_editor.howl.writer import HowlWriter
-from howl_editor.howl.editor import HowlEditor
-from howl_editor.cseq.reader import CseqReader
-from howl_editor.cseq.writer import CseqWriter
 from howl_editor.vag.reader import VagReader
 from howl_editor.vag.writer import VagWriter
-from howl_editor.bank.reader import BankReader
-from howl_editor.bank.builder import BankBuilder
-from howl_editor.howl.version import HowlVersionDetector
-from howl_editor.analysis.sample_classifier import SampleClassifier
-from howl_editor.analysis.validator import BankCseqValidator
-from howl_editor.audio.vag_decoder import VagDecoder
 
 
 @pytest.fixture

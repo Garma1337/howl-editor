@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import pytest
+
 from howl_editor.vlq import read_vlq, write_vlq
 
 

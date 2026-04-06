@@ -1,11 +1,11 @@
 # coding: utf-8
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QSpinBox, QCheckBox, QGroupBox, QFormLayout, QTableWidget,
     QTableWidgetItem, QDialogButtonBox,
 )
-from PySide6.QtCore import Qt
 
 from howl_editor.midi.models import MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping
 

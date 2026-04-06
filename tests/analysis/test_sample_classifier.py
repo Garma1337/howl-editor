@@ -1,10 +1,9 @@
 # coding: utf-8
 
+from howl_editor.analysis.sample_classifier import SampleType
 from howl_editor.models import (
-    HowlFile, SpuAddrEntry, OtherFX, EngineFX,
-    CseqInstrument, CseqPercussion,
+    HowlFile, OtherFX, CseqInstrument, CseqPercussion,
 )
-from howl_editor.analysis.sample_classifier import SampleClassifier, SampleType
 from tests.conftest import build_cseq_bytes
 
 

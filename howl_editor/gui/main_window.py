@@ -3,32 +3,31 @@
 import traceback
 from pathlib import Path
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTreeWidget, QTreeWidgetItem, QSplitter,
     QTextEdit, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QDialog, QHeaderView, QInputDialog,
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence
 
-from howl_editor.models import HowlFile, VagSample
-from howl_editor.howl import HowlReader, HowlWriter, HowlEditor
-from howl_editor.cseq import CseqReader, CseqWriter
-from howl_editor.cseq.editor import CseqEditor
-from howl_editor.vag import VagReader, VagWriter
-from howl_editor.bank import BankReader, BankBuilder
-from howl_editor.midi.converter import MidiConverter, HAS_MIDO
-from howl_editor.midi.exporter import CseqMidiExporter
-from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.analysis import SampleClassifier, BankCseqValidator
 from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.player import AudioPlayer
-from howl_editor.howl.version import HowlVersionDetector
-from howl_editor.analysis import SampleClassifier, BankCseqValidator
+from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.bank import BankReader, BankBuilder
+from howl_editor.cseq import CseqReader, CseqWriter
+from howl_editor.cseq.editor import CseqEditor
 from howl_editor.export import BatchExporter
 from howl_editor.gui.convert_midi_dialog import ConvertMidiDialog
-from howl_editor.gui.merge_bank_dialog import MergeBankDialog
 from howl_editor.gui.detail_formatter import DetailFormatter
-
+from howl_editor.gui.merge_bank_dialog import MergeBankDialog
+from howl_editor.howl import HowlReader, HowlWriter, HowlEditor
+from howl_editor.howl.version import HowlVersionDetector
+from howl_editor.midi.converter import MidiConverter, HAS_MIDO
+from howl_editor.midi.exporter import CseqMidiExporter
+from howl_editor.models import HowlFile, VagSample
+from howl_editor.vag import VagReader, VagWriter
 
 NODE_ROOT = 0
 NODE_SPU_TABLE = 1

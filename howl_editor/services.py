@@ -1,27 +1,25 @@
 # coding: utf-8
 
-"""Default service definitions for the HOWL Editor."""
-
-from howl_editor.core import Container
-from howl_editor.howl.reader import HowlReader
-from howl_editor.howl.writer import HowlWriter
-from howl_editor.howl.editor import HowlEditor
-from howl_editor.cseq.reader import CseqReader
-from howl_editor.cseq.writer import CseqWriter
-from howl_editor.vag.reader import VagReader
-from howl_editor.vag.writer import VagWriter
-from howl_editor.bank.reader import BankReader
-from howl_editor.bank.builder import BankBuilder
-from howl_editor.cseq.editor import CseqEditor
-from howl_editor.midi.converter import MidiConverter
-from howl_editor.midi.exporter import CseqMidiExporter
-from howl_editor.audio.vag_decoder import VagDecoder
-from howl_editor.audio.cseq_renderer import CseqRenderer
-from howl_editor.audio.player import AudioPlayer
-from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.analysis.sample_classifier import SampleClassifier
 from howl_editor.analysis.validator import BankCseqValidator
+from howl_editor.audio.cseq_renderer import CseqRenderer
+from howl_editor.audio.player import AudioPlayer
+from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.bank.builder import BankBuilder
+from howl_editor.bank.reader import BankReader
+from howl_editor.core import Container
+from howl_editor.cseq.editor import CseqEditor
+from howl_editor.cseq.reader import CseqReader
+from howl_editor.cseq.writer import CseqWriter
 from howl_editor.export.batch_exporter import BatchExporter
+from howl_editor.howl.editor import HowlEditor
+from howl_editor.howl.reader import HowlReader
+from howl_editor.howl.version import HowlVersionDetector
+from howl_editor.howl.writer import HowlWriter
+from howl_editor.midi.converter import MidiConverter
+from howl_editor.midi.exporter import CseqMidiExporter
+from howl_editor.vag.reader import VagReader
+from howl_editor.vag.writer import VagWriter
 
 container = Container()
 container.register("howl_reader", lambda c: HowlReader())

@@ -2,13 +2,12 @@
 
 import pytest
 
+from howl_editor.cseq.editor import CseqEditor
+from howl_editor.cseq.writer import CseqWriter
 from howl_editor.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
     CseqInstrument,
 )
-from howl_editor.cseq.reader import CseqReader
-from howl_editor.cseq.writer import CseqWriter
-from howl_editor.cseq.editor import CseqEditor
 
 
 @pytest.fixture

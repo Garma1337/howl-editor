@@ -1,11 +1,10 @@
 # coding: utf-8
 
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
-    QListWidgetItem, QPushButton, QDialogButtonBox, QGroupBox,
-    QAbstractItemView, QMessageBox, QComboBox,
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
+    QListWidgetItem, QPushButton, QDialogButtonBox, QGroupBox,
+    QAbstractItemView, QMessageBox, )
 
 from howl_editor.models import BankSample, SpuAddrEntry
 

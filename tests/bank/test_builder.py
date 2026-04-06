@@ -1,12 +1,9 @@
 # coding: utf-8
 
 import struct
-import pytest
 
-from howl_editor.models import SpuAddrEntry, VagSample, BankSample, BankBuildResult
-from howl_editor.bank.builder import BankBuilder
-from howl_editor.vag.reader import VagReader
 from howl_editor.constants import SECTOR_SIZE
+from howl_editor.models import SpuAddrEntry, VagSample, BankSample, BankBuildResult
 
 
 class TestBuildFromSamples:

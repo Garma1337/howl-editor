@@ -1,7 +1,7 @@
 # coding: utf-8
 
-from struct import pack
 from pathlib import Path
+from struct import pack
 
 from howl_editor.constants import SECTOR_SIZE, bytes_to_sectors
 from howl_editor.models import SpuAddrEntry, VagSample, BankSample, BankBuildResult

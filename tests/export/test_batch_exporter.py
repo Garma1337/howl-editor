@@ -1,20 +1,18 @@
 # coding: utf-8
 
-from pathlib import Path
-
 import pytest
 
+from howl_editor.analysis.sample_classifier import SampleClassifier
+from howl_editor.audio.vag_decoder import VagDecoder
+from howl_editor.bank.reader import BankReader
+from howl_editor.cseq.reader import CseqReader
+from howl_editor.export.batch_exporter import BatchExporter
+from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.models import (
     HowlFile, SpuAddrEntry, OtherFX,
     CseqInstrument, CseqPercussion,
 )
-from howl_editor.bank.reader import BankReader
-from howl_editor.cseq.reader import CseqReader
 from howl_editor.vag.writer import VagWriter
-from howl_editor.audio.vag_decoder import VagDecoder
-from howl_editor.analysis.sample_classifier import SampleClassifier
-from howl_editor.midi.exporter import CseqMidiExporter
-from howl_editor.export.batch_exporter import BatchExporter
 from tests.conftest import build_cseq_bytes, build_bank_blob
 
 

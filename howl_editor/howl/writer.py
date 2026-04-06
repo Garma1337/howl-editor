@@ -1,8 +1,8 @@
 # coding: utf-8
 
 from dataclasses import dataclass, field
-from struct import pack_into
 from pathlib import Path
+from struct import pack_into
 
 from howl_editor.constants import (
     HEADER_STRUCT, HEADER_SIZE, HWL_MAGIC,

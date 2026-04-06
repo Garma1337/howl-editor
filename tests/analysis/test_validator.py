@@ -1,7 +1,7 @@
 # coding: utf-8
 
-from howl_editor.models import SpuAddrEntry, CseqInstrument, CseqPercussion
 from howl_editor.analysis.validator import ValidationResult
+from howl_editor.models import SpuAddrEntry, CseqInstrument, CseqPercussion
 from tests.conftest import build_cseq_bytes, build_bank_blob
 
 

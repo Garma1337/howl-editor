@@ -1,8 +1,6 @@
 # coding: utf-8
 
-import pytest
 from howl_editor.models import SpuAddrEntry, BankSample
-from howl_editor.bank.reader import BankReader
 from tests.conftest import build_bank_blob
 
 

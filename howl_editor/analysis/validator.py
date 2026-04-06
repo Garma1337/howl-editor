@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass, field
 
-from howl_editor.models import HowlFile, CseqFile, SpuAddrEntry
-from howl_editor.cseq.reader import CseqReader
 from howl_editor.bank.reader import BankReader
+from howl_editor.cseq.reader import CseqReader
+from howl_editor.models import CseqFile, SpuAddrEntry
 
 
 @dataclass
