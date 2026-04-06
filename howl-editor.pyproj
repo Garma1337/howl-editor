@@ -31,6 +31,9 @@
     <Content Include="requirements.txt" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="howl_editor\analysis\sample_classifier.py" />
+    <Compile Include="howl_editor\analysis\validator.py" />
+    <Compile Include="howl_editor\analysis\__init__.py" />
     <Compile Include="howl_editor\audio\cseq_renderer.py" />
     <Compile Include="howl_editor\audio\player.py" />
     <Compile Include="howl_editor\audio\vag_decoder.py" />
@@ -41,9 +44,12 @@
     <Compile Include="howl_editor\constants.py" />
     <Compile Include="howl_editor\core\container.py" />
     <Compile Include="howl_editor\core\__init__.py" />
+    <Compile Include="howl_editor\cseq\editor.py" />
     <Compile Include="howl_editor\cseq\reader.py" />
     <Compile Include="howl_editor\cseq\writer.py" />
     <Compile Include="howl_editor\cseq\__init__.py" />
+    <Compile Include="howl_editor\export\batch_exporter.py" />
+    <Compile Include="howl_editor\export\__init__.py" />
     <Compile Include="howl_editor\gui\detail_formatter.py" />
     <Compile Include="howl_editor\gui\main_window.py" />
     <Compile Include="howl_editor\gui\merge_bank_dialog.py" />
@@ -51,6 +57,7 @@
     <Compile Include="howl_editor\gui\__init__.py" />
     <Compile Include="howl_editor\howl\editor.py" />
     <Compile Include="howl_editor\howl\reader.py" />
+    <Compile Include="howl_editor\howl\version.py" />
     <Compile Include="howl_editor\howl\writer.py" />
     <Compile Include="howl_editor\howl\__init__.py" />
     <Compile Include="howl_editor\midi\converter.py" />
@@ -68,6 +75,9 @@
     <Compile Include="howl_editor\vlq.py" />
     <Compile Include="howl_editor\__init__.py" />
     <Compile Include="main.py" />
+    <Compile Include="tests\analysis\test_sample_classifier.py" />
+    <Compile Include="tests\analysis\test_validator.py" />
+    <Compile Include="tests\analysis\__init__.py" />
     <Compile Include="tests\audio\test_vag_decoder.py" />
     <Compile Include="tests\audio\__init__.py" />
     <Compile Include="tests\bank\test_builder.py" />
@@ -76,14 +86,20 @@
     <Compile Include="tests\conftest.py" />
     <Compile Include="tests\core\test_container.py" />
     <Compile Include="tests\core\__init__.py" />
+    <Compile Include="tests\cseq\test_editor.py" />
     <Compile Include="tests\cseq\test_reader.py" />
     <Compile Include="tests\cseq\test_writer.py" />
     <Compile Include="tests\cseq\__init__.py" />
+    <Compile Include="tests\export\test_batch_exporter.py" />
+    <Compile Include="tests\export\__init__.py" />
     <Compile Include="tests\howl\test_editor.py" />
     <Compile Include="tests\howl\test_reader.py" />
     <Compile Include="tests\howl\test_roundtrip.py" />
+    <Compile Include="tests\howl\test_version.py" />
     <Compile Include="tests\howl\test_writer.py" />
     <Compile Include="tests\howl\__init__.py" />
+    <Compile Include="tests\midi\test_exporter.py" />
+    <Compile Include="tests\midi\__init__.py" />
     <Compile Include="tests\models\test_bank.py" />
     <Compile Include="tests\models\test_cseq.py" />
     <Compile Include="tests\models\test_howl.py" />
@@ -102,21 +118,26 @@
     <Folder Include="documentation\" />
     <Folder Include="documentation\formats\" />
     <Folder Include="howl_editor" />
+    <Folder Include="howl_editor\analysis\" />
     <Folder Include="howl_editor\audio\" />
     <Folder Include="howl_editor\bank" />
     <Folder Include="howl_editor\core\" />
     <Folder Include="howl_editor\cseq" />
+    <Folder Include="howl_editor\export\" />
     <Folder Include="howl_editor\gui" />
     <Folder Include="howl_editor\howl" />
     <Folder Include="howl_editor\midi" />
     <Folder Include="howl_editor\models" />
     <Folder Include="howl_editor\vag" />
     <Folder Include="tests\" />
+    <Folder Include="tests\analysis\" />
     <Folder Include="tests\audio\" />
     <Folder Include="tests\bank\" />
     <Folder Include="tests\core\" />
     <Folder Include="tests\cseq\" />
+    <Folder Include="tests\export\" />
     <Folder Include="tests\howl\" />
+    <Folder Include="tests\midi\" />
     <Folder Include="tests\models\" />
     <Folder Include="tests\vag\" />
   </ItemGroup>

@@ -39,4 +39,3 @@ class HowlEditor:
     def _validate_index(self, index: int, length: int, label: str) -> None:
         if index < 0 or index >= length:
             raise IndexError(f"{label} index {index} out of range (0..{length - 1})")
-

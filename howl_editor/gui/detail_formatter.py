@@ -5,18 +5,25 @@ from struct import unpack_from
 from howl_editor.models import HowlFile, CseqInfo
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.bank.reader import BankReader
+from howl_editor.howl.version import HowlVersionDetector
 
 
 class DetailFormatter:
 
-    def __init__(self, cseq_reader: CseqReader, bank_reader: BankReader):
+    def __init__(self, cseq_reader: CseqReader, bank_reader: BankReader, version_detector: HowlVersionDetector):
         self._cseq_reader = cseq_reader
         self._bank_reader = bank_reader
+        self._version_detector = version_detector
 
-    def howl_details(self, hwl: HowlFile, file_path: str | None) -> str:
+    def howl_details(self, hwl: HowlFile, file_path: str | None, raw_data: bytes | None = None) -> str:
+        version_str = f"{hwl.version} ({hwl.version:#x})"
+        if raw_data:
+            info = self._version_detector.detect(raw_data)
+            version_str += f" - {info.version_name}"
+
         lines = [
             "HOWL File", "=" * 40,
-            f"Version:     {hwl.version} ({hwl.version:#x})",
+            f"Version:     {version_str}",
             f"Reserved 1:  {hwl.reserved1}",
             f"Reserved 2:  {hwl.reserved2}",
             f"SPU Entries:  {len(hwl.spu_addrs)}",

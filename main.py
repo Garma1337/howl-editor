@@ -15,14 +15,20 @@ if __name__ == "__main__":
         howl_editor_svc=container.resolve("howl_editor"),
         cseq_reader=container.resolve("cseq_reader"),
         cseq_writer=container.resolve("cseq_writer"),
+        cseq_editor=container.resolve("cseq_editor"),
         vag_reader=container.resolve("vag_reader"),
         vag_writer=container.resolve("vag_writer"),
         bank_reader=container.resolve("bank_reader"),
         bank_builder=container.resolve("bank_builder"),
         midi_converter=container.resolve("midi_converter"),
+        midi_exporter=container.resolve("midi_exporter"),
         vag_decoder=container.resolve("vag_decoder"),
         cseq_renderer=container.resolve("cseq_renderer"),
         audio_player=container.resolve("audio_player"),
+        version_detector=container.resolve("version_detector"),
+        sample_classifier=container.resolve("sample_classifier"),
+        validator=container.resolve("validator"),
+        batch_exporter=container.resolve("batch_exporter"),
     )
 
     window.show()

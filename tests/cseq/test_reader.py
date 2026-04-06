@@ -105,6 +105,20 @@ class TestReadSongMetadata:
         assert cseq.songs[0].tpqn == 240
 
 
+class TestGetName:
+    def test_known_song(self, cseq_reader):
+        assert cseq_reader.get_name(0) == "Dingo Canyon"
+        assert cseq_reader.get_name(25) == "Boss Race"
+        assert cseq_reader.get_name(32) == "Credits"
+
+    def test_unknown_song(self, cseq_reader):
+        assert cseq_reader.get_name(99) == "Custom"
+
+    def test_custom_threshold(self, cseq_reader):
+        assert cseq_reader.get_name(33) == "Custom"
+        assert cseq_reader.get_name(32) != "Custom"
+
+
 class TestAlignTo:
     def test_already_aligned(self, cseq_reader):
         assert cseq_reader._align_to(8, 4) == 8

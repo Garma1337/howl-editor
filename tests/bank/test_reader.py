@@ -55,6 +55,21 @@ class TestParseBankBlob:
         assert result[0].spu_index == 0
 
 
+class TestGetName:
+    def test_known_bank(self, bank_reader):
+        assert bank_reader.get_name(0) != ""
+        assert bank_reader.get_name(1) != ""
+
+    def test_known_bank_returns_string(self, bank_reader):
+        name = bank_reader.get_name(0)
+        assert isinstance(name, str)
+        assert len(name) > 0
+
+    def test_custom_bank(self, bank_reader):
+        assert bank_reader.get_name(71) == "Custom"
+        assert bank_reader.get_name(100) == "Custom"
+
+
 class TestCalculateDataOffset:
     def test_small_header(self, bank_reader):
         # 2 + 1*2 = 4 bytes header -> rounds up to 1 sector = 0x800

@@ -25,6 +25,10 @@ from howl_editor.vag.reader import VagReader
 from howl_editor.vag.writer import VagWriter
 from howl_editor.bank.reader import BankReader
 from howl_editor.bank.builder import BankBuilder
+from howl_editor.howl.version import HowlVersionDetector
+from howl_editor.analysis.sample_classifier import SampleClassifier
+from howl_editor.analysis.validator import BankCseqValidator
+from howl_editor.audio.vag_decoder import VagDecoder
 
 
 @pytest.fixture
@@ -62,6 +66,22 @@ def bank_reader():
 @pytest.fixture
 def bank_builder(vag_reader):
     return BankBuilder(vag_reader)
+
+@pytest.fixture
+def version_detector():
+    return HowlVersionDetector()
+
+@pytest.fixture
+def vag_decoder():
+    return VagDecoder()
+
+@pytest.fixture
+def sample_classifier(cseq_reader):
+    return SampleClassifier(cseq_reader)
+
+@pytest.fixture
+def validator(bank_reader, cseq_reader):
+    return BankCseqValidator(bank_reader, cseq_reader)
 
 
 @pytest.fixture
