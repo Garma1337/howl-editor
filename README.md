@@ -11,30 +11,34 @@ A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspe
 
 ### Banks
 - **Add, replace, remove** banks
-- **Merge banks** - combine samples from two banks with reordering support
+- **Merge banks** - combine samples from two banks with drag-and-drop reordering
 - **Build banks** from multiple `.vag` files (standalone or add to HWL)
-- **Export** banks as `.bnk` or individual samples as `.vag` / `.wav`
+- **Export** banks as `.bnk`, samples as `.vag` or `.wav`
 - **Browse samples** in the tree view with SPU index, size, and type classification
 
 ### Songs & Sequences
 - **Add, replace, remove** songs
 - **Replace or remove** individual sequences within a song
-- **Export** songs as `.cseq` or MIDI files
+- **Export** songs as `.cseq` or MIDI files (per-song or per-sequence)
 - **Convert MIDI to CSEQ** with per-track instrument mapping (standalone or add to HWL)
 
 ### Samples
-- **Replace** individual samples within a bank
+- **Add, replace, remove** individual samples within a bank
 - **Export** as `.vag` or `.wav`
 - **Sample type classification** - automatically tags samples as Instrument, Percussion, or SoundEffect
-- **Click to play** any sample in the tree (requires Qt Multimedia)
 
 ### Audio Playback
-- **Play samples** by clicking them in the tree
-- **Play sequences** by clicking them in the tree (renders CSEQ to audio)
+- **Click to play** samples, sequences, OtherFX, and EngineFX entries in the tree
 - **Stop** playback via toolbar button
+- **Audio cache** - decoded audio is cached in `%TEMP%/howl-editor/` for instant replay (clearable via Tools menu)
+
+### Effects Tables
+- **Browse OtherFX** entries (sound effects) with volume, pitch, duration, and SPU index
+- **Browse EngineFX** entries (engine sounds) with volume, pitch, and SPU index
+- **Click to play** any effect entry at its native pitch
 
 ### Analysis
-- **Bank/CSEQ validation** - verify a bank contains all samples needed by a song
+- **Bank/CSEQ validation** - verify a bank contains all samples needed by a song, lists all missing sample IDs
 - **NTSC-U bank and song names** shown in tree view and detail panels (Custom label for modded entries)
 
 ## Requirements
@@ -84,30 +88,35 @@ python -m pytest tests/ -v
 
 ```
 documentation/
-    formats/        Format specifications (HOWL, CSEQ, Bank, VAG)
-    audio-loading.md  Runtime audio loading system
+    formats/            Format specifications (HOWL, CSEQ, Bank, VAG)
+    audio-loading.md    Runtime audio loading system
 
 howl_editor/
-    core/           DI container
-    models/         Data models (HowlFile, CseqFile, VagSample, BankSample, ...)
-    howl/           HWL reader, writer, editor, version detector
-    cseq/           CSEQ reader, writer, editor
-    vag/            VAG reader, writer
-    bank/           Bank reader, builder
-    midi/           MIDI to CSEQ converter and CSEQ to MIDI exporter
-    audio/          VAG decoder, CSEQ renderer, audio player
-    analysis/       Sample classifier, bank/CSEQ validator
-    export/         Batch exporter
-    gui/            PySide6 GUI
-    services.py     Service registrations
-    constants.py    Format constants and struct definitions
-    vlq.py          Variable-length quantity codec
+    core/               DI container
+    models/             Data models (HowlFile, CseqFile, VagSample, BankSample, ...)
+    howl/               HWL reader, writer, editor, version detector
+    cseq/               CSEQ reader, writer, editor
+    vag/                VAG reader, writer
+    bank/               Bank reader, builder
+    midi/               MIDI to CSEQ converter and CSEQ to MIDI exporter
+    audio/              VAG decoder, CSEQ renderer, audio player with cache
+    analysis/           Sample classifier, bank/CSEQ validator
+    export/             Batch exporter
+    gui/
+        detail/         Detail formatters (HOWL, FX, bank, song)
+        dialog/         Dialogs (merge bank, convert MIDI)
+        handler/        Action handlers (bank, sample, song, playback, tools)
+        main_window.py  Main window shell
+    services.py         Service registrations
+    constants.py        Format constants and struct definitions
+    vlq.py              Variable-length quantity codec
 
-tests/              Mirrors the source structure
+tests/                  Mirrors the source structure (227 tests)
 ```
 
 ## Documentation
 
+- **[User Guide](documentation/user-guide.md)** - Internal details: SPU index assignment, MIDI conversion, audio playback, bank merging, batch export, validation
 - **[Audio Loading](documentation/audio-loading.md)** - How CTR loads audio at runtime: level/character/boss bank selection, song mapping, loading pipeline
 
 Format specifications:
