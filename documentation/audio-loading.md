@@ -2,6 +2,21 @@
 
 This document describes how CTR selects and loads audio data from the HOWL file at runtime. Audio is loaded in a structured pipeline that selects specific banks and songs based on the current level, game mode, and active characters.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Universal SFX Bank](#universal-sfx-bank)
+- [Level FX Banks](#level-fx-banks)
+- [Character Banks](#character-banks)
+  - [8-Driver Shared Bank](#8-driver-shared-bank)
+  - [Character Bank Loading Rules](#character-bank-loading-rules)
+- [Song Selection](#song-selection)
+- [Boss Races](#boss-races)
+- [Special Levels](#special-levels)
+- [Loading Pipeline Detail](#loading-pipeline-detail)
+  - [Bank Sub-Pipeline](#bank-sub-pipeline)
+  - [Sample Deduplication](#sample-deduplication)
+
 ## Overview
 
 ```mermaid

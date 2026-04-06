@@ -2,6 +2,18 @@
 
 VAG is the standard audio sample format for the PlayStation 1. It stores audio compressed using ADPCM (Adaptive Differential Pulse-Code Modulation) at a 4:1 compression ratio.
 
+## Table of Contents
+
+- [Standalone VAG File](#standalone-vag-file)
+  - [VAG Header (48 bytes)](#vag-header-48-bytes)
+- [In-Bank VAG Data](#in-bank-vag-data)
+- [ADPCM Frame Structure](#adpcm-frame-structure)
+  - [Frame Flags](#frame-flags)
+  - [ADPCM Prediction Coefficients](#adpcm-prediction-coefficients)
+  - [Decoding Algorithm](#decoding-algorithm)
+- [SPU Address Table Relationship](#spu-address-table-relationship)
+- [Common Sample Rates](#common-sample-rates)
+
 ## Standalone VAG File
 
 When stored as a standalone `.vag` file, a 48-byte header precedes the sample data.

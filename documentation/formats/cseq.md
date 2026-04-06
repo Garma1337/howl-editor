@@ -2,6 +2,26 @@
 
 CSEQ is CTR's music sequence format, similar to MIDI. Each CSEQ blob (stored as a "song" in the HOWL file) contains instrument definitions, percussion definitions, and one or more playable sequences with tracks of timed note/control events.
 
+## Table of Contents
+
+- [File Layout](#file-layout)
+- [CSEQ Header (8 bytes)](#cseq-header-8-bytes)
+- [Instrument Table (Long Samples)](#instrument-table-long-samples)
+  - [Instrument Volume Calculation (Runtime)](#instrument-volume-calculation-runtime)
+- [Percussion Table (Short Samples)](#percussion-table-short-samples)
+- [Song Offset Table](#song-offset-table)
+- [Song Data](#song-data)
+  - [Song Header (6 bytes)](#song-header-6-bytes)
+  - [Track Structure](#track-structure)
+- [Event Format](#event-format)
+  - [Opcodes](#opcodes)
+  - [NoteOn (0x05)](#noteon-0x05)
+  - [ChangePatch (0x09)](#changepatch-0x09)
+- [Variable-Length Quantity (VLQ)](#variable-length-quantity-vlq)
+  - [Examples](#examples)
+  - [Decoding Algorithm](#decoding-algorithm)
+- [Pitch and Frequency](#pitch-and-frequency)
+
 ## File Layout
 
 ```mermaid

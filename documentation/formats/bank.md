@@ -2,6 +2,22 @@
 
 A bank is a collection of audio samples stored as a sector-aligned blob within the HOWL file. Banks are loaded at runtime to populate SPU RAM with sample data for sound effects and music.
 
+## Table of Contents
+
+- [Bank Layout](#bank-layout)
+- [Bank Header](#bank-header)
+- [Padding](#padding)
+- [Sample Data](#sample-data)
+- [How Banks Reference Samples](#how-banks-reference-samples)
+- [Runtime Loading](#runtime-loading)
+  - [Stage 0: Load Header](#stage-0-load-header)
+  - [Stage 1: Calculate Sizes and Assign SPU Addresses](#stage-1-calculate-sizes-and-assign-spu-addresses)
+  - [Stage 2: DMA Transfer](#stage-2-dma-transfer)
+  - [Stage 3: Verify Transfer](#stage-3-verify-transfer)
+- [Bank Destruction](#bank-destruction)
+- [Sample Deduplication](#sample-deduplication)
+- [Example](#example)
+
 ## Bank Layout
 
 ```mermaid

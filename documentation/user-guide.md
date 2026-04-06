@@ -2,6 +2,27 @@
 
 This guide covers internal behaviors and details that are not immediately obvious from the editor's UI.
 
+## Table of Contents
+
+- [SPU Address Table](#spu-address-table)
+  - [How SPU Indices Are Assigned](#how-spu-indices-are-assigned)
+  - [Important Considerations](#important-considerations)
+- [Bank Names](#bank-names)
+- [Sample Type Classification](#sample-type-classification)
+- [MIDI to CSEQ Conversion](#midi-to-cseq-conversion)
+  - [Standalone vs HWL](#standalone-vs-hwl)
+- [CSEQ to MIDI Export](#cseq-to-midi-export)
+- [Audio Playback](#audio-playback)
+  - [Sample Playback](#sample-playback)
+  - [FX Playback](#fx-playback)
+  - [Sequence Playback](#sequence-playback)
+  - [Playback Limitations](#playback-limitations)
+  - [Audio Cache](#audio-cache)
+- [Bank Merging](#bank-merging)
+- [Bank/CSEQ Validation](#bankcseq-validation)
+- [Batch Export](#batch-export)
+- [HWL Version Detection](#hwl-version-detection)
+
 ## SPU Address Table
 
 The SPU Address Table is the global registry of all audio samples in the HWL file. Each entry has two fields:
@@ -90,11 +111,26 @@ Clicking a sequence renders the entire song offline before playing:
 
 1. All instruments and percussions referenced by the CSEQ are collected
 2. Their sample data is found by searching all banks in the HWL
-3. Each note event decodes its sample and mixes it at the correct pitch and velocity
+3. Each note event decodes its sample, applies the ADSR envelope, and mixes at the correct pitch, velocity, and pan
 4. Melodic notes are pitch-shifted relative to middle C (note 60) using semitone ratios
-5. The result is rendered at 22050 Hz mono
+5. Percussion uses the instrument's fixed pitch directly (no semitone transposition)
+6. The result is rendered at 22050 Hz stereo
 
 Rendering can take a few seconds for complex songs.
+
+### Playback Limitations
+
+The editor's playback is a software approximation of the PS1 SPU (Sound Processing Unit). While it reproduces the general character of each song, there are differences compared to in-game audio:
+
+- **ADSR envelope approximation**: The PS1 SPU processes ADSR envelopes in hardware with cycle-accurate timing. The editor approximates these timings in software, so attack/decay/release curves may not match exactly. The overall shape is correct but fine timing details differ.
+- **No reverb**: The PS1 SPU has built-in hardware reverb with multiple modes (studio, hall, etc.). The editor does not simulate reverb, so songs that rely heavily on it (especially indoor/cave tracks) will sound drier than in-game.
+- **No pitch bend**: CSEQ pitch bend events (opcode 0x0A) are parsed but not applied during playback. Notes play at their initial pitch without real-time modulation.
+- **Simplified volume chain**: In-game, the final volume is a cascade of global music volume, song volume, sequence volume, instrument volume, and note velocity. The editor applies only instrument volume and note velocity.
+- **Percussion volume scaling**: Percussion samples are played at 40% volume to approximate the in-game balance. On the PS1, percussion samples are typically short one-shot sounds that naturally decay when the sample data ends. The editor applies the same behavior (no looping for percussion) but the relative mix may still differ.
+- **Linear pan**: The editor uses linear panning (left = 1 - right). The PS1 uses a lookup table for smoother L/R curves, which can produce slightly different stereo imaging.
+- **Sample rate**: Songs are rendered at 22050 Hz rather than the PS1's native 44100 Hz. This reduces rendering time but may affect the character of high-frequency content.
+
+Despite these limitations, the playback is suitable for previewing songs, verifying note arrangements, and checking that the correct samples are referenced.
 
 ### Audio Cache
 

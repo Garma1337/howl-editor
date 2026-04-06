@@ -2,6 +2,25 @@
 
 The HOWL file is the master audio container used by Crash Team Racing (PS1). It bundles all audio data for the game: SPU sample metadata, sound effect definitions, engine sound definitions, sample banks, and music sequences.
 
+## Table of Contents
+
+- [File Layout](#file-layout)
+- [HOWL Header (40 bytes)](#howl-header-40-bytes)
+  - [Known Versions](#known-versions)
+- [SPU Address Table](#spu-address-table)
+  - [SPU Memory at Runtime](#spu-memory-at-runtime)
+- [OtherFX Table (Sound Effects)](#otherfx-table-sound-effects)
+  - [Playback Parameters](#playback-parameters)
+- [EngineFX Table (Engine Sounds)](#enginefx-table-engine-sounds)
+- [Bank Offset Table](#bank-offset-table)
+- [Song Offset Table](#song-offset-table)
+- [Bank Data](#bank-data)
+- [KART.HWL Statistics (NTSC-U Release)](#karthwl-statistics-ntsc-u-release)
+  - [Bank Names (NTSC-U)](#bank-names-ntsc-u)
+- [Loading Sequence (Runtime)](#loading-sequence-runtime)
+- [Channel Types](#channel-types)
+- [Frequency Encoding](#frequency-encoding)
+
 The file used in-game is `SOUNDS\KART.HWL`.
 
 ## File Layout
