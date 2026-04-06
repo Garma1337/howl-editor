@@ -54,10 +54,12 @@ class AudioPlayer:
     def clear_cache(self) -> int:
         """Remove all cached WAV files. Returns number of files removed."""
         count = 0
+
         for f in _CACHE_DIR.glob("*.wav"):
             try:
                 f.unlink()
                 count += 1
             except OSError:
                 pass
+
         return count
