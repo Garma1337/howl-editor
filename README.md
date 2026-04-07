@@ -5,11 +5,12 @@ A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspe
 ## Features
 
 ### File Operations
+
 - **Create, open, close, save** HWL files
-- **HOWL version detection** - identifies release, prototype, and demo builds
 - **Batch export** entire HWL to organized folders (`banks/`, `songs/`, `samples/instruments/`, `samples/percussion/`, `samples/effects/`) with VAG + WAV + MIDI
 
 ### Banks
+
 - **Add, replace, remove** banks
 - **Merge banks** - combine samples from two banks with drag-and-drop reordering
 - **Build banks** from multiple `.vag` files (standalone or add to HWL)
@@ -17,27 +18,44 @@ A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspe
 - **Browse samples** in the tree view with SPU index, size, and type classification
 
 ### Songs & Sequences
+
 - **Add, replace, remove** songs
 - **Replace or remove** individual sequences within a song
 - **Export** songs as `.cseq` or MIDI files (per-song or per-sequence)
 - **Convert MIDI to CSEQ** with per-track instrument mapping (standalone or add to HWL)
 
 ### Samples
+
 - **Add, replace, remove** individual samples within a bank
 - **Export** as `.vag` or `.wav`
-- **Sample type classification** - automatically tags samples as Instrument, Percussion, or SoundEffect
 
 ### Audio Playback
-- **Click to play** samples, sequences, OtherFX, and EngineFX entries in the tree
-- **Stop** playback via toolbar button
+
+- **Reasonably CTR-accurate rendering** - pitch, volume, panning, and drum indexing use lookup tables extracted from the decompiled CTR source code
+- **Pitch bend** (opcode 0x0A), mid-note **volume** (0x06) and **pan** (0x07) changes applied in real time
+- **Click to play** samples, sequences, OtherFX, and EngineFX entries
+- **Player bar** with play/stop, seek slider, and elapsed/total time display
+- **Automatic pitch detection** for bank samples - looks up the correct playback rate from FX and instrument tables
 - **Audio cache** - decoded audio is cached in `%TEMP%/howl-editor/` for instant replay (clearable via Tools menu)
 
 ### Effects Tables
+
 - **Browse OtherFX** entries (sound effects) with volume, pitch, duration, and SPU index
 - **Browse EngineFX** entries (engine sounds) with volume, pitch, and SPU index
 - **Click to play** any effect entry at its native pitch
 
+### Waveform Preview
+
+- **Waveform display** for samples and FX entries on selection (before playing), and for rendered sequences after playback
+- **Loop start marker** shown as an orange dashed line on the waveform
+
+### Editor
+
+- **Drag-and-drop file import** - drop `.hwl`, `.bnk`, `.cseq`, or `.vag` files onto the window
+- **Drag-and-drop reordering** of banks, songs, and sequences in the tree
+
 ### Analysis
+
 - **Bank/CSEQ validation** - verify a bank contains all samples needed by a song, lists all missing sample IDs
 - **NTSC-U bank and song names** shown in tree view and detail panels (Custom label for modded entries)
 
@@ -92,31 +110,38 @@ documentation/
     audio-loading.md    Runtime audio loading system
 
 howl_editor/
-    core/               DI container
+    core/               DI container, template engine, VLQ codec
     models/             Data models (HowlFile, CseqFile, VagSample, BankSample, ...)
     howl/               HWL reader, writer, editor, version detector
     cseq/               CSEQ reader, writer, editor
     vag/                VAG reader, writer
     bank/               Bank reader, builder
     midi/               MIDI to CSEQ converter and CSEQ to MIDI exporter
-    audio/              VAG decoder, CSEQ renderer, audio player with cache
+    audio/
+        settings/       PS1 hardware constants, CTR lookup tables
+        decoder/        VAG ADPCM decoder, ADSR envelope decoder
+        voice/          Voice playback, pitch calculator, gain calculator
+        cseq_renderer   CSEQ sequence renderer
+        sample_lookup   Sample data and pitch lookup across banks/FX/songs
+        audio_player    Qt Multimedia playback with file caching
+        wav_writer      PCM to WAV conversion
     analysis/           Sample classifier, bank/CSEQ validator
     export/             Batch exporter
     gui/
         detail/         Detail formatters (HOWL, FX, bank, song)
+        templates/      HTML templates and CSS for detail panel
         dialog/         Dialogs (merge bank, convert MIDI)
         handler/        Action handlers (bank, sample, song, playback, tools)
+        widget/         Widgets (filter bar, player bar, waveform)
+        command/        Undo commands (swap blob, remove item, move item/sequence)
         main_window.py  Main window shell
     services.py         Service registrations
     constants.py        Format constants and struct definitions
-    vlq.py              Variable-length quantity codec
-
-tests/                  Mirrors the source structure (227 tests)
 ```
 
 ## Documentation
 
-- **[User Guide](documentation/user-guide.md)** - Internal details: SPU index assignment, MIDI conversion, audio playback, bank merging, batch export, validation
+- **[User Guide](documentation/user-guide.md)** - Non-obvious behaviors: undo/redo, keyboard shortcuts, drag-and-drop, sample pitch lookup, filter logic, waveform loop markers, reordering caveats, SPU index assignment, MIDI conversion, audio playback accuracy, bank merging, batch export, validation
 - **[Audio Loading](documentation/audio-loading.md)** - How CTR loads audio at runtime: level/character/boss bank selection, song mapping, loading pipeline
 
 Format specifications:
