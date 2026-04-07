@@ -21,6 +21,7 @@ def _make_song(bpm: int = 120, num_tracks: int = 1) -> CseqSong:
         CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
         for _ in range(num_tracks)
     ]
+
     return CseqSong(bpm=bpm, tpqn=480, tracks=tracks)
 
 
@@ -30,6 +31,7 @@ def _make_cseq_blob(*songs: CseqSong) -> bytes:
 
 
 class TestReplaceSequence:
+
     def test_replaces_sequence(self, cseq_editor_svc, cseq_reader):
         blob = _make_cseq_blob(_make_song(bpm=100), _make_song(bpm=200))
         replacement = _make_song(bpm=999)
@@ -69,6 +71,7 @@ class TestReplaceSequence:
             instruments=[CseqInstrument(sample_id=42)],
             songs=[_make_song(bpm=100)],
         )
+
         blob = CseqWriter(VlqCodec()).serialize(cseq)
         new_blob = cseq_editor_svc.replace_sequence(blob, 0, _make_song(bpm=200))
         parsed = cseq_reader.read(new_blob)
@@ -78,6 +81,7 @@ class TestReplaceSequence:
 
 
 class TestRemoveSequence:
+
     def test_removes_sequence(self, cseq_editor_svc, cseq_reader):
         blob = _make_cseq_blob(_make_song(bpm=100), _make_song(bpm=200), _make_song(bpm=300))
 

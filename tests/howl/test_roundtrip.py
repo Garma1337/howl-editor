@@ -5,10 +5,12 @@ from tests.conftest import build_hwl_bytes
 
 
 class TestRoundTrip:
+
     def test_empty_roundtrip(self, howl_reader, howl_writer):
         hwl = HowlFile()
         data = howl_writer.serialize(hwl)
         hwl2 = howl_reader.read(data)
+
         assert hwl2.version == hwl.version
         assert len(hwl2.banks) == 0
         assert len(hwl2.songs) == 0
@@ -21,6 +23,7 @@ class TestRoundTrip:
             banks=[b"\xAA" * 500, b"\xBB" * 3000],
             songs=[b"\xCC" * 100],
         )
+
         data = howl_writer.serialize(hwl)
         hwl2 = howl_reader.read(data)
 

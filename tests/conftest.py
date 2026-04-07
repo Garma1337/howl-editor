@@ -148,15 +148,19 @@ def build_hwl_bytes(
     for e in spu_addrs:
         SpuAddrEntry.STRUCT.pack_into(buf, pos, e.ptr, e.size)
         pos += 4
+
     for fx in other_fx:
         OtherFX.STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.spu_index, fx.duration)
         pos += 8
+
     for fx in engine_fx:
         EngineFX.STRUCT.pack_into(buf, pos, fx.flags, fx.volume, fx.pitch, fx.unk, fx.spu_index)
         pos += 8
+
     for off in bank_offsets:
         pack_into("<H", buf, pos, off)
         pos += 2
+
     for off in song_offsets:
         pack_into("<H", buf, pos, off)
         pos += 2
@@ -204,6 +208,7 @@ def build_bank_blob(sample_ids: list[int], sample_datas: list[bytes]) -> bytes:
     header = pack("<H", len(sample_ids))
     for sid in sample_ids:
         header += pack("<h", sid)
+
     padded_len = bytes_to_sectors(len(header)) * SECTOR_SIZE
     header_padded = header + b"\x00" * (padded_len - len(header))
     return header_padded + b"".join(sample_datas)

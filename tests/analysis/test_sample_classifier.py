@@ -13,18 +13,21 @@ class TestClassify:
             other_fx=[OtherFX(flags=0, volume=255, pitch=1024, spu_index=10, duration=100)],
         )
         result = sample_classifier.classify(hwl)
+
         assert SampleType.SOUND_EFFECT in result[10]
 
     def test_instrument_classified(self, sample_classifier):
         song = build_cseq_bytes(instruments=[CseqInstrument(sample_id=42)])
         hwl = HowlFile(songs=[song])
         result = sample_classifier.classify(hwl)
+
         assert SampleType.INSTRUMENT in result[42]
 
     def test_percussion_classified(self, sample_classifier):
         song = build_cseq_bytes(percussions=[CseqPercussion(sample_id=7)])
         hwl = HowlFile(songs=[song])
         result = sample_classifier.classify(hwl)
+
         assert SampleType.PERCUSSION in result[7]
 
     def test_multi_type_sample(self, sample_classifier):
@@ -34,12 +37,14 @@ class TestClassify:
             songs=[song],
         )
         result = sample_classifier.classify(hwl)
+
         assert SampleType.INSTRUMENT in result[5]
         assert SampleType.SOUND_EFFECT in result[5]
 
     def test_empty_hwl(self, sample_classifier):
         hwl = HowlFile()
         result = sample_classifier.classify(hwl)
+
         assert result == {}
 
     def test_bad_song_data_skipped(self, sample_classifier):
@@ -48,6 +53,7 @@ class TestClassify:
             songs=[b"\xFF\xFF"],
         )
         result = sample_classifier.classify(hwl)
+
         assert 1 in result
 
 

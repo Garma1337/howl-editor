@@ -5,6 +5,7 @@ from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
 
 
 class TestBytesToSectors:
+
     def test_zero(self):
         assert bytes_to_sectors(0) == 0
 
@@ -22,6 +23,7 @@ class TestBytesToSectors:
 
 
 class TestStructSizes:
+
     def test_header_size(self):
         assert HowlHeader.SIZE == 40
 

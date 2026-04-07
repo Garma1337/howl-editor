@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from howl_editor.audio.ps1 import PS1_SAMPLE_RATE
+from howl_editor.audio.settings.ps1 import PS1_SAMPLE_RATE
 
 _MAX_ENVELOPE = 0x7FFF
 

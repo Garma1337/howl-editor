@@ -4,35 +4,47 @@ from struct import pack
 
 from howl_editor.audio.decoder.adsr_decoder import AdsrDecoder, AdsrEnvelope
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
-from howl_editor.audio.ps1 import PS1_SAMPLE_RATE, PS1_FREQUENCY_UNIT
-from howl_editor.audio.voice import Voice
+from howl_editor.audio.settings.ctr import DEFAULT_DISTORT, DEFAULT_PAN, DEFAULT_SEQ_VOL
+from howl_editor.audio.voice import Voice, PitchCalculator, GainCalculator
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.models import CseqFile, CseqSong, CseqEventType
 
+# CTR default percussion ADSR: ad=0x80FF, sr=0x1FC2
 _PERCUSSION_ENVELOPE = AdsrEnvelope(
     attack_time=0.001,
-    decay_time=0.0,
+    decay_time=0.001,
     sustain_level=1.0,
     release_time=0.005,
     sustain_decrease=False,
     sustain_shift=31,
 )
 
-_PERCUSSION_VOLUME_SCALE = 0.40
-_MIDDLE_C = 60
-_MAX_VOLUME = 255.0
-_MAX_PAN = 127.0
 _SAMPLE_CLAMP_MIN = -32768
 _SAMPLE_CLAMP_MAX = 32767
 _TAIL_SECONDS = 5
 
+# Voice event actions
+_ON = "on"
+_OFF = "off"
+_UPDATE = "update"
+_BEND = "bend"
+
 
 class CseqRenderer:
 
-    def __init__(self, vag_decoder: VagDecoder, adsr_decoder: AdsrDecoder, wav_writer: WavWriter):
+    def __init__(
+        self,
+        vag_decoder: VagDecoder,
+        adsr_decoder: AdsrDecoder,
+        wav_writer: WavWriter,
+        pitch_calculator: PitchCalculator,
+        gain_calculator: GainCalculator,
+    ):
         self._decoder = vag_decoder
         self._adsr = adsr_decoder
         self._wav_writer = wav_writer
+        self._pitch = pitch_calculator
+        self._gain = gain_calculator
 
     def render_song(
         self,
@@ -109,42 +121,65 @@ class CseqRenderer:
         decoded_cache: dict[int, tuple[list[int], int]],
         output_rate: int,
         samples_per_tick: float,
-    ) -> list[tuple[int, str, Voice]]:
-        events: list[tuple[int, str, Voice]] = []
+    ) -> list[tuple]:
+        events: list[tuple] = []
 
         for track in song.tracks:
             patch_idx = 0
-            cur_velocity = 127
-            cur_pan = 64
+            seq_vol = DEFAULT_SEQ_VOL
+            cur_pan = DEFAULT_PAN
+            distort = DEFAULT_DISTORT
             tick = 0
             active_notes: dict[int, list[Voice]] = {}
+            live_voices: list[Voice] = []
 
             for event in track.events:
                 tick += event.delta
 
                 if event.event_type == CseqEventType.CHANGE_PATCH:
                     patch_idx = event.pitch
+
                 elif event.event_type == CseqEventType.VELOCITY:
-                    cur_velocity = event.pitch
+                    seq_vol = event.pitch
+                    pos = self._tick_to_sample(tick, samples_per_tick)
+                    if live_voices:
+                        events.append((pos, _UPDATE, list(live_voices), (seq_vol, cur_pan)))
+
                 elif event.event_type == CseqEventType.PAN:
                     cur_pan = event.pitch
+                    pos = self._tick_to_sample(tick, samples_per_tick)
+                    if live_voices:
+                        events.append((pos, _UPDATE, list(live_voices), (seq_vol, cur_pan)))
+
+                elif event.event_type == CseqEventType.PITCH_BEND:
+                    distort = event.pitch
+                    pos = self._tick_to_sample(tick, samples_per_tick)
+                    if live_voices:
+                        events.append((pos, _BEND, list(live_voices), distort))
+
                 elif event.event_type == CseqEventType.NOTE_ON:
                     start = self._tick_to_sample(tick, samples_per_tick)
-                    vel = event.velocity if event.velocity > 0 else cur_velocity
+                    note_vel = event.velocity if event.velocity > 0 else 127
                     voice = self._create_voice(
                         cseq, track.is_drum, patch_idx, event.pitch,
-                        vel, cur_pan, sample_data, decoded_cache, output_rate,
+                        note_vel, seq_vol, cur_pan, distort,
+                        sample_data, decoded_cache, output_rate,
                     )
 
                     if voice:
-                        events.append((start, "on", voice))
+                        events.append((start, _ON, voice, None))
                         active_notes.setdefault(event.pitch, []).append(voice)
+                        live_voices.append(voice)
+
                 elif event.event_type == CseqEventType.NOTE_OFF:
                     off = self._tick_to_sample(tick, samples_per_tick)
 
                     if event.pitch in active_notes and active_notes[event.pitch]:
                         voice = active_notes[event.pitch].pop(0)
-                        events.append((off, "off", voice))
+                        events.append((off, _OFF, voice, None))
+                        if voice in live_voices:
+                            live_voices.remove(voice)
+
                 elif event.event_type in (
                     CseqEventType.END_TRACK,
                     CseqEventType.END_TRACK_2,
@@ -153,16 +188,17 @@ class CseqRenderer:
                     off = self._tick_to_sample(tick, samples_per_tick)
                     for note_voices in active_notes.values():
                         for v in note_voices:
-                            events.append((off, "off", v))
+                            events.append((off, _OFF, v, None))
 
                     active_notes.clear()
+                    live_voices.clear()
                     break
 
         return events
 
     def _render_voices(
         self,
-        voice_events: list[tuple[int, str, Voice]],
+        voice_events: list[tuple],
         output_rate: int,
         dt: float,
     ) -> tuple[list[int], list[int]]:
@@ -177,12 +213,30 @@ class CseqRenderer:
 
         while sample_pos < total_estimate or active_voices:
             while event_idx < len(voice_events) and voice_events[event_idx][0] <= sample_pos:
-                _, action, voice = voice_events[event_idx]
+                evt = voice_events[event_idx]
+                action = evt[1]
 
-                if action == "on":
-                    active_voices.append(voice)
-                else:
-                    voice.note_off()
+                if action == _ON:
+                    active_voices.append(evt[2])
+                elif action == _OFF:
+                    evt[2].note_off()
+                elif action == _UPDATE:
+                    new_seq_vol, new_pan = evt[3]
+                    for v in evt[2]:
+                        v.gain_l, v.gain_r = self._gain.compute(
+                            v.inst_vol, v.note_vel, new_seq_vol, new_pan,
+                        )
+                elif action == _BEND:
+                    new_distort = evt[3]
+                    for v in evt[2]:
+                        if v.is_drum:
+                            v.pitch_ratio = self._pitch.drum(
+                                v.base_pitch, new_distort, v.output_rate,
+                            )
+                        else:
+                            v.pitch_ratio = self._pitch.instrument(
+                                v.base_pitch, v.note_index, new_distort, v.output_rate,
+                            )
 
                 event_idx += 1
 
@@ -208,17 +262,11 @@ class CseqRenderer:
 
             env = voice.advance_envelope(dt)
             raw = voice.read()
-            amplitude = raw * env * voice.volume * voice.velocity
-            pan_l, pan_r = self._compute_pan(voice.pan)
-            mix_l += amplitude * pan_l
-            mix_r += amplitude * pan_r
+            sample = raw * env
+            mix_l += sample * voice.gain_l
+            mix_r += sample * voice.gain_r
 
         return mix_l, mix_r
-
-    def _compute_pan(self, pan: float) -> tuple[float, float]:
-        pan_r = pan / _MAX_PAN
-        pan_l = 1.0 - pan_r
-        return pan_l, pan_r
 
     def _clamp_sample(self, value: float) -> int:
         return max(_SAMPLE_CLAMP_MIN, min(_SAMPLE_CLAMP_MAX, int(value)))
@@ -229,28 +277,33 @@ class CseqRenderer:
         is_drum: bool,
         patch_idx: int,
         note_pitch: int,
-        velocity: int,
+        note_vel: int,
+        seq_vol: int,
         pan: int,
+        distort: int,
         sample_data: dict[int, bytes],
         decoded_cache: dict[int, tuple[list[int], int]],
         output_rate: int,
     ) -> Voice | None:
         if is_drum:
-            if patch_idx >= len(cseq.percussions):
+            perc_idx = note_pitch
+            if perc_idx >= len(cseq.percussions):
                 return None
 
-            inst = cseq.percussions[patch_idx]
-            pitch_ratio = self._compute_drum_pitch(inst.frequency, output_rate)
-            inst_volume = self._normalize_volume(inst.volume) * _PERCUSSION_VOLUME_SCALE
+            inst = cseq.percussions[perc_idx]
+            pitch_ratio = self._pitch.drum(inst.frequency, distort, output_rate)
             envelope = _PERCUSSION_ENVELOPE
+            base_pitch = inst.frequency
+            note_index = 0
         else:
             if patch_idx >= len(cseq.instruments):
                 return None
 
             inst = cseq.instruments[patch_idx]
-            pitch_ratio = self._compute_melodic_pitch(inst.frequency, note_pitch, output_rate)
-            inst_volume = self._normalize_volume(inst.volume)
+            pitch_ratio = self._pitch.instrument(inst.frequency, note_pitch, distort, output_rate)
             envelope = self._adsr.decode(inst.adsr)
+            base_pitch = inst.frequency
+            note_index = note_pitch
 
         spu_id = inst.sample_id
         if spu_id not in sample_data:
@@ -260,24 +313,19 @@ class CseqRenderer:
             decoded_cache[spu_id] = self._decoder.decode_with_loop(sample_data[spu_id])
 
         samples, loop_start = decoded_cache[spu_id]
+        gain_l, gain_r = self._gain.compute(inst.volume, note_vel, seq_vol, pan)
 
         return Voice(
             samples=samples,
             loop_start=loop_start,
             pitch_ratio=pitch_ratio,
-            volume=inst_volume,
-            pan=float(pan),
-            velocity=self._normalize_volume(velocity),
+            gain_l=gain_l,
+            gain_r=gain_r,
             envelope=envelope,
+            inst_vol=inst.volume,
+            note_vel=note_vel,
+            base_pitch=base_pitch,
+            note_index=note_index,
+            is_drum=is_drum,
+            output_rate=output_rate,
         )
-
-    def _compute_drum_pitch(self, frequency: int, output_rate: int) -> float:
-        return (frequency / PS1_FREQUENCY_UNIT) * (PS1_SAMPLE_RATE / output_rate)
-
-    def _compute_melodic_pitch(self, frequency: int, note_pitch: int, output_rate: int) -> float:
-        semitone_offset = note_pitch - _MIDDLE_C
-        freq_mult = 2.0 ** (semitone_offset / 12.0)
-        return (frequency / PS1_FREQUENCY_UNIT) * freq_mult * (PS1_SAMPLE_RATE / output_rate)
-
-    def _normalize_volume(self, value: int) -> float:
-        return value / _MAX_VOLUME

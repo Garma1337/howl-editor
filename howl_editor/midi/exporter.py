@@ -58,8 +58,10 @@ class CseqMidiExporter:
             return _DRUM_CHANNEL, next_channel
 
         channel = next_channel
+
         if next_channel == _DRUM_CHANNEL:
             next_channel += 1
+
         next_channel += 1
 
         if next_channel > _MAX_MIDI_CHANNEL:

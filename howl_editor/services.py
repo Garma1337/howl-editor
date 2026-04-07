@@ -2,10 +2,11 @@
 
 from howl_editor.analysis.sample_classifier import SampleClassifier
 from howl_editor.analysis.validator import BankCseqValidator
+from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.decoder.adsr_decoder import AdsrDecoder
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
-from howl_editor.audio.player import AudioPlayer
+from howl_editor.audio.voice import PitchCalculator, GainCalculator
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.bank.builder import BankBuilder
 from howl_editor.bank.reader import BankReader
@@ -49,10 +50,14 @@ container.register("midi_exporter", lambda c: CseqMidiExporter())
 container.register("wav_writer", lambda c: WavWriter())
 container.register("vag_decoder", lambda c: VagDecoder(c.resolve("wav_writer")))
 container.register("adsr_decoder", lambda c: AdsrDecoder())
+container.register("pitch_calculator", lambda c: PitchCalculator())
+container.register("gain_calculator", lambda c: GainCalculator())
 container.register("cseq_renderer", lambda c: CseqRenderer(
     c.resolve("vag_decoder"),
     c.resolve("adsr_decoder"),
-    c.resolve("wav_writer")))
+    c.resolve("wav_writer"),
+    c.resolve("pitch_calculator"),
+    c.resolve("gain_calculator")))
 container.register("audio_player", lambda c: AudioPlayer())
 container.register("version_detector", lambda c: HowlVersionDetector())
 container.register("sample_classifier", lambda c: SampleClassifier(c.resolve("cseq_reader")))

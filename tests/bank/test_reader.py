@@ -5,6 +5,7 @@ from tests.conftest import build_bank_blob
 
 
 class TestReadSampleCount:
+
     def test_empty_data(self, bank_reader):
         assert bank_reader._read_sample_count(b"") == 0
 
@@ -19,8 +20,10 @@ class TestReadSampleCount:
 
 
 class TestParseBankBlob:
+
     def test_empty_bank(self, bank_reader):
         result = bank_reader.parse(b"", [])
+
         assert result == []
 
     def test_single_sample(self, bank_reader):
@@ -28,6 +31,7 @@ class TestParseBankBlob:
         spu_addrs = [SpuAddrEntry(0, 100)]  # 100 * 8 = 800 bytes
         blob = build_bank_blob([0], [sample_data])
         result = bank_reader.parse(blob, spu_addrs)
+
         assert len(result) == 1
         assert isinstance(result[0], BankSample)
         assert result[0].spu_index == 0
@@ -39,6 +43,7 @@ class TestParseBankBlob:
         spu_addrs = [SpuAddrEntry(0, 10), SpuAddrEntry(0, 20)]
         blob = build_bank_blob([0, 1], [data1, data2])
         result = bank_reader.parse(blob, spu_addrs)
+
         assert len(result) == 2
         assert result[0].spu_index == 0
         assert result[0].data == data1
@@ -49,11 +54,13 @@ class TestParseBankBlob:
         spu_addrs = [SpuAddrEntry(0, 10)]  # Only index 0 exists
         blob = build_bank_blob([0, 99], [b"\x00" * 80, b"\x00" * 80])
         result = bank_reader.parse(blob, spu_addrs)
+
         assert len(result) == 1
         assert result[0].spu_index == 0
 
 
 class TestGetName:
+
     def test_known_bank(self, bank_reader):
         assert bank_reader.get_name(0) != ""
         assert bank_reader.get_name(1) != ""
@@ -69,6 +76,7 @@ class TestGetName:
 
 
 class TestCalculateDataOffset:
+
     def test_small_header(self, bank_reader):
         # 2 + 1*2 = 4 bytes header -> rounds up to 1 sector = 0x800
         assert bank_reader._calculate_data_offset(1) == 0x800

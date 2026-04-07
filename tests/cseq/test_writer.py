@@ -9,11 +9,14 @@ from howl_editor.models import (
 
 
 class TestSerializeMinimal:
+
     def test_produces_bytes(self, cseq_writer):
         cseq = CseqFile(songs=[
             CseqSong(tracks=[CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])])
         ])
+
         data = cseq_writer.serialize(cseq)
+
         assert isinstance(data, bytes)
         assert len(data) >= 8
 
@@ -21,8 +24,10 @@ class TestSerializeMinimal:
         cseq = CseqFile(songs=[
             CseqSong(tracks=[CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])])
         ])
+
         data = cseq_writer.serialize(cseq)
         stored_size = unpack_from("<I", data, 0)[0]
+
         assert stored_size == len(data)
 
     def test_header_counts(self, cseq_writer):
@@ -31,22 +36,27 @@ class TestSerializeMinimal:
             percussions=[CseqPercussion()],
             songs=[CseqSong(tracks=[CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])])],
         )
+
         data = cseq_writer.serialize(cseq)
         _, num_inst, num_perc, num_songs = unpack_from("<IBBh", data, 0)
+
         assert num_inst == 2
         assert num_perc == 1
         assert num_songs == 1
 
 
 class TestCseqRoundTrip:
+
     def test_minimal_roundtrip(self, cseq_reader, cseq_writer):
         original = CseqFile(songs=[
             CseqSong(bpm=120, tpqn=480, tracks=[
                 CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
             ])
         ])
+
         data = cseq_writer.serialize(original)
         parsed = cseq_reader.read(data)
+
         assert len(parsed.songs) == 1
         assert parsed.songs[0].bpm == 120
         assert parsed.songs[0].tpqn == 480
@@ -59,8 +69,10 @@ class TestCseqRoundTrip:
                 CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
             ])],
         )
+
         data = cseq_writer.serialize(original)
         parsed = cseq_reader.read(data)
+
         assert parsed.instruments[0].volume == 200
         assert parsed.instruments[0].sample_id == 42
         assert parsed.instruments[0].adsr == 0xDEADBEEF
@@ -73,10 +85,12 @@ class TestCseqRoundTrip:
             CseqEvent(delta=480, event_type=CseqEventType.NOTE_OFF, pitch=60),
             CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
         ])
+
         original = CseqFile(songs=[CseqSong(bpm=140, tpqn=480, tracks=[track])])
         data = cseq_writer.serialize(original)
         parsed = cseq_reader.read(data)
         events = parsed.songs[0].tracks[0].events
+
         assert events[0].event_type == CseqEventType.CHANGE_PATCH
         assert events[1].event_type == CseqEventType.NOTE_ON
         assert events[1].pitch == 60
@@ -90,6 +104,7 @@ class TestCseqRoundTrip:
         original = CseqFile(songs=[CseqSong(tracks=[t1, t2])])
         data = cseq_writer.serialize(original)
         parsed = cseq_reader.read(data)
+
         assert len(parsed.songs[0].tracks) == 2
         assert not parsed.songs[0].tracks[0].is_drum
         assert parsed.songs[0].tracks[1].is_drum

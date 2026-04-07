@@ -13,26 +13,31 @@ def codec():
 class TestRead:
     def test_zero(self, codec):
         val, pos = codec.read(b"\x00", 0)
+
         assert val == 0
         assert pos == 1
 
     def test_single_byte(self, codec):
         val, pos = codec.read(b"\x7F", 0)
+
         assert val == 127
         assert pos == 1
 
     def test_two_bytes(self, codec):
         val, pos = codec.read(b"\x81\x00", 0)
+
         assert val == 128
         assert pos == 2
 
     def test_large_value(self, codec):
         # 0xFF 0x7F = (0x7F << 7) | 0x7F = 16383
         val, pos = codec.read(b"\xFF\x7F", 0)
+
         assert val == 16383
 
     def test_offset(self, codec):
         val, pos = codec.read(b"\xAA\xBB\x05\xCC", 2)
+
         assert val == 5
         assert pos == 3
 
@@ -46,6 +51,7 @@ class TestRead:
 
 
 class TestWrite:
+
     def test_zero(self, codec):
         assert codec.write(0) == b"\x00"
 

@@ -12,14 +12,17 @@ from howl_editor.howl.version import HowlVersionDetector
 
 
 class TestDetailFormatter:
+
     def test_facade_exposes_sub_formatters(self):
         vlq = VlqCodec()
+
         fmt = DetailFormatter(
             howl_formatter=HowlDetailFormatter(HowlVersionDetector()),
             fx_formatter=FxDetailFormatter(),
             bank_formatter=BankDetailFormatter(BankReader()),
             song_formatter=SongDetailFormatter(CseqReader(vlq)),
         )
+
         assert isinstance(fmt.howl, HowlDetailFormatter)
         assert isinstance(fmt.fx, FxDetailFormatter)
         assert isinstance(fmt.bank, BankDetailFormatter)

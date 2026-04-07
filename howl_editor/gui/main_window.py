@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
 )
 
 from howl_editor.analysis import SampleClassifier, BankCseqValidator
+from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
-from howl_editor.audio.player import AudioPlayer
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
 from howl_editor.bank import BankReader, BankBuilder
 from howl_editor.cseq import CseqReader, CseqWriter

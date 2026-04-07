@@ -1,7 +1,7 @@
 # coding: utf-8
 
 from howl_editor.audio.decoder.adsr_decoder import AdsrEnvelope
-from howl_editor.audio.ps1 import PS1_SAMPLE_RATE
+from howl_editor.audio.settings.ps1 import PS1_SAMPLE_RATE
 
 
 _SUSTAIN_DECAY_FACTOR = 0.0001
@@ -9,7 +9,12 @@ _MAX_SUSTAIN_SHIFT = 31
 
 
 class Voice:
-    """A single playing voice with sample playback, looping, panning, and ADSR envelope."""
+    """A single playing voice with sample playback, looping, and ADSR envelope.
+
+    Holds immutable note metadata (inst_vol, note_vel, base_pitch, note_index,
+    is_drum, output_rate) so that callers can recalculate gain or pitch for
+    mid-note updates without needing a side-channel lookup.
+    """
 
     PHASE_ATTACK = 0
     PHASE_DECAY = 1
@@ -21,19 +26,32 @@ class Voice:
         samples: list[int],
         loop_start: int,
         pitch_ratio: float,
-        volume: float,
-        pan: float,
-        velocity: float,
+        gain_l: float,
+        gain_r: float,
         envelope: AdsrEnvelope,
+        inst_vol: int = 0,
+        note_vel: int = 0,
+        base_pitch: int = 0,
+        note_index: int = 0,
+        is_drum: bool = False,
+        output_rate: int = 22050,
     ):
         self.samples = samples
         self.loop_start = loop_start
         self.pos: float = 0.0
         self.pitch_ratio = pitch_ratio
-        self.volume = volume
-        self.pan = pan
-        self.velocity = velocity
+        self.gain_l = gain_l
+        self.gain_r = gain_r
         self.envelope = envelope
+
+        # Immutable note metadata — kept for mid-note recalculation
+        self.inst_vol = inst_vol
+        self.note_vel = note_vel
+        self.base_pitch = base_pitch
+        self.note_index = note_index
+        self.is_drum = is_drum
+        self.output_rate = output_rate
+
         self.env_phase = self.PHASE_ATTACK
         self.env_level = 0.0
         self.active = True
@@ -130,6 +148,7 @@ class Voice:
         next_idx = self._next_sample_index(idx)
         sample = self._interpolate(idx, next_idx)
         self.pos += self.pitch_ratio
+
         return int(sample)
 
     def _try_loop(self) -> bool:

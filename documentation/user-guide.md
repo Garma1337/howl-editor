@@ -16,6 +16,7 @@ This guide covers internal behaviors and details that are not immediately obviou
   - [Sample Playback](#sample-playback)
   - [FX Playback](#fx-playback)
   - [Sequence Playback](#sequence-playback)
+  - [Playback Accuracy](#playback-accuracy)
   - [Playback Limitations](#playback-limitations)
   - [Audio Cache](#audio-cache)
 - [Bank Merging](#bank-merging)
@@ -111,26 +112,36 @@ Clicking a sequence renders the entire song offline before playing:
 
 1. All instruments and percussions referenced by the CSEQ are collected
 2. Their sample data is found by searching all banks in the HWL
-3. Each note event decodes its sample, applies the ADSR envelope, and mixes at the correct pitch, velocity, and pan
-4. Melodic notes are pitch-shifted relative to middle C (note 60) using semitone ratios
-5. Percussion uses the instrument's fixed pitch directly (no semitone transposition)
-6. The result is rendered at 22050 Hz stereo
+3. Each note event decodes its sample, applies the ADSR envelope, and mixes at the correct pitch, volume, and pan
+4. Melodic pitch is calculated using the CTR note frequency lookup table, matching the game's fixed-point pitch computation
+5. Percussion uses the note number to select the drum instrument (matching CTR's drum indexing), with the instrument's fixed pitch
+6. Volume is computed using the CTR volume chain: master music volume, song volume, sequence volume, instrument volume, and note velocity
+7. Stereo panning uses the CTR volume lookup table for accurate L/R balance
+8. Mid-note volume, pan, and pitch bend changes update already-playing voices in real time
+9. The result is rendered at 22050 Hz stereo
 
 Rendering can take a few seconds for complex songs.
 
+### Playback Accuracy
+
+The editor's playback uses lookup tables and volume formulas extracted from the decompiled CTR source code. The following aspects match the in-game behavior:
+
+- **Pitch calculation**: Uses the exact 108-entry note frequency table from CTR for semitone-accurate pitch. Pitch bend (opcode 0x0A) applies both coarse (semitone shift) and fine (distortion constant) modulation, matching the game's `DECOMP_howl_InstrumentPitch` function.
+- **Volume chain**: Applies the full CTR volume cascade: `(masterVol * songVol * seqVol) >> 10 * instVol * noteVel >> 15`, clamped to the SPU's 14-bit maximum.
+- **Stereo panning**: Uses the 256-entry `volumeLR` lookup table from CTR (0=full left, 128=center, 255=full right) instead of linear interpolation.
+- **Drum indexing**: Percussion tracks use the MIDI note number as the percussion table index (matching CTR opcode 0x05 for drum tracks), not the CHANGE_PATCH value.
+- **Mid-note updates**: VELOCITY (opcode 0x06) and PAN (opcode 0x07) events update all currently playing voices on the sequence, matching CTR's `DECOMP_cseq_opcode_from06and07`. PITCH_BEND (opcode 0x0A) similarly updates active voice pitches.
+- **Percussion ADSR**: Uses the CTR default drum ADSR values (ad=0x80FF, sr=0x1FC2): instant attack, full sustain hold, fast release.
+
 ### Playback Limitations
 
-The editor's playback is a software approximation of the PS1 SPU (Sound Processing Unit). While it reproduces the general character of each song, there are differences compared to in-game audio:
+Despite the accuracy improvements, some differences remain compared to in-game audio:
 
 - **ADSR envelope approximation**: The PS1 SPU processes ADSR envelopes in hardware with cycle-accurate timing. The editor approximates these timings in software, so attack/decay/release curves may not match exactly. The overall shape is correct but fine timing details differ.
 - **No reverb**: The PS1 SPU has built-in hardware reverb with multiple modes (studio, hall, etc.). The editor does not simulate reverb, so songs that rely heavily on it (especially indoor/cave tracks) will sound drier than in-game.
-- **No pitch bend**: CSEQ pitch bend events (opcode 0x0A) are parsed but not applied during playback. Notes play at their initial pitch without real-time modulation.
-- **Simplified volume chain**: In-game, the final volume is a cascade of global music volume, song volume, sequence volume, instrument volume, and note velocity. The editor applies only instrument volume and note velocity.
-- **Percussion volume scaling**: Percussion samples are played at 40% volume to approximate the in-game balance. On the PS1, percussion samples are typically short one-shot sounds that naturally decay when the sample data ends. The editor applies the same behavior (no looping for percussion) but the relative mix may still differ.
-- **Linear pan**: The editor uses linear panning (left = 1 - right). The PS1 uses a lookup table for smoother L/R curves, which can produce slightly different stereo imaging.
 - **Sample rate**: Songs are rendered at 22050 Hz rather than the PS1's native 44100 Hz. This reduces rendering time but may affect the character of high-frequency content.
 
-Despite these limitations, the playback is suitable for previewing songs, verifying note arrangements, and checking that the correct samples are referenced.
+The playback is suitable for previewing songs, verifying note arrangements, and checking that the correct samples are referenced.
 
 ### Audio Cache
 
