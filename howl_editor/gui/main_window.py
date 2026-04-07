@@ -6,8 +6,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
-    QSplitter, QTextEdit, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QHeaderView,
+    QSplitter, QTextEdit, QWidget, QVBoxLayout, QMenu, QToolBar, QStatusBar,
+    QFileDialog, QMessageBox, QHeaderView, QAbstractItemView,
 )
 
 from howl_editor.analysis import SampleClassifier, BankCseqValidator
@@ -24,6 +24,7 @@ from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
 from howl_editor.gui.handler.tools_handler import ToolsHandler
+from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.howl import HowlReader, HowlWriter, HowlEditor
 from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
@@ -114,6 +115,15 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         splitter = QSplitter(Qt.Horizontal)
 
+        # Left panel: filter bar + tree
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+
+        self.filter_widget = FilterWidget()
+        left_layout.addWidget(self.filter_widget)
+
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Item", "Info"])
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -123,11 +133,40 @@ class MainWindow(QMainWindow):
         self.tree.currentItemChanged.connect(self._on_selection_changed)
         self.tree.itemClicked.connect(self._on_item_clicked)
 
+        # Drag-and-drop for reordering banks, songs, and sequences
+        self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.tree.setDefaultDropAction(Qt.MoveAction)
+        self.tree.setDragEnabled(True)
+        self.tree.setAcceptDrops(True)
+        self.tree.model().rowsMoved.connect(self._on_rows_moved)
+
+        left_layout.addWidget(self.tree)
+        self.filter_widget.set_tree(self.tree)
+
+        # Right panel: detail view + waveform + audio transport
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
         self.details = QTextEdit()
         self.details.setReadOnly(True)
+        right_layout.addWidget(self.details, stretch=1)
 
-        splitter.addWidget(self.tree)
-        splitter.addWidget(self.details)
+        self.waveform = WaveformWidget()
+        self.waveform.setVisible(False)
+        right_layout.addWidget(self.waveform)
+
+        self.player_widget = PlayerWidget()
+        right_layout.addWidget(self.player_widget)
+
+        if self._audio_player and self._audio_player.media_player:
+            self.player_widget.connect_player(
+                self._audio_player.media_player, self._playback.stop,
+            )
+
+        splitter.addWidget(left_panel)
+        splitter.addWidget(right_panel)
         splitter.setSizes([660, 440])
         self.setCentralWidget(splitter)
 
@@ -215,6 +254,10 @@ class MainWindow(QMainWindow):
         self._sample_types = {}
         self.tree.clear()
         self.details.clear()
+        self.waveform.clear()
+        self.waveform.setVisible(False)
+        self.player_widget.clear()
+        self.filter_widget.reset()
         self._set_file_actions_enabled(False)
         self.status.showMessage("Ready - Open or create a new HWL file")
         self._update_title()
@@ -458,13 +501,15 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _on_selection_changed(self, current, previous):
+    def _on_selection_changed(self, current):
         if not current or not self.hwl:
             self.details.clear()
+            self.waveform.setVisible(False)
             return
 
         node_type = current.data(0, Qt.UserRole)
         index = current.data(0, Qt.UserRole + 1)
+        sub_index = current.data(0, Qt.UserRole + 2)
 
         formatters = {
             NODE_ROOT: lambda: self._detail_fmt.howl.format_details(self.hwl, self.file_path),
@@ -479,11 +524,54 @@ class MainWindow(QMainWindow):
             NODE_SONG: lambda: self._detail_fmt.song.format_details(self.hwl, index),
         }
 
+        # Waveform on selection: samples and FX entries (instant decode)
+        if node_type == NODE_SAMPLE and index is not None and sub_index is not None:
+            self._show_sample_waveform(index, sub_index)
+        elif node_type == NODE_OTHER_FX_ENTRY and index is not None:
+            self._show_fx_waveform(self.hwl.other_fx[index].spu_index)
+        elif node_type == NODE_ENGINE_FX_ENTRY and index is not None:
+            self._show_fx_waveform(self.hwl.engine_fx[index].spu_index)
+        else:
+            self.waveform.setVisible(False)
+
         fn = formatters.get(node_type)
         if fn:
-            self.details.setPlainText(fn())
+            self.details.setHtml(fn())
 
-    def _on_item_clicked(self, item, column):
+    def _show_sample_waveform(self, bank_index: int, sample_index: int) -> None:
+        type_labeler = self._sample_classifier.get_label if self._sample_classifier else None
+        self.details.setHtml(self._detail_fmt.bank.format_sample_details(
+            self.hwl, bank_index, sample_index, self._sample_types, type_labeler,
+        ))
+
+        try:
+            samples = self._bank_reader.parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
+
+            if sample_index < len(samples):
+                pcm, loop_start = self._vag_decoder.decode_with_loop(samples[sample_index].data)
+                self.waveform.set_samples(pcm, loop_start)
+                self.waveform.setVisible(True)
+                return
+        except Exception:
+            pass
+
+        self.waveform.setVisible(False)
+
+    def _show_fx_waveform(self, spu_index: int) -> None:
+        try:
+            data = self._playback._find_sample_data(spu_index)
+
+            if data:
+                pcm, loop_start = self._vag_decoder.decode_with_loop(data)
+                self.waveform.set_samples(pcm, loop_start)
+                self.waveform.setVisible(True)
+                return
+        except Exception:
+            pass
+
+        self.waveform.setVisible(False)
+
+    def _on_item_clicked(self, item):
         if not item or not self.hwl:
             return
 
@@ -521,6 +609,13 @@ class MainWindow(QMainWindow):
             menu.addAction("Export Samples as VAGs...", lambda: self._bank_handler.export_bank_samples(index))
             menu.addAction("Export Samples as WAVs...", lambda: self._bank_handler.export_bank_samples_as_wav(index))
             menu.addSeparator()
+
+            if index > 0:
+                menu.addAction("Move Up", lambda: self._move_bank(index, index - 1))
+            if index < len(self.hwl.banks) - 1:
+                menu.addAction("Move Down", lambda: self._move_bank(index, index + 1))
+
+            menu.addSeparator()
             menu.addAction("Add Sample (.vag)...", lambda: self._sample_handler.add_sample(index))
             menu.addAction("Merge Bank...", lambda: self._bank_handler.merge_bank(index))
             menu.addAction("Replace Bank...", lambda: self._bank_handler.replace_bank(index))
@@ -528,11 +623,31 @@ class MainWindow(QMainWindow):
         elif node_type == NODE_SEQUENCE and index is not None and sub_index is not None:
             menu.addAction("Export as MIDI...", lambda: self._song_handler.export_sequence_as_midi(index, sub_index))
             menu.addSeparator()
+
+            try:
+                cseq = self._cseq_reader.read(self.hwl.songs[index])
+                seq_count = len(cseq.songs)
+            except Exception:
+                seq_count = 0
+
+            if sub_index > 0:
+                menu.addAction("Move Up", lambda: self._move_sequence(index, sub_index, sub_index - 1))
+            if seq_count > 0 and sub_index < seq_count - 1:
+                menu.addAction("Move Down", lambda: self._move_sequence(index, sub_index, sub_index + 1))
+
+            menu.addSeparator()
             menu.addAction("Replace Sequence...", lambda: self._song_handler.replace_sequence(index, sub_index))
             menu.addAction("Remove Sequence", lambda: self._song_handler.remove_sequence(index, sub_index))
         elif node_type == NODE_SONG and index is not None:
             menu.addAction("Export Song (.cseq)...", lambda: self._song_handler.export_song(index))
             menu.addAction("Export as MIDI...", lambda: self._song_handler.export_song_as_midi(index))
+            menu.addSeparator()
+
+            if index > 0:
+                menu.addAction("Move Up", lambda: self._move_song(index, index - 1))
+            if index < len(self.hwl.songs) - 1:
+                menu.addAction("Move Down", lambda: self._move_song(index, index + 1))
+
             menu.addSeparator()
             menu.addAction("Replace Song...", lambda: self._song_handler.replace_song(index))
             menu.addAction("Remove Song", lambda: self._song_handler.remove_song(index))
@@ -547,6 +662,80 @@ class MainWindow(QMainWindow):
             return
 
         menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _move_bank(self, from_index: int, to_index: int) -> None:
+        try:
+            self._editor.move_bank(self.hwl, from_index, to_index)
+            self._mark_modified()
+            self._rebuild_tree()
+            self.status.showMessage(f"Moved bank {from_index} to position {to_index}")
+        except Exception as e:
+            self.status.showMessage(f"Move failed: {e}")
+
+    def _move_song(self, from_index: int, to_index: int) -> None:
+        try:
+            self._editor.move_song(self.hwl, from_index, to_index)
+            self._mark_modified()
+            self._rebuild_tree()
+            self.status.showMessage(f"Moved song {from_index} to position {to_index}")
+        except Exception as e:
+            self.status.showMessage(f"Move failed: {e}")
+
+    def _move_sequence(self, song_index: int, from_index: int, to_index: int) -> None:
+        try:
+            self.hwl.songs[song_index] = self._cseq_editor.move_sequence(
+                self.hwl.songs[song_index], from_index, to_index,
+            )
+            self._mark_modified()
+            self._rebuild_tree()
+            self.status.showMessage(f"Moved sequence {from_index} to position {to_index}")
+        except Exception as e:
+            self.status.showMessage(f"Move failed: {e}")
+
+    def _on_rows_moved(self, start, destination, dest_row):
+        """Handle drag-and-drop reorder of banks, songs, or sequences."""
+        if not self.hwl:
+            return
+
+        # Determine what was moved by checking the parent node type
+        if destination.isValid():
+            parent_item = self.tree.itemFromIndex(destination)
+        else:
+            parent_item = None
+
+        if not parent_item:
+            return
+
+        parent_type = parent_item.data(0, Qt.UserRole)
+
+        try:
+            if parent_type == NODE_BANKS:
+                self._editor.move_bank(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
+                self._mark_modified()
+                self._rebuild_tree()
+                self.status.showMessage(f"Moved bank {start} to position {dest_row}")
+
+            elif parent_type == NODE_SONGS:
+                self._editor.move_song(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
+                self._mark_modified()
+                self._rebuild_tree()
+                self.status.showMessage(f"Moved song {start} to position {dest_row}")
+
+            elif parent_type == NODE_SONG:
+                song_index = parent_item.data(0, Qt.UserRole + 1)
+                if song_index is not None:
+                    to_idx = dest_row if dest_row <= start else dest_row - 1
+
+                    self.hwl.songs[song_index] = self._cseq_editor.move_sequence(
+                        self.hwl.songs[song_index], start, to_idx,
+                    )
+
+                    self._mark_modified()
+                    self._rebuild_tree()
+                    self.status.showMessage(f"Moved sequence {start} to position {dest_row}")
+        except (IndexError, Exception) as e:
+            self.status.showMessage(f"Move failed: {e}")
+            self._rebuild_tree()
 
     def closeEvent(self, event):
         if self._check_unsaved():

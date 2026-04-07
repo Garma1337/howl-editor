@@ -1,0 +1,25 @@
+<h3>Sample — SPU {{ spu_index }}</h3>
+<table class="kv">
+    <tr>
+        <td>SPU Index</td>
+        <td>{{ spu_index }}</td>
+    </tr>
+    <tr>
+        <td>Data size</td>
+        <td>{{ data_size }}</td>
+    </tr>
+    <tr>
+        <td>Bank</td>
+        <td>{{ bank_label }}</td>
+    </tr>
+    <tr>
+        <td>Position in bank</td>
+        <td>{{ position }}</td>
+    </tr>
+    {% if classification %}
+    <tr>
+        <td>Classification</td>
+        <td>{{ classification }}</td>
+    </tr>
+    {% endif %}
+</table>

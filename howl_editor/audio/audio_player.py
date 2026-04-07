@@ -32,6 +32,11 @@ class AudioPlayer:
     def available(self) -> bool:
         return HAS_MULTIMEDIA and self._player is not None
 
+    @property
+    def media_player(self):
+        """The underlying QMediaPlayer, or None if QtMultimedia is unavailable."""
+        return self._player
+
     def play_wav(self, wav_data: bytes) -> None:
         if not self.available:
             return

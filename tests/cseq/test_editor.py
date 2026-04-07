@@ -121,3 +121,48 @@ class TestRemoveSequence:
 
         with pytest.raises(IndexError):
             cseq_editor_svc.remove_sequence(blob, -1)
+
+
+class TestMoveSequence:
+
+    def test_moves_forward(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_song(bpm=100), _make_song(bpm=200), _make_song(bpm=300))
+
+        new_blob = cseq_editor_svc.move_sequence(blob, 0, 2)
+        parsed = cseq_reader.read(new_blob)
+
+        assert len(parsed.songs) == 3
+        assert parsed.songs[0].bpm == 200
+        assert parsed.songs[1].bpm == 300
+        assert parsed.songs[2].bpm == 100
+
+    def test_moves_backward(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_song(bpm=100), _make_song(bpm=200), _make_song(bpm=300))
+
+        new_blob = cseq_editor_svc.move_sequence(blob, 2, 0)
+        parsed = cseq_reader.read(new_blob)
+
+        assert parsed.songs[0].bpm == 300
+        assert parsed.songs[1].bpm == 100
+        assert parsed.songs[2].bpm == 200
+
+    def test_same_position_is_noop(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_song(bpm=100), _make_song(bpm=200))
+
+        new_blob = cseq_editor_svc.move_sequence(blob, 1, 1)
+        parsed = cseq_reader.read(new_blob)
+
+        assert parsed.songs[0].bpm == 100
+        assert parsed.songs[1].bpm == 200
+
+    def test_out_of_range_raises(self, cseq_editor_svc):
+        blob = _make_cseq_blob(_make_song())
+
+        with pytest.raises(IndexError):
+            cseq_editor_svc.move_sequence(blob, 0, 5)
+
+    def test_negative_index_raises(self, cseq_editor_svc):
+        blob = _make_cseq_blob(_make_song())
+
+        with pytest.raises(IndexError):
+            cseq_editor_svc.move_sequence(blob, -1, 0)

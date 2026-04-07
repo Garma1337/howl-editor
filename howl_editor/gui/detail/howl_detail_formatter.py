@@ -1,13 +1,15 @@
 # coding: utf-8
 
+from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.models import HowlFile
 
 
 class HowlDetailFormatter:
 
-    def __init__(self, version_detector: HowlVersionDetector):
+    def __init__(self, version_detector: HowlVersionDetector, template_engine: TemplateEngine):
         self._version_detector = version_detector
+        self._template_engine = template_engine
 
     def format_details(self, hwl: HowlFile, file_path: str | None, raw_data: bytes | None = None) -> str:
         version_str = f"{hwl.version} ({hwl.version:#x})"
@@ -15,31 +17,29 @@ class HowlDetailFormatter:
             info = self._version_detector.detect(raw_data)
             version_str += f" - {info.version_name}"
 
-        lines = [
-            "HOWL File", "=" * 40,
-            f"Version:     {version_str}",
-            f"Reserved 1:  {hwl.reserved1}",
-            f"Reserved 2:  {hwl.reserved2}",
-            f"SPU Entries:  {len(hwl.spu_addrs)}",
-            f"Effects:     {len(hwl.other_fx)}",
-            f"Engine FX:   {len(hwl.engine_fx)}",
-            f"Banks:       {len(hwl.banks)}",
-            f"Songs:       {len(hwl.songs)}",
-            f"\nHeader data size: {hwl.header_data_size} bytes",
+        rows = [
+            {"key": "Version", "value": version_str},
+            {"key": "Reserved 1", "value": str(hwl.reserved1)},
+            {"key": "Reserved 2", "value": str(hwl.reserved2)},
+            {"key": "SPU Entries", "value": str(len(hwl.spu_addrs))},
+            {"key": "Effects", "value": str(len(hwl.other_fx))},
+            {"key": "Engine FX", "value": str(len(hwl.engine_fx))},
+            {"key": "Banks", "value": str(len(hwl.banks))},
+            {"key": "Songs", "value": str(len(hwl.songs))},
+            {"key": "Header data size", "value": f"{hwl.header_data_size} bytes"},
         ]
 
         if file_path:
-            lines.append(f"File: {file_path}")
+            rows.append({"key": "File", "value": file_path})
 
-        return "\n".join(lines)
+        body = self._template_engine.render("howl_details.html", rows=rows)
+        return self._template_engine.render("document.html", body=body)
 
     def format_spu_table(self, hwl: HowlFile) -> str:
-        lines = [
-            f"SPU Address Table ({len(hwl.spu_addrs)} entries)", "=" * 50,
-            f"{'Index':>6}  {'Ptr':>6}  {'Size':>6}  {'Bytes':>8}", "-" * 35,
+        entries = [
+            {"index": str(i), "ptr": str(e.ptr), "size": str(e.size), "bytes": f"{e.byte_size:,}"}
+            for i, e in enumerate(hwl.spu_addrs)
         ]
 
-        for i, e in enumerate(hwl.spu_addrs):
-            lines.append(f"{i:>6}  {e.ptr:>6}  {e.size:>6}  {e.byte_size:>8}")
-
-        return "\n".join(lines)
+        body = self._template_engine.render("spu_table.html", count=str(len(hwl.spu_addrs)), entries=entries)
+        return self._template_engine.render("document.html", body=body)

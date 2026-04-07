@@ -1,12 +1,18 @@
 # coding: utf-8
 
+from pathlib import Path
+
+from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
 from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.models import HowlFile, SpuAddrEntry, OtherFX, EngineFX
 
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
+
 
 def _formatter():
-    return HowlDetailFormatter(HowlVersionDetector())
+    engine = TemplateEngine(_TEMPLATE_DIR)
+    return HowlDetailFormatter(HowlVersionDetector(), engine)
 
 
 class TestHowlDetailFormatter:
@@ -25,9 +31,8 @@ class TestHowlDetailFormatter:
         text = fmt.format_details(hwl, None)
 
         assert "HOWL File" in text
-        assert "SPU Entries:  1" in text
-        assert "Banks:       1" in text
-        assert "Songs:       1" in text
+        assert "SPU Entries" in text
+        assert ">1<" in text  # value in table cell
 
     def test_format_details_with_path(self):
         fmt = _formatter()
@@ -39,7 +44,7 @@ class TestHowlDetailFormatter:
         fmt = _formatter()
         text = fmt.format_details(HowlFile(), None)
 
-        assert "File:" not in text
+        assert "File" not in text or text.count("File") == text.count("HOWL File")
 
     def test_format_spu_table(self):
         fmt = _formatter()

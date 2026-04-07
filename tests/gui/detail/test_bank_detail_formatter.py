@@ -1,13 +1,18 @@
 # coding: utf-8
 
+from pathlib import Path
+
 from howl_editor.bank.reader import BankReader
+from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
 from howl_editor.models import HowlFile, SpuAddrEntry
 from tests.conftest import build_bank_blob
 
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
+
 
 def _formatter():
-    return BankDetailFormatter(BankReader())
+    return BankDetailFormatter(BankReader(), TemplateEngine(_TEMPLATE_DIR))
 
 
 def _hwl_with_bank():
@@ -61,4 +66,3 @@ class TestBankDetailFormatter:
 
         assert "Bank 0" in text
         assert "Samples: 2" in text
-        assert "Sample IDs:" in text

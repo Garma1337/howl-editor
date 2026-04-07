@@ -1,0 +1,18 @@
+<h3>{{ title }}</h3>
+{% if summary %}
+<p>{{ summary }}</p>
+{% endif %}
+<table>
+    <tr>
+        {% for col in headers %}
+        <th>{{ col.text | raw }}</th>
+        {% endfor %}
+    </tr>
+    {% for row in rows %}
+    <tr>
+        {% for cell in row.cells %}
+        <td>{{ cell.text | raw }}</td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+</table>

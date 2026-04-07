@@ -1,0 +1,17 @@
+<h3>SPU Address Table ({{ count }} entries)</h3>
+<table>
+    <tr>
+        <th>Index</th>
+        <th>Ptr</th>
+        <th>Size</th>
+        <th>Bytes</th>
+    </tr>
+    {% for entry in entries %}
+    <tr>
+        <td>{{ entry.index }}</td>
+        <td>{{ entry.ptr }}</td>
+        <td>{{ entry.size }}</td>
+        <td>{{ entry.bytes }}</td>
+    </tr>
+    {% endfor %}
+</table>

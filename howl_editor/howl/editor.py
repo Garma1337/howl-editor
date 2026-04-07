@@ -36,6 +36,22 @@ class HowlEditor:
         self._validate_index(index, len(hwl.songs), "Song")
         hwl.songs[index] = song_data
 
+    def move_bank(self, hwl: HowlFile, from_index: int, to_index: int) -> None:
+        """Move a bank from one position to another."""
+        self._validate_index(from_index, len(hwl.banks), "Bank")
+        self._validate_index(to_index, len(hwl.banks), "Bank")
+
+        bank = hwl.banks.pop(from_index)
+        hwl.banks.insert(to_index, bank)
+
+    def move_song(self, hwl: HowlFile, from_index: int, to_index: int) -> None:
+        """Move a song from one position to another."""
+        self._validate_index(from_index, len(hwl.songs), "Song")
+        self._validate_index(to_index, len(hwl.songs), "Song")
+
+        song = hwl.songs.pop(from_index)
+        hwl.songs.insert(to_index, song)
+
     def _validate_index(self, index: int, length: int, label: str) -> None:
         if index < 0 or index >= length:
             raise IndexError(f"{label} index {index} out of range (0..{length - 1})")

@@ -1,5 +1,8 @@
 # coding: utf-8
 
+from pathlib import Path
+
+from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
@@ -7,9 +10,11 @@ from howl_editor.models import CseqInstrument
 from howl_editor.models import HowlFile
 from tests.conftest import build_cseq_bytes
 
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
+
 
 def _formatter():
-    return SongDetailFormatter(CseqReader(VlqCodec()))
+    return SongDetailFormatter(CseqReader(VlqCodec()), TemplateEngine(_TEMPLATE_DIR))
 
 
 class TestSongDetailFormatter:
@@ -66,4 +71,4 @@ class TestSongDetailFormatter:
         hwl = HowlFile(songs=[cseq])
         text = fmt.format_details(hwl, 0)
 
-        assert "Instruments:" in text
+        assert "Instruments" in text

@@ -1,0 +1,42 @@
+body {
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 9pt;
+}
+
+h3 {
+    margin: 8px 0 4px 0;
+}
+
+table {
+    border-collapse: collapse;
+    margin: 4px 0;
+}
+
+th, td {
+    padding: 2px 8px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+th {
+    border-bottom: 1px solid #888;
+    font-weight: bold;
+}
+
+td.left, th.left {
+    text-align: left;
+}
+
+tr:hover {
+    background: #e8e8e8;
+}
+
+.kv td:first-child {
+    font-weight: bold;
+    text-align: left;
+    padding-right: 16px;
+}
+
+.kv td:last-child {
+    text-align: left;
+}

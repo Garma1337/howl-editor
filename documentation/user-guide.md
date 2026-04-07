@@ -4,6 +4,9 @@ This guide covers internal behaviors and details that are not immediately obviou
 
 ## Table of Contents
 
+- [Search / Filter](#search--filter)
+- [Waveform Preview](#waveform-preview)
+- [Reordering Banks and Songs](#reordering-banks-and-songs)
 - [SPU Address Table](#spu-address-table)
   - [How SPU Indices Are Assigned](#how-spu-indices-are-assigned)
   - [Important Considerations](#important-considerations)
@@ -23,6 +26,20 @@ This guide covers internal behaviors and details that are not immediately obviou
 - [Bank/CSEQ Validation](#bankcseq-validation)
 - [Batch Export](#batch-export)
 - [HWL Version Detection](#hwl-version-detection)
+
+## Search / Filter
+
+The filter bar matches against both tree columns (name and info text), case-insensitive. When a parent node matches (e.g., a bank name like "Dingo Canyon"), all its children are shown and the node auto-expands so you can see the samples inside. When only children match, the parent stays visible to provide context. Clearing the filter restores the tree to its exact pre-filter expanded/collapsed state.
+
+## Waveform Preview
+
+The waveform appears for all audio types. Samples and FX entries show the waveform immediately on selection (before playing); sequences show it after rendering completes. The orange dashed vertical line marks the sample's **loop start point** — this is where the PS1 SPU jumps back to when it reaches the end of the sample data. Samples without a loop point have no marker and stop playing when the data ends. For rendered sequences, the stereo output is mixed to mono for display and no loop marker is shown.
+
+## Reordering Banks and Songs
+
+Banks, songs, and sequences can be reordered via right-click **Move Up** / **Move Down** or by drag-and-drop within the tree.
+
+Bank and song names are tied to index positions, not to the data (see [Bank Names](#bank-names)). Moving bank 0 ("SFX") to position 5 means the label "SFX" will appear on whatever bank now occupies index 0, not on the moved bank.
 
 ## SPU Address Table
 
@@ -100,11 +117,11 @@ When exporting a song as MIDI:
 
 ### Sample Playback
 
-Clicking a sample in the tree decodes the VAG ADPCM data to PCM and plays it at 11025 Hz (the default CTR sample rate).
+Clicking a sample in the tree decodes the VAG ADPCM data to PCM and plays it at 11025 Hz (the default CTR sample rate). The [waveform preview](#waveform-preview) shows the decoded waveform with the loop point marked.
 
 ### FX Playback
 
-Clicking an OtherFX or EngineFX entry plays its referenced sample at the entry's native pitch. The pitch is converted from the internal encoding: `Hz = (pitch / 4096) * 44100`.
+Selecting an OtherFX or EngineFX entry shows the waveform of its referenced SPU sample (with loop marker). Clicking the entry plays it at the entry's native pitch. The pitch is converted from the internal encoding: `Hz = (pitch / 4096) * 44100`.
 
 ### Sequence Playback
 

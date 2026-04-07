@@ -1,0 +1,86 @@
+<h3>{{ title }}</h3>
+<table class="kv">
+    <tr>
+        <td>Raw size</td>
+        <td>{{ raw_size }}</td>
+    </tr>
+    <tr>
+        <td>Instruments</td>
+        <td>{{ instrument_count }}</td>
+    </tr>
+    <tr>
+        <td>Percussions</td>
+        <td>{{ percussion_count }}</td>
+    </tr>
+    <tr>
+        <td>Sequences</td>
+        <td>{{ sequence_count }}</td>
+    </tr>
+</table>
+
+{% if instruments %}
+<h3>Instruments</h3>
+<table>
+    <tr>
+        <th>#</th>
+        <th>Vol</th>
+        <th>Freq</th>
+        <th>Hz</th>
+        <th>SPU</th>
+        <th>ADSR</th>
+    </tr>
+    {% for inst in instruments %}
+    <tr>
+        <td>{{ inst.index }}</td>
+        <td>{{ inst.volume }}</td>
+        <td>{{ inst.frequency }}</td>
+        <td>{{ inst.hz }}</td>
+        <td>{{ inst.sample_id }}</td>
+        <td>{{ inst.adsr }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+{% if percussions %}
+<h3>Percussions</h3>
+<table>
+    <tr>
+        <th>#</th>
+        <th>Vol</th>
+        <th>Freq</th>
+        <th>Hz</th>
+        <th>SPU</th>
+    </tr>
+    {% for perc in percussions %}
+    <tr>
+        <td>{{ perc.index }}</td>
+        <td>{{ perc.volume }}</td>
+        <td>{{ perc.frequency }}</td>
+        <td>{{ perc.hz }}</td>
+        <td>{{ perc.sample_id }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+{% for seq in sequences %}
+<h3>Sequence {{ seq.index }}</h3>
+<p>BPM={{ seq.bpm }}, TPQN={{ seq.tpqn }}, {{ seq.track_count }} tracks</p>
+<table>
+    <tr>
+        <th>Track</th>
+        <th class="left">Type</th>
+        <th>Events</th>
+        <th>Instrument</th>
+    </tr>
+    {% for track in seq.tracks %}
+    <tr>
+        <td>{{ track.index }}</td>
+        <td class="left">{{ track.type }}</td>
+        <td>{{ track.events }}</td>
+        <td>{{ track.instrument }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endfor %}

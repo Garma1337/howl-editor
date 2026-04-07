@@ -1,0 +1,26 @@
+<h3>{{ title }}</h3>
+<table class="kv">
+    <tr>
+        <td>Size</td>
+        <td>{{ size }}</td>
+    </tr>
+</table>
+{% if samples %}
+<p>Samples: {{ sample_count }} — IDs: {{ sample_ids }}</p>
+<table>
+    <tr>
+        <th>#</th>
+        <th>SPU ID</th>
+        <th>Size</th>
+        <th>Bytes</th>
+    </tr>
+    {% for s in samples %}
+    <tr>
+        <td>{{ s.index }}</td>
+        <td>{{ s.spu_id }}</td>
+        <td>{{ s.size }}</td>
+        <td>{{ s.bytes }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}

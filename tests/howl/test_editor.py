@@ -98,3 +98,56 @@ class TestReplaceSong:
         assert hwl.songs[0] == b"new"
 
 
+class TestMoveBank:
+
+    def test_moves_forward(self, howl_editor):
+        hwl = HowlFile(banks=[b"a", b"b", b"c"])
+        howl_editor.move_bank(hwl, 0, 2)
+
+        assert hwl.banks == [b"b", b"c", b"a"]
+
+    def test_moves_backward(self, howl_editor):
+        hwl = HowlFile(banks=[b"a", b"b", b"c"])
+        howl_editor.move_bank(hwl, 2, 0)
+
+        assert hwl.banks == [b"c", b"a", b"b"]
+
+    def test_same_position_is_noop(self, howl_editor):
+        hwl = HowlFile(banks=[b"a", b"b", b"c"])
+        howl_editor.move_bank(hwl, 1, 1)
+
+        assert hwl.banks == [b"a", b"b", b"c"]
+
+    def test_out_of_range_raises(self, howl_editor):
+        hwl = HowlFile(banks=[b"a"])
+
+        with pytest.raises(IndexError):
+            howl_editor.move_bank(hwl, 0, 5)
+
+    def test_negative_index_raises(self, howl_editor):
+        hwl = HowlFile(banks=[b"a", b"b"])
+
+        with pytest.raises(IndexError):
+            howl_editor.move_bank(hwl, -1, 0)
+
+
+class TestMoveSong:
+
+    def test_moves_forward(self, howl_editor):
+        hwl = HowlFile(songs=[b"x", b"y", b"z"])
+        howl_editor.move_song(hwl, 0, 2)
+
+        assert hwl.songs == [b"y", b"z", b"x"]
+
+    def test_moves_backward(self, howl_editor):
+        hwl = HowlFile(songs=[b"x", b"y", b"z"])
+        howl_editor.move_song(hwl, 2, 0)
+
+        assert hwl.songs == [b"z", b"x", b"y"]
+
+    def test_out_of_range_raises(self, howl_editor):
+        hwl = HowlFile(songs=[b"x"])
+
+        with pytest.raises(IndexError):
+            howl_editor.move_song(hwl, 0, 3)
+

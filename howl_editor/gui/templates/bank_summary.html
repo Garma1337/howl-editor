@@ -1,0 +1,18 @@
+<h3>Banks ({{ count }})</h3>
+<p>Total: {{ total_bytes }} bytes ({{ total_kb }} KB)</p>
+<table>
+    <tr>
+        <th>Idx</th>
+        <th>Samples</th>
+        <th>Size</th>
+        <th class="left">Name</th>
+    </tr>
+    {% for bank in banks %}
+    <tr>
+        <td>{{ bank.index }}</td>
+        <td>{{ bank.samples }}</td>
+        <td>{{ bank.size }}</td>
+        <td class="left">{{ bank.name }}</td>
+    </tr>
+    {% endfor %}
+</table>

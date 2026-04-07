@@ -1,0 +1,15 @@
+<h3>{{ title }}</h3>
+<table>
+    <tr>
+        {% for col in headers %}
+        <th>{{ col }}</th>
+        {% endfor %}
+    </tr>
+    {% for entry in entries %}
+    <tr>
+        {% for cell in entry.cells %}
+        <td>{{ cell }}</td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+</table>

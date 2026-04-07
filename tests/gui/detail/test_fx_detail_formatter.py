@@ -1,11 +1,16 @@
 # coding: utf-8
 
+from pathlib import Path
+
+from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
 from howl_editor.models import HowlFile, OtherFX, EngineFX
 
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
+
 
 def _formatter():
-    return FxDetailFormatter()
+    return FxDetailFormatter(TemplateEngine(_TEMPLATE_DIR))
 
 
 def _hwl_with_fx():

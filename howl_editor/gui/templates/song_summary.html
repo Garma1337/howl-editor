@@ -1,0 +1,22 @@
+<h3>Songs ({{ count }})</h3>
+<p>Total: {{ total_bytes }} bytes ({{ total_kb }} KB)</p>
+<table>
+    <tr>
+        <th>Idx</th>
+        <th>Inst</th>
+        <th>Perc</th>
+        <th>Seqs</th>
+        <th>Size</th>
+        <th class="left">Name</th>
+    </tr>
+    {% for song in songs %}
+    <tr>
+        <td>{{ song.index }}</td>
+        <td>{{ song.instruments }}</td>
+        <td>{{ song.percussions }}</td>
+        <td>{{ song.sequences }}</td>
+        <td>{{ song.size }}</td>
+        <td class="left">{{ song.name }}</td>
+    </tr>
+    {% endfor %}
+</table>

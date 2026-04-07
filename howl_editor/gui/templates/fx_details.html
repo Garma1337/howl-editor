@@ -1,0 +1,9 @@
+<h3>{{ title }}</h3>
+<table class="kv">
+    {% for row in rows %}
+    <tr>
+        <td>{{ row.key }}</td>
+        <td>{{ row.value }}</td>
+    </tr>
+    {% endfor %}
+</table>

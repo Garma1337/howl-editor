@@ -1,60 +1,73 @@
 # coding: utf-8
 
 from howl_editor.audio.settings.ps1 import PS1_SAMPLE_RATE, PS1_FREQUENCY_UNIT
+from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.models import HowlFile
 
 
 class FxDetailFormatter:
 
+    def __init__(self, template_engine: TemplateEngine):
+        self._template_engine = template_engine
+
     def format_effects_table(self, hwl: HowlFile) -> str:
-        lines = [
-            f"Effects / OtherFX ({len(hwl.other_fx)} entries)", "=" * 60,
-            f"{'Idx':>4}  {'Flags':>5}  {'Vol':>4}  {'Pitch':>6}  {'SPU':>5}  {'Dur':>5}", "-" * 40,
+        entries = [
+            {"cells": [str(i), str(fx.flags), str(fx.volume), str(fx.pitch), str(fx.spu_index), str(fx.duration)]}
+            for i, fx in enumerate(hwl.other_fx)
         ]
 
-        for i, fx in enumerate(hwl.other_fx):
-            lines.append(f"{i:>4}  {fx.flags:>5}  {fx.volume:>4}  {fx.pitch:>6}  {fx.spu_index:>5}  {fx.duration:>5}")
+        body = self._template_engine.render(
+            "fx_table.html",
+            title=f"Effects / OtherFX ({len(hwl.other_fx)} entries)",
+            headers=["Idx", "Flags", "Vol", "Pitch", "SPU", "Dur"],
+            entries=entries,
+        )
 
-        return "\n".join(lines)
+        return self._template_engine.render("document.html", body=body)
 
     def format_engine_fx_table(self, hwl: HowlFile) -> str:
-        lines = [
-            f"Engine FX ({len(hwl.engine_fx)} entries)", "=" * 50,
-            f"{'Idx':>4}  {'Flags':>5}  {'Vol':>4}  {'Pitch':>6}  {'Unk':>5}  {'SPU':>5}", "-" * 40,
+        entries = [
+            {"cells": [str(i), str(fx.flags), str(fx.volume), str(fx.pitch), str(fx.unk), str(fx.spu_index)]}
+            for i, fx in enumerate(hwl.engine_fx)
         ]
 
-        for i, fx in enumerate(hwl.engine_fx):
-            lines.append(f"{i:>4}  {fx.flags:>5}  {fx.volume:>4}  {fx.pitch:>6}  {fx.unk:>5}  {fx.spu_index:>5}")
+        body = self._template_engine.render(
+            "fx_table.html",
+            title=f"Engine FX ({len(hwl.engine_fx)} entries)",
+            headers=["Idx", "Flags", "Vol", "Pitch", "Unk", "SPU"],
+            entries=entries,
+        )
 
-        return "\n".join(lines)
+        return self._template_engine.render("document.html", body=body)
 
     def format_other_fx_details(self, hwl: HowlFile, index: int) -> str:
         fx = hwl.other_fx[index]
         freq_hz = self._pitch_to_hz(fx.pitch)
-        lines = [
-            f"OtherFX {index}", "=" * 40,
-            f"Flags:      {fx.flags} ({fx.flags:#04x})",
-            f"Volume:     {fx.volume}",
-            f"Pitch:      {fx.pitch} ({freq_hz} Hz)",
-            f"SPU Index:  {fx.spu_index}",
-            f"Duration:   {fx.duration} frames",
+
+        rows = [
+            {"key": "Flags", "value": f"{fx.flags} ({fx.flags:#04x})"},
+            {"key": "Volume", "value": str(fx.volume)},
+            {"key": "Pitch", "value": f"{fx.pitch} ({freq_hz} Hz)"},
+            {"key": "SPU Index", "value": str(fx.spu_index)},
+            {"key": "Duration", "value": f"{fx.duration} frames"},
         ]
 
-        return "\n".join(lines)
+        body = self._template_engine.render("fx_details.html", title=f"OtherFX {index}", rows=rows)
+        return self._template_engine.render("document.html", body=body)
 
     def format_engine_fx_details(self, hwl: HowlFile, index: int) -> str:
         fx = hwl.engine_fx[index]
         freq_hz = self._pitch_to_hz(fx.pitch)
-        lines = [
-            f"EngineFX {index}", "=" * 40,
-            f"Flags:      {fx.flags} ({fx.flags:#04x})",
-            f"Volume:     {fx.volume}",
-            f"Pitch:      {fx.pitch} ({freq_hz} Hz)",
-            f"Unknown:    {fx.unk}",
-            f"SPU Index:  {fx.spu_index}",
+        rows = [
+            {"key": "Flags", "value": f"{fx.flags} ({fx.flags:#04x})"},
+            {"key": "Volume", "value": str(fx.volume)},
+            {"key": "Pitch", "value": f"{fx.pitch} ({freq_hz} Hz)"},
+            {"key": "Unknown", "value": str(fx.unk)},
+            {"key": "SPU Index", "value": str(fx.spu_index)},
         ]
 
-        return "\n".join(lines)
+        body = self._template_engine.render("fx_details.html", title=f"EngineFX {index}", rows=rows)
+        return self._template_engine.render("document.html", body=body)
 
     def _pitch_to_hz(self, pitch: int) -> int:
         if pitch <= 0:
