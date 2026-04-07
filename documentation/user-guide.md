@@ -4,6 +4,9 @@ This guide covers internal behaviors and details that are not immediately obviou
 
 ## Table of Contents
 
+- [Undo / Redo](#undo--redo)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Drag-and-Drop File Import](#drag-and-drop-file-import)
 - [Search / Filter](#search--filter)
 - [Waveform Preview](#waveform-preview)
 - [Reordering Banks and Songs](#reordering-banks-and-songs)
@@ -26,6 +29,28 @@ This guide covers internal behaviors and details that are not immediately obviou
 - [Bank/CSEQ Validation](#bankcseq-validation)
 - [Batch Export](#batch-export)
 - [HWL Version Detection](#hwl-version-detection)
+
+## Undo / Redo
+
+Most destructive operations can be undone with **Ctrl+Z** and redone with **Ctrl+Shift+Z** (or Ctrl+Y). This covers: removing/replacing banks, songs, samples, and sequences, as well as reordering via Move Up/Down and drag-and-drop. Adding a bank or song is not undoable (use remove to reverse it). The undo stack is cleared when you open, create, or close a file.
+
+## Keyboard Shortcuts
+
+Beyond the standard menu shortcuts (Ctrl+N/O/S/W/Q), the editor supports:
+
+- **Space** — toggle play/stop for the selected item
+- **Enter** — play the selected item
+- **Delete** — remove the selected bank, song, sample, or sequence (with confirmation)
+- **F5** — refresh the tree
+
+## Drag-and-Drop File Import
+
+Files can be dropped directly onto the editor window:
+
+- **.hwl** — opens the file (replaces the current one, with unsaved-changes prompt)
+- **.bnk** — adds as a new bank (requires an open HWL)
+- **.cseq** — adds as a new song (requires an open HWL)
+- **.vag** — adds as a sample to the currently selected bank, or bank 0 if no bank is selected
 
 ## Search / Filter
 
@@ -117,7 +142,7 @@ When exporting a song as MIDI:
 
 ### Sample Playback
 
-Clicking a sample in the tree decodes the VAG ADPCM data to PCM and plays it at 11025 Hz (the default CTR sample rate). The [waveform preview](#waveform-preview) shows the decoded waveform with the loop point marked.
+Clicking a sample in the tree decodes the VAG ADPCM data to PCM and plays it. The editor automatically looks up the correct playback pitch by checking the OtherFX table, EngineFX table, and CSEQ instrument/percussion definitions (in that order). If the sample isn't referenced anywhere, it falls back to 11025 Hz. The [waveform preview](#waveform-preview) shows the decoded waveform with the loop point marked.
 
 ### FX Playback
 
@@ -152,7 +177,7 @@ The editor's playback uses lookup tables and volume formulas extracted from the 
 
 ### Playback Limitations
 
-Despite the accuracy improvements, some differences remain compared to in-game audio:
+Some differences remain compared to in-game audio:
 
 - **ADSR envelope approximation**: The PS1 SPU processes ADSR envelopes in hardware with cycle-accurate timing. The editor approximates these timings in software, so attack/decay/release curves may not match exactly. The overall shape is correct but fine timing details differ.
 - **No reverb**: The PS1 SPU has built-in hardware reverb with multiple modes (studio, hall, etc.). The editor does not simulate reverb, so songs that rely heavily on it (especially indoor/cave tracks) will sound drier than in-game.
