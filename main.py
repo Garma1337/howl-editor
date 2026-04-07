@@ -26,6 +26,7 @@ if __name__ == "__main__":
         vag_decoder=container.resolve("vag_decoder"),
         cseq_renderer=container.resolve("cseq_renderer"),
         audio_player=container.resolve("audio_player"),
+        sample_lookup=container.resolve("sample_lookup"),
         version_detector=container.resolve("version_detector"),
         sample_classifier=container.resolve("sample_classifier"),
         validator=container.resolve("validator"),
