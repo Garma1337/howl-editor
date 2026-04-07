@@ -2,13 +2,19 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtCore import Qt, QSettings
+from PySide6.QtGui import QAction, QKeySequence, QShortcut, QUndoStack
 from PySide6.QtWidgets import (
     QMainWindow, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
     QSplitter, QTextEdit, QWidget, QVBoxLayout, QMenu, QToolBar, QStatusBar,
     QFileDialog, QMessageBox, QHeaderView, QAbstractItemView,
 )
+
+try:
+    from PySide6.QtMultimedia import QMediaPlayer
+    HAS_MULTIMEDIA = True
+except ImportError:
+    HAS_MULTIMEDIA = False
 
 from howl_editor.analysis import SampleClassifier, BankCseqValidator
 from howl_editor.audio.audio_player import AudioPlayer
@@ -24,6 +30,7 @@ from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
 from howl_editor.gui.handler.tools_handler import ToolsHandler
+from howl_editor.gui.command import MoveItemCommand, MoveSequenceCommand
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.howl import HowlReader, HowlWriter, HowlEditor
 from howl_editor.howl.version import HowlVersionDetector
@@ -102,15 +109,24 @@ class MainWindow(QMainWindow):
         self.modified = False
         self._file_actions: list[QAction] = []
 
+        self._settings = QSettings("HowlEditor", "HowlEditor")
+        self._max_recent = 10
+
+        self._undo_stack = QUndoStack(self)
+        self._undo_stack.cleanChanged.connect(self._on_clean_changed)
+
         self._bank_handler = BankHandler(self)
         self._sample_handler = SampleHandler(self)
         self._song_handler = SongHandler(self)
         self._playback = PlaybackHandler(self)
         self._tools = ToolsHandler(self)
 
+        self.setAcceptDrops(True)
+
         self._setup_ui()
         self._setup_menus()
         self._setup_toolbar()
+        self._setup_shortcuts()
 
     def _setup_ui(self):
         splitter = QSplitter(Qt.Horizontal)
@@ -185,11 +201,21 @@ class MainWindow(QMainWindow):
         self._add_action(file_menu, "&Save", self._save_file, QKeySequence.Save, requires_file=True)
         self._add_action(file_menu, "Save &As...", self._save_file_as, QKeySequence("Ctrl+Shift+S"), requires_file=True)
         file_menu.addSeparator()
+        self._recent_files_menu = file_menu.addMenu("&Recent Files")
+        self._update_recent_files_menu()
+        file_menu.addSeparator()
         self._add_action(file_menu, "Batch &Export...", self._tools.batch_export, requires_file=True)
         file_menu.addSeparator()
         self._add_action(file_menu, "E&xit", self.close, QKeySequence.Quit)
 
         edit_menu = menubar.addMenu("&Edit")
+        undo_action = self._undo_stack.createUndoAction(self, "&Undo")
+        undo_action.setShortcut(QKeySequence.Undo)
+        edit_menu.addAction(undo_action)
+        redo_action = self._undo_stack.createRedoAction(self, "&Redo")
+        redo_action.setShortcut(QKeySequence.Redo)
+        edit_menu.addAction(redo_action)
+        edit_menu.addSeparator()
         self._add_action(edit_menu, "Add &Bank...", self._bank_handler.add_bank, requires_file=True)
         self._add_action(edit_menu, "Add &Song...", self._song_handler.add_song, requires_file=True)
 
@@ -252,6 +278,7 @@ class MainWindow(QMainWindow):
         self.file_path = None
         self.modified = False
         self._sample_types = {}
+        self._undo_stack.clear()
         self.tree.clear()
         self.details.clear()
         self.waveform.clear()
@@ -269,6 +296,7 @@ class MainWindow(QMainWindow):
         self.hwl = HowlFile()
         self.file_path = None
         self.modified = False
+        self._undo_stack.clear()
         self._rebuild_tree()
         self._set_file_actions_enabled(True)
         self.status.showMessage("New HWL file created")
@@ -279,19 +307,8 @@ class MainWindow(QMainWindow):
             return
 
         path, _ = QFileDialog.getOpenFileName(self, "Open HWL File", "", "HWL Files (*.hwl);;All Files (*)")
-        if not path:
-            return
-
-        try:
-            self.hwl = self._reader.read_file(path)
-            self.file_path = path
-            self.modified = False
-            self._rebuild_tree()
-            self._set_file_actions_enabled(True)
-            self.status.showMessage(f"Loaded: {path} ({len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs)")
-            self._update_title()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to open HWL:\n{e}")
+        if path:
+            self._load_file(path)
 
     def _save_file(self):
         if not self.hwl:
@@ -304,6 +321,7 @@ class MainWindow(QMainWindow):
         try:
             self._writer.write_file(self.hwl, self.file_path)
             self.modified = False
+            self._undo_stack.setClean()
             self.status.showMessage(f"Saved: {self.file_path}")
             self._update_title()
         except Exception as e:
@@ -665,29 +683,28 @@ class MainWindow(QMainWindow):
 
     def _move_bank(self, from_index: int, to_index: int) -> None:
         try:
-            self._editor.move_bank(self.hwl, from_index, to_index)
-            self._mark_modified()
-            self._rebuild_tree()
+            self._undo_stack.push(
+                MoveItemCommand(self, f"Move Bank {from_index} to {to_index}", "banks", from_index, to_index),
+            )
+
             self.status.showMessage(f"Moved bank {from_index} to position {to_index}")
         except Exception as e:
             self.status.showMessage(f"Move failed: {e}")
 
     def _move_song(self, from_index: int, to_index: int) -> None:
         try:
-            self._editor.move_song(self.hwl, from_index, to_index)
-            self._mark_modified()
-            self._rebuild_tree()
+            self._undo_stack.push(
+                MoveItemCommand(self, f"Move Song {from_index} to {to_index}", "songs", from_index, to_index),
+            )
+
             self.status.showMessage(f"Moved song {from_index} to position {to_index}")
         except Exception as e:
             self.status.showMessage(f"Move failed: {e}")
 
     def _move_sequence(self, song_index: int, from_index: int, to_index: int) -> None:
         try:
-            self.hwl.songs[song_index] = self._cseq_editor.move_sequence(
-                self.hwl.songs[song_index], from_index, to_index,
-            )
-            self._mark_modified()
-            self._rebuild_tree()
+            cmd = MoveSequenceCommand(self, song_index, from_index, to_index)
+            self._undo_stack.push(cmd)
             self.status.showMessage(f"Moved sequence {from_index} to position {to_index}")
         except Exception as e:
             self.status.showMessage(f"Move failed: {e}")
@@ -736,6 +753,183 @@ class MainWindow(QMainWindow):
         except (IndexError, Exception) as e:
             self.status.showMessage(f"Move failed: {e}")
             self._rebuild_tree()
+
+    def _setup_shortcuts(self):
+        QShortcut(QKeySequence(Qt.Key_Space), self, self._toggle_playback)
+        QShortcut(QKeySequence(Qt.Key_Delete), self, self._delete_selected)
+        QShortcut(QKeySequence(Qt.Key_Return), self, self._play_selected)
+        QShortcut(QKeySequence(Qt.Key_F5), self, self._rebuild_tree)
+
+    def _toggle_playback(self):
+        if not self.hwl:
+            return
+
+        if (HAS_MULTIMEDIA and self._audio_player
+                and self._audio_player.media_player
+                and self._audio_player.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState):
+            self._playback.stop()
+        else:
+            self._play_selected()
+
+    def _play_selected(self):
+        item = self.tree.currentItem()
+        if item:
+            self._on_item_clicked(item)
+
+    def _delete_selected(self):
+        if not self.hwl:
+            return
+
+        item = self.tree.currentItem()
+        if not item:
+            return
+
+        node_type = item.data(0, Qt.UserRole)
+        index = item.data(0, Qt.UserRole + 1)
+        sub_index = item.data(0, Qt.UserRole + 2)
+
+        if node_type == NODE_BANK and index is not None:
+            self._bank_handler.remove_bank(index)
+        elif node_type == NODE_SAMPLE and index is not None and sub_index is not None:
+            self._sample_handler.remove_sample(index, sub_index)
+        elif node_type == NODE_SONG and index is not None:
+            self._song_handler.remove_song(index)
+        elif node_type == NODE_SEQUENCE and index is not None and sub_index is not None:
+            self._song_handler.remove_sequence(index, sub_index)
+
+    def _update_recent_files_menu(self):
+        self._recent_files_menu.clear()
+        recent = self._settings.value("recent_files") or []
+
+        if not recent:
+            action = self._recent_files_menu.addAction("No recent files")
+            action.setEnabled(False)
+            return
+
+        for path in recent:
+            name = Path(path).name
+            self._recent_files_menu.addAction(name, lambda p=path: self._open_recent(p))
+
+    def _add_to_recent(self, path: str):
+        recent = self._settings.value("recent_files") or []
+        abs_path = str(Path(path).resolve())
+
+        if abs_path in recent:
+            recent.remove(abs_path)
+
+        recent.insert(0, abs_path)
+        recent = recent[:self._max_recent]
+        self._settings.setValue("recent_files", recent)
+        self._update_recent_files_menu()
+
+    def _open_recent(self, path: str):
+        if not self._check_unsaved():
+            return
+
+        if not Path(path).exists():
+            QMessageBox.warning(self, "File Not Found", f"File no longer exists:\n{path}")
+            recent = self._settings.value("recent_files") or []
+
+            if path in recent:
+                recent.remove(path)
+                self._settings.setValue("recent_files", recent)
+                self._update_recent_files_menu()
+
+            return
+
+        self._load_file(path)
+
+    def _load_file(self, path: str):
+        """Load a HWL file from path. Shared by _open_file and _open_recent."""
+        try:
+            self.hwl = self._reader.read_file(path)
+            self.file_path = path
+            self.modified = False
+            self._undo_stack.clear()
+            self._rebuild_tree()
+            self._set_file_actions_enabled(True)
+            self._add_to_recent(path)
+            self.status.showMessage(f"Loaded: {path} ({len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs)")
+            self._update_title()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open HWL:\n{e}")
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                path = url.toLocalFile().lower()
+
+                if path.endswith((".hwl", ".bnk", ".cseq", ".vag")):
+                    event.acceptProposedAction()
+                    return
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            ext = Path(path).suffix.lower()
+
+            if ext == ".hwl":
+                if self._check_unsaved():
+                    self._load_file(path)
+
+            elif ext == ".bnk" and self.hwl:
+                self._editor.add_bank(self.hwl, Path(path).read_bytes())
+                self._mark_modified()
+                self._rebuild_tree()
+                self.status.showMessage(f"Added bank from {Path(path).name}")
+
+            elif ext == ".cseq" and self.hwl:
+                self._editor.add_song(self.hwl, Path(path).read_bytes())
+                self._mark_modified()
+                self._rebuild_tree()
+                self.status.showMessage(f"Added song from {Path(path).name}")
+
+            elif ext == ".vag" and self.hwl:
+                self._drop_vag_file(path)
+
+            elif not self.hwl and ext != ".hwl":
+                self.status.showMessage("Open a HWL file first before dropping banks, songs, or samples")
+
+    def _drop_vag_file(self, path: str):
+        """Add a dropped VAG file as a sample to the currently selected bank."""
+        item = self.tree.currentItem()
+        bank_index = None
+
+        if item:
+            node_type = item.data(0, Qt.UserRole)
+            index = item.data(0, Qt.UserRole + 1)
+
+            if node_type == NODE_BANK and index is not None:
+                bank_index = index
+            elif node_type == NODE_SAMPLE and index is not None:
+                bank_index = index
+
+        if bank_index is None and self.hwl.banks:
+            bank_index = 0
+
+        if bank_index is None:
+            self.status.showMessage("No bank to add sample to")
+            return
+
+        try:
+            vag = self._vag_reader.read_file(path)
+
+            new_blob = self._bank_builder.add_sample(
+                self.hwl.banks[bank_index], self.hwl.spu_addrs,
+                vag.data, self._bank_reader,
+            )
+
+            self._editor.replace_bank(self.hwl, bank_index, new_blob)
+            self._mark_modified()
+            self._rebuild_tree()
+            spu_index = len(self.hwl.spu_addrs) - 1
+            self.status.showMessage(f"Added SPU {spu_index} to bank {bank_index} from {Path(path).name}")
+        except Exception as e:
+            self.status.showMessage(f"Failed to add sample: {e}")
+
+    def _on_clean_changed(self, clean: bool):
+        self.modified = not clean
+        self._update_title()
 
     def closeEvent(self, event):
         if self._check_unsaved():

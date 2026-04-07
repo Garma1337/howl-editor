@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
+from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.models import VagSample
 
 
@@ -71,9 +72,9 @@ class SampleHandler:
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
                 vag.data, self._window._bank_reader,
             )
-            self._window._editor.replace_bank(self._window.hwl, bank_index, new_blob)
-            self._window._mark_modified()
-            self._window._rebuild_tree()
+            self._window._undo_stack.push(
+                SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
+            )
             spu_index = len(self._window.hwl.spu_addrs) - 1
             self._window._notify(f"Added sample SPU {spu_index} to bank {bank_index}")
         except Exception as e:
@@ -95,9 +96,9 @@ class SampleHandler:
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
                 sample_index, vag.data, self._window._bank_reader,
             )
-            self._window._editor.replace_bank(self._window.hwl, bank_index, new_blob)
-            self._window._mark_modified()
-            self._window._rebuild_tree()
+            self._window._undo_stack.push(
+                SwapBlobCommand(self._window, f"Replace Sample in Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
+            )
             self._window._notify(f"Replaced sample {sample_index} in bank {bank_index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Replace failed:\n{e}")
@@ -116,9 +117,9 @@ class SampleHandler:
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
                 sample_index, self._window._bank_reader,
             )
-            self._window._editor.replace_bank(self._window.hwl, bank_index, new_blob)
-            self._window._mark_modified()
-            self._window._rebuild_tree()
+            self._window._undo_stack.push(
+                SwapBlobCommand(self._window, f"Remove Sample {sample_index} from Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
+            )
             self._window._notify(f"Removed sample {sample_index} from bank {bank_index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Remove failed:\n{e}")

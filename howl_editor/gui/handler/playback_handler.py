@@ -38,7 +38,8 @@ class PlaybackHandler:
                 return
 
             sample = samples[sample_index]
-            wav = self._window._vag_decoder.decode_to_wav(sample.data)
+            sample_rate = self._lookup_sample_rate(sample.spu_index)
+            wav = self._window._vag_decoder.decode_to_wav(sample.data, sample_rate)
             label = f"SPU {sample.spu_index}"
 
             self._play_wav(
@@ -137,6 +138,34 @@ class PlaybackHandler:
         )
 
         return header + pcm
+
+    def _lookup_sample_rate(self, spu_index: int) -> int:
+        """Find the playback rate for a sample by checking FX and instrument tables."""
+        hwl = self._window.hwl
+
+        for fx in hwl.other_fx:
+            if fx.spu_index == spu_index and fx.pitch > 0:
+                return int(fx.pitch / 4096 * 44100)
+
+        for fx in hwl.engine_fx:
+            if fx.spu_index == spu_index and fx.pitch > 0:
+                return int(fx.pitch / 4096 * 44100)
+
+        for song_data in hwl.songs:
+            try:
+                cseq = self._window._cseq_reader.read(song_data)
+
+                for inst in cseq.instruments:
+                    if inst.sample_id == spu_index and inst.frequency > 0:
+                        return int(inst.frequency / 4096 * 44100)
+
+                for perc in cseq.percussions:
+                    if perc.sample_id == spu_index and perc.frequency > 0:
+                        return int(perc.frequency / 4096 * 44100)
+            except Exception:
+                continue
+
+        return 11025
 
     def _find_sample_data(self, spu_index: int) -> bytes | None:
         for bank_blob in self._window.hwl.banks:

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog, QInputDialog
 
+from howl_editor.gui.command import RemoveItemCommand, SwapBlobCommand
 from howl_editor.gui.dialog.merge_bank_dialog import MergeBankDialog
 from howl_editor.models import VagSample
 
@@ -103,9 +104,11 @@ class BankHandler:
 
         result = dialog.get_result()
         new_blob = self._window._bank_builder.merge(result)
-        self._window._editor.replace_bank(self._window.hwl, index, new_blob)
-        self._window._mark_modified()
-        self._window._rebuild_tree()
+
+        self._window._undo_stack.push(
+            SwapBlobCommand(self._window, f"Merge into Bank {index}", "banks", index, new_blob),
+        )
+
         self._window._notify(f"Merged {len(result)} samples into bank {index}")
 
     def replace_bank(self, index: int):
@@ -113,14 +116,16 @@ class BankHandler:
         if not path:
             return
 
-        self._window._editor.replace_bank(self._window.hwl, index, Path(path).read_bytes())
-        self._window._mark_modified()
-        self._window._rebuild_tree()
+        self._window._undo_stack.push(
+            SwapBlobCommand(self._window, f"Replace Bank {index}", "banks", index, Path(path).read_bytes()),
+        )
+
         self._window._notify(f"Replaced bank {index} with {Path(path).name}")
 
     def remove_bank(self, index: int):
         if QMessageBox.question(self._window, "Remove Bank", f"Remove bank {index}?") == QMessageBox.Yes:
-            self._window._editor.remove_bank(self._window.hwl, index)
-            self._window._mark_modified()
-            self._window._rebuild_tree()
+            self._window._undo_stack.push(
+                RemoveItemCommand(self._window, f"Remove Bank {index}", "banks", index),
+            )
+
             self._window._notify(f"Removed bank {index}")

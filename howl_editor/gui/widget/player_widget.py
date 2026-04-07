@@ -1,7 +1,7 @@
 # coding: utf-8
 
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, QSlider
 
 try:
     from PySide6.QtMultimedia import QMediaPlayer
@@ -11,13 +11,14 @@ except ImportError:
 
 
 class PlayerWidget(QWidget):
-    """Audio transport bar with play/stop buttons, track label, and elapsed time."""
+    """Audio transport bar with play/stop buttons, seek slider, and elapsed time."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._media_player: QMediaPlayer | None = None
         self._replay_callback = None
         self._stop_callback = None
+        self._seeking = False
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
@@ -38,9 +39,17 @@ class PlayerWidget(QWidget):
         self._label.setMinimumWidth(100)
         layout.addWidget(self._label, stretch=1)
 
-        self._time_label = QLabel("0:00")
+        self._seek_slider = QSlider(Qt.Horizontal)
+        self._seek_slider.setRange(0, 1000)
+        self._seek_slider.setValue(0)
+        self._seek_slider.setEnabled(False)
+        self._seek_slider.sliderPressed.connect(self._on_seek_start)
+        self._seek_slider.sliderReleased.connect(self._on_seek_end)
+        layout.addWidget(self._seek_slider, stretch=2)
+
+        self._time_label = QLabel("0:00 / 0:00")
         self._time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._time_label.setFixedWidth(50)
+        self._time_label.setFixedWidth(90)
         layout.addWidget(self._time_label)
 
         self._timer = QTimer(self)
@@ -61,14 +70,16 @@ class PlayerWidget(QWidget):
         """Show a track label and start the elapsed timer."""
         self._label.setText(label)
         self._replay_callback = replay_callback
-        self._time_label.setText("0:00")
+        self._time_label.setText("0:00 / 0:00")
+        self._seek_slider.setValue(0)
         self._timer.start()
         self._update_buttons(True)
 
     def clear(self) -> None:
         """Reset the player bar to idle state."""
         self._label.setText("No audio")
-        self._time_label.setText("0:00")
+        self._time_label.setText("0:00 / 0:00")
+        self._seek_slider.setValue(0)
         self._replay_callback = None
         self._timer.stop()
         self._update_buttons(False)
@@ -88,16 +99,39 @@ class PlayerWidget(QWidget):
             self._timer.stop()
             self._update_buttons(False)
 
+    def _on_seek_start(self) -> None:
+        self._seeking = True
+
+    def _on_seek_end(self) -> None:
+        self._seeking = False
+
+        if not self._media_player:
+            return
+
+        dur = self._media_player.duration()
+        if dur > 0:
+            target = self._seek_slider.value() * dur // 1000
+            self._media_player.setPosition(target)
+
     def _update_time(self) -> None:
         if not self._media_player:
             return
 
         pos_ms = self._media_player.position()
-        seconds = pos_ms // 1000
-        minutes = seconds // 60
-        secs = seconds % 60
-        self._time_label.setText(f"{minutes}:{secs:02d}")
+        dur_ms = self._media_player.duration()
+
+        pos_text = self._format_time(pos_ms)
+        dur_text = self._format_time(dur_ms)
+        self._time_label.setText(f"{pos_text} / {dur_text}")
+
+        if not self._seeking and dur_ms > 0:
+            self._seek_slider.setValue(int(pos_ms * 1000 / dur_ms))
+
+    def _format_time(self, ms: int) -> str:
+        seconds = ms // 1000
+        return f"{seconds // 60}:{seconds % 60:02d}"
 
     def _update_buttons(self, playing: bool) -> None:
         self._play_btn.setEnabled(not playing and self._replay_callback is not None)
         self._stop_btn.setEnabled(playing)
+        self._seek_slider.setEnabled(playing)

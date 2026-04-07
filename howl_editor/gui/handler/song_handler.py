@@ -4,6 +4,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QInputDialog
 
+from howl_editor.gui.command import RemoveItemCommand, SwapBlobCommand
+
 
 class SongHandler:
 
@@ -79,16 +81,16 @@ class SongHandler:
         if not path:
             return
 
-        self._w._editor.replace_song(self._w.hwl, index, Path(path).read_bytes())
-        self._w._mark_modified()
-        self._w._rebuild_tree()
+        self._w._undo_stack.push(
+            SwapBlobCommand(self._w, f"Replace Song {index}", "songs", index, Path(path).read_bytes()),
+        )
         self._w._notify(f"Replaced song {index} with {Path(path).name}")
 
     def remove_song(self, index: int):
         if QMessageBox.question(self._w, "Remove Song", f"Remove song {index}?") == QMessageBox.Yes:
-            self._w._editor.remove_song(self._w.hwl, index)
-            self._w._mark_modified()
-            self._w._rebuild_tree()
+            self._w._undo_stack.push(
+                RemoveItemCommand(self._w, f"Remove Song {index}", "songs", index),
+            )
             self._w._notify(f"Removed song {index}")
 
     def replace_sequence(self, song_index: int, seq_index: int):
@@ -120,9 +122,9 @@ class SongHandler:
             new_blob = self._w._cseq_editor.replace_sequence(
                 self._w.hwl.songs[song_index], seq_index, source_cseq.songs[source_seq_index],
             )
-            self._w._editor.replace_song(self._w.hwl, song_index, new_blob)
-            self._w._mark_modified()
-            self._w._rebuild_tree()
+            self._w._undo_stack.push(
+                SwapBlobCommand(self._w, f"Replace Sequence in Song {song_index}", "songs", song_index, new_blob),
+            )
             self._w._notify(f"Replaced sequence {seq_index} in song {song_index}")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Replace failed:\n{e}")
@@ -138,9 +140,9 @@ class SongHandler:
 
         try:
             new_blob = self._w._cseq_editor.remove_sequence(self._w.hwl.songs[song_index], seq_index)
-            self._w._editor.replace_song(self._w.hwl, song_index, new_blob)
-            self._w._mark_modified()
-            self._w._rebuild_tree()
+            self._w._undo_stack.push(
+                SwapBlobCommand(self._w, f"Remove Sequence {seq_index} from Song {song_index}", "songs", song_index, new_blob),
+            )
             self._w._notify(f"Removed sequence {seq_index} from song {song_index}")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Remove failed:\n{e}")
