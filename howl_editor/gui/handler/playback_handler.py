@@ -1,12 +1,6 @@
 # coding: utf-8
 
-from struct import pack
-
 from PySide6.QtWidgets import QApplication
-
-_WAV_HEADER_SIZE = 36
-_WAV_FORMAT_PCM = 1
-_WAV_BITS = 16
 
 
 class PlaybackHandler:
@@ -31,6 +25,7 @@ class PlaybackHandler:
             return
 
         try:
+            lookup = self._window._sample_lookup
             samples = self._window._bank_reader.parse(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
             )
@@ -38,7 +33,7 @@ class PlaybackHandler:
                 return
 
             sample = samples[sample_index]
-            sample_rate = self._lookup_sample_rate(sample.spu_index)
+            sample_rate = lookup.lookup_sample_rate(self._window.hwl, sample.spu_index)
             wav = self._window._vag_decoder.decode_to_wav(sample.data, sample_rate)
             label = f"SPU {sample.spu_index}"
 
@@ -55,17 +50,17 @@ class PlaybackHandler:
             return
 
         try:
+            lookup = self._window._sample_lookup
             cseq = self._window._cseq_reader.read(self._window.hwl.songs[song_index])
             if seq_index >= len(cseq.songs):
                 return
 
-            sample_data = self._collect_song_samples(cseq)
+            sample_data = lookup.collect_song_samples(self._window.hwl, cseq)
 
             self._window.status.showMessage(f"Rendering song {song_index} sequence {seq_index}...")
             QApplication.processEvents()
 
-            pcm = self._window._cseq_renderer.render_song(cseq, seq_index, sample_data)
-            wav = self._pcm_to_wav(pcm, sample_rate=22050, channels=2)
+            wav = self._window._cseq_renderer.render_song_to_wav(cseq, seq_index, sample_data)
             label = f"Song {song_index} Seq {seq_index}"
 
             self._play_wav(wav, label, lambda: self.play_sequence(song_index, seq_index))
@@ -92,7 +87,8 @@ class PlaybackHandler:
             return
 
         try:
-            data = self._find_sample_data(spu_index)
+            lookup = self._window._sample_lookup
+            data = lookup.find_sample_data(self._window.hwl, spu_index)
             if data is None:
                 self._window.status.showMessage(f"SPU {spu_index} not found in any bank")
                 return
@@ -124,76 +120,3 @@ class PlaybackHandler:
     def _show_no_audio(self) -> None:
         if not self.can_play():
             self._window.status.showMessage("Audio playback not available (QtMultimedia not found)")
-
-    def _pcm_to_wav(self, pcm: bytes, sample_rate: int, channels: int) -> bytes:
-        """Wrap raw PCM bytes in a WAV header."""
-        byte_rate = sample_rate * channels * _WAV_BITS // 8
-        block_align = channels * _WAV_BITS // 8
-        header = pack(
-            "<4sI4s4sIHHIIHH4sI",
-            b"RIFF", _WAV_HEADER_SIZE + len(pcm), b"WAVE",
-            b"fmt ", 16, _WAV_FORMAT_PCM, channels,
-            sample_rate, byte_rate, block_align, _WAV_BITS,
-            b"data", len(pcm),
-        )
-
-        return header + pcm
-
-    def _lookup_sample_rate(self, spu_index: int) -> int:
-        """Find the playback rate for a sample by checking FX and instrument tables."""
-        hwl = self._window.hwl
-
-        for fx in hwl.other_fx:
-            if fx.spu_index == spu_index and fx.pitch > 0:
-                return int(fx.pitch / 4096 * 44100)
-
-        for fx in hwl.engine_fx:
-            if fx.spu_index == spu_index and fx.pitch > 0:
-                return int(fx.pitch / 4096 * 44100)
-
-        for song_data in hwl.songs:
-            try:
-                cseq = self._window._cseq_reader.read(song_data)
-
-                for inst in cseq.instruments:
-                    if inst.sample_id == spu_index and inst.frequency > 0:
-                        return int(inst.frequency / 4096 * 44100)
-
-                for perc in cseq.percussions:
-                    if perc.sample_id == spu_index and perc.frequency > 0:
-                        return int(perc.frequency / 4096 * 44100)
-            except Exception:
-                continue
-
-        return 11025
-
-    def _find_sample_data(self, spu_index: int) -> bytes | None:
-        for bank_blob in self._window.hwl.banks:
-            try:
-                for s in self._window._bank_reader.parse(bank_blob, self._window.hwl.spu_addrs):
-                    if s.spu_index == spu_index:
-                        return s.data
-            except Exception:
-                continue
-
-        return None
-
-    def _collect_song_samples(self, cseq) -> dict[int, bytes]:
-        needed_ids = set()
-
-        for inst in cseq.instruments:
-            needed_ids.add(inst.sample_id)
-
-        for perc in cseq.percussions:
-            needed_ids.add(perc.sample_id)
-
-        sample_data: dict[int, bytes] = {}
-
-        for bank_blob in self._window.hwl.banks:
-            parsed = self._window._bank_reader.parse(bank_blob, self._window.hwl.spu_addrs)
-
-            for s in parsed:
-                if s.spu_index in needed_ids and s.spu_index not in sample_data:
-                    sample_data[s.spu_index] = s.data
-
-        return sample_data

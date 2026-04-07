@@ -20,6 +20,7 @@ from howl_editor.analysis import SampleClassifier, BankCseqValidator
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
+from howl_editor.audio.sample_lookup import SampleLookup
 from howl_editor.bank import BankReader, BankBuilder
 from howl_editor.cseq import CseqReader, CseqWriter
 from howl_editor.cseq.editor import CseqEditor
@@ -72,6 +73,7 @@ class MainWindow(QMainWindow):
         vag_decoder: VagDecoder | None = None,
         cseq_renderer: CseqRenderer | None = None,
         audio_player: AudioPlayer | None = None,
+        sample_lookup: SampleLookup | None = None,
         version_detector: HowlVersionDetector | None = None,
         sample_classifier: SampleClassifier | None = None,
         validator: BankCseqValidator | None = None,
@@ -97,6 +99,7 @@ class MainWindow(QMainWindow):
         self._vag_decoder = vag_decoder
         self._cseq_renderer = cseq_renderer
         self._audio_player = audio_player
+        self._sample_lookup = sample_lookup
         self._version_detector = version_detector
         self._sample_classifier = sample_classifier
         self._validator = validator
@@ -577,7 +580,7 @@ class MainWindow(QMainWindow):
 
     def _show_fx_waveform(self, spu_index: int) -> None:
         try:
-            data = self._playback._find_sample_data(spu_index)
+            data = self._sample_lookup.find_sample_data(self.hwl, spu_index)
 
             if data:
                 pcm, loop_start = self._vag_decoder.decode_with_loop(data)

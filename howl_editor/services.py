@@ -9,6 +9,7 @@ from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.decoder.adsr_decoder import AdsrDecoder
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
 from howl_editor.audio.voice import PitchCalculator, GainCalculator
+from howl_editor.audio.sample_lookup import SampleLookup
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.bank.builder import BankBuilder
 from howl_editor.bank.reader import BankReader
@@ -64,6 +65,10 @@ container.register("cseq_renderer", lambda c: CseqRenderer(
     c.resolve("pitch_calculator"),
     c.resolve("gain_calculator")))
 container.register("audio_player", lambda c: AudioPlayer())
+container.register("sample_lookup", lambda c: SampleLookup(
+    c.resolve("bank_reader"),
+    c.resolve("cseq_reader")
+))
 container.register("version_detector", lambda c: HowlVersionDetector())
 container.register("sample_classifier", lambda c: SampleClassifier(c.resolve("cseq_reader")))
 container.register("validator", lambda c: BankCseqValidator(
