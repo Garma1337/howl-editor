@@ -32,6 +32,9 @@ if __name__ == "__main__":
         validator=container.resolve("validator"),
         batch_exporter=container.resolve("batch_exporter"),
         detail_formatter=container.resolve("detail_formatter"),
+        sca_reader=container.resolve("sca_reader"),
+        sca_writer=container.resolve("sca_writer"),
+        sample_sizes_extractor=container.resolve("sample_sizes_extractor"),
     )
 
     window.show()

@@ -6,7 +6,10 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox, QDialog, QInputDialog
 
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
+from howl_editor.gui.dialog.saphi_export_dialog import SaphiExportDialog
 from howl_editor.midi.converter import HAS_MIDO
+from howl_editor.models import ScaFile, ScaMetadata
+from howl_editor.sca.constants import SAPHI_BANK_MAX_SIZE
 
 
 class ToolsHandler:
@@ -99,6 +102,74 @@ class ToolsHandler:
             QMessageBox.information(self._window, "Validation Result", result.message)
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Validation failed:\n{e}")
+
+    def export_for_saphi(self):
+        if not self._window.hwl:
+            return
+
+        if not self._window.hwl.banks or not self._window.hwl.songs:
+            QMessageBox.information(self._window, "Export for Saphi","The current HWL has no banks or songs to export.")
+            return
+
+        bank_labels = [self._window._get_item_label("Bank", i, self._window._bank_reader.get_name(i)) for i in range(len(self._window.hwl.banks))]
+        song_labels = [self._window._get_item_label("Song", i, self._window._cseq_reader.get_name(i)) for i in range(len(self._window.hwl.songs))]
+        bank_sizes = [len(b) for b in self._window.hwl.banks]
+
+        dialog = SaphiExportDialog(self._window, bank_labels, song_labels, bank_sizes, SAPHI_BANK_MAX_SIZE)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        selection = dialog.get_selection()
+        path, _ = QFileDialog.getSaveFileName(
+            self._window, "Save Saphi Export",
+            f"{selection.name}.sca", "Saphi Audio (*.sca)",
+        )
+
+        if not path:
+            return
+
+        try:
+            bank = self._window.hwl.banks[selection.bank_index]
+            cseq = self._window.hwl.songs[selection.song_index]
+            sample_sizes = self._window._sample_sizes_extractor.extract(bank, self._window.hwl.spu_addrs)
+
+            sca = ScaFile(
+                bank=bank,
+                cseq=cseq,
+                sample_sizes=sample_sizes,
+                metadata=ScaMetadata(name=selection.name, author=selection.author),
+            )
+
+            blob = self._window._sca_writer.serialize(sca)
+            Path(path).write_bytes(blob)
+            self._window.status.showMessage(f"Exported {Path(path).name}")
+        except Exception as e:
+            QMessageBox.critical(self._window, "Error", f"Saphi export failed:\n{e}\n{traceback.format_exc()}")
+
+    def import_saphi(self):
+        if not self._window.hwl:
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self._window, "Import Saphi Audio Container", "", "Saphi Audio (*.sca);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            sca = self._window._sca_reader.parse(Path(path).read_bytes())
+        except Exception as e:
+            QMessageBox.critical(self._window, "Error", f"Failed to parse .sca file:\n{e}")
+            return
+
+        bank_index = self._window._editor.add_bank(self._window.hwl, sca.bank)
+        song_index = self._window._editor.add_song(self._window.hwl, sca.cseq)
+        self._window._mark_modified()
+        self._window._rebuild_tree()
+        self._window._notify(
+            f"Imported \"{sca.metadata.name}\" by {sca.metadata.author} "
+            f"(bank {bank_index}, song {song_index})"
+        )
 
     def batch_export(self):
         if not self._window.hwl or not self._window._batch_exporter:

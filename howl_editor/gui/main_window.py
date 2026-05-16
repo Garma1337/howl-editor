@@ -38,6 +38,7 @@ from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
 from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.models import HowlFile
+from howl_editor.sca import SampleSizesExtractor, ScaReader, ScaWriter
 from howl_editor.vag import VagReader, VagWriter
 
 NODE_ROOT = 0
@@ -79,6 +80,9 @@ class MainWindow(QMainWindow):
         validator: BankCseqValidator | None = None,
         batch_exporter: BatchExporter | None = None,
         detail_formatter: DetailFormatter | None = None,
+        sca_reader: ScaReader | None = None,
+        sca_writer: ScaWriter | None = None,
+        sample_sizes_extractor: SampleSizesExtractor | None = None,
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
@@ -105,6 +109,9 @@ class MainWindow(QMainWindow):
         self._validator = validator
         self._batch_exporter = batch_exporter
         self._detail_fmt = detail_formatter
+        self._sca_reader = sca_reader
+        self._sca_writer = sca_writer
+        self._sample_sizes_extractor = sample_sizes_extractor
         self._sample_types: dict[int, set] = {}
 
         self.hwl: HowlFile | None = None
@@ -226,7 +233,10 @@ class MainWindow(QMainWindow):
         self._add_action(tools_menu, "Build Bank from &VAGs...", self._tools.build_bank_from_vags)
         midi_text = "&Convert MIDI to CSEQ..." if HAS_MIDO else "Convert MIDI to CSEQ (mido not installed)"
         self._add_action(tools_menu, midi_text, self._tools.midi_to_cseq, enabled=HAS_MIDO)
-        self._add_action(tools_menu, "&Validate Bank/Song...", self._tools.validate_bank_song, requires_file=True)
+        self._add_action(tools_menu, "&Validate Bank / Song...", self._tools.validate_bank_song, requires_file=True)
+        tools_menu.addSeparator()
+        self._add_action(tools_menu, "&Export Saphi Audio Container...", self._tools.export_for_saphi, requires_file=True)
+        self._add_action(tools_menu, "&Import Saphi Audio Container...", self._tools.import_saphi, requires_file=True)
         tools_menu.addSeparator()
         self._add_action(tools_menu, "Clear Audio &Cache", self._clear_audio_cache)
 

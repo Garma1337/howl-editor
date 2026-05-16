@@ -28,6 +28,9 @@ This guide covers internal behaviors and details that are not immediately obviou
 - [Bank Merging](#bank-merging)
 - [Bank/CSEQ Validation](#bankcseq-validation)
 - [Batch Export](#batch-export)
+- [Saphi Audio Container (.sca)](#saphi-audio-container-sca)
+  - [Export Saphi Audio Container](#export-saphi-audio-container)
+  - [Import Saphi Audio Container](#import-saphi-audio-container)
 - [HWL Version Detection](#hwl-version-detection)
 
 ## Undo / Redo
@@ -204,9 +207,9 @@ The merge dialog lets you combine samples from two banks:
 
 The order of samples in the result determines the order in the bank blob. This matters because some CSEQ files may reference samples by their position within a bank.
 
-## Bank/CSEQ Validation
+## Bank / CSEQ Validation
 
-The validation tool (Tools > Validate Bank/Song) checks whether a bank contains all the SPU sample IDs that a CSEQ song needs. It reports:
+The validation tool (Tools > Validate Bank / Song) checks whether a bank contains all the SPU sample IDs that a CSEQ song needs. It reports:
 
 - How many of the required samples are present
 - A list of every missing SPU index
@@ -254,6 +257,27 @@ output/
 - Songs are exported as raw `.cseq` blobs plus MIDI conversions (one per sequence)
 - Samples are deduplicated by SPU index and sorted into subfolders by type classification
 - Both `.vag` (native PS1 format) and `.wav` (decoded PCM) are generated for each sample
+
+## Saphi Audio Container (.sca)
+
+The Saphi Audio Container (`.sca`) bundles a single bank + song pair into one file that the Saphi runtime streams into PS1 memory at level-load time, replacing the original music without modifying the KART.HWL. See [sca.md](formats/sca.md) for the wire format.
+
+### Export Saphi Audio Container
+
+**Tools > Export Saphi Audio Container...** prompts you to pick one bank and one song from the loaded HWL, plus a track name and author. The editor writes:
+
+- The full bank blob (header + padded sample data), capped at `0x57800` bytes
+- The full CSEQ blob, capped at `0xC000` bytes
+- A per-sample `spuSize` array extracted from the loaded HWL's SPU Address Table (in bank-header order) — this lets the Saphi runtime use the source HWL's sizes even when they differ from the player's ISO HOWL
+- A small UTF-8 JSON metadata chunk with `name` and `author`
+
+The dialog warns if the selected bank exceeds the Saphi size cap. Bank/song pairing is not validated at export — use [Tools > Validate Bank/Song](#bankcseq-validation) first if you want to confirm the bank contains every sample the CSEQ references.
+
+### Import Saphi Audio Container
+
+**Tools > Import Saphi Audio Container...** is the inverse: pick a `.sca` file and the editor appends its bank and CSEQ as new entries on the loaded HWL (the SIZE chunk is ignored on import because the loaded HWL already has authoritative SPU sizes). A status-bar message reports the imported track's name, author, and the new bank/song indices.
+
+Unknown chunks in the container are skipped silently for forward compatibility, so newer `.sca` files with extra metadata still import cleanly.
 
 ## HWL Version Detection
 

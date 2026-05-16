@@ -13,6 +13,11 @@ from howl_editor.bank.reader import BankReader
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.cseq.writer import CseqWriter
+from howl_editor.sca.chunk_reader import ScaChunkReader
+from howl_editor.sca.chunk_writer import ScaChunkWriter
+from howl_editor.sca.metadata_codec import ScaMetadataCodec
+from howl_editor.sca.reader import ScaReader
+from howl_editor.sca.writer import ScaWriter
 from howl_editor.howl.editor import HowlEditor
 from howl_editor.howl.reader import HowlReader
 from howl_editor.howl.version import HowlVersionDetector
@@ -81,6 +86,26 @@ def sample_classifier(cseq_reader):
 @pytest.fixture
 def validator(bank_reader, cseq_reader):
     return BankCseqValidator(bank_reader, cseq_reader)
+
+@pytest.fixture
+def sca_chunk_writer():
+    return ScaChunkWriter()
+
+@pytest.fixture
+def sca_metadata_codec():
+    return ScaMetadataCodec()
+
+@pytest.fixture
+def sca_writer(sca_chunk_writer, sca_metadata_codec):
+    return ScaWriter(sca_chunk_writer, sca_metadata_codec)
+
+@pytest.fixture
+def sca_chunk_reader():
+    return ScaChunkReader()
+
+@pytest.fixture
+def sca_reader(sca_chunk_reader, sca_metadata_codec):
+    return ScaReader(sca_chunk_reader, sca_metadata_codec)
 
 
 @pytest.fixture

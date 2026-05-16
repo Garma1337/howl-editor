@@ -31,6 +31,12 @@ from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.howl.writer import HowlWriter
 from howl_editor.midi.converter import MidiConverter
 from howl_editor.midi.exporter import CseqMidiExporter
+from howl_editor.sca.chunk_reader import ScaChunkReader
+from howl_editor.sca.chunk_writer import ScaChunkWriter
+from howl_editor.sca.metadata_codec import ScaMetadataCodec
+from howl_editor.sca.reader import ScaReader
+from howl_editor.sca.sample_sizes_extractor import SampleSizesExtractor
+from howl_editor.sca.writer import ScaWriter
 from howl_editor.vag.reader import VagReader
 from howl_editor.vag.writer import VagWriter
 
@@ -99,3 +105,15 @@ container.register("detail_formatter", lambda c: DetailFormatter(
     c.resolve("bank_detail_formatter"),
     c.resolve("song_detail_formatter"),
 ))
+container.register("sca_chunk_reader", lambda c: ScaChunkReader())
+container.register("sca_chunk_writer", lambda c: ScaChunkWriter())
+container.register("sca_metadata_codec", lambda c: ScaMetadataCodec())
+container.register("sca_reader", lambda c: ScaReader(
+    c.resolve("sca_chunk_reader"),
+    c.resolve("sca_metadata_codec"),
+))
+container.register("sca_writer", lambda c: ScaWriter(
+    c.resolve("sca_chunk_writer"),
+    c.resolve("sca_metadata_codec"),
+))
+container.register("sample_sizes_extractor", lambda c: SampleSizesExtractor(c.resolve("bank_reader")))

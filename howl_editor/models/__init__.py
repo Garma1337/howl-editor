@@ -10,6 +10,7 @@ from howl_editor.models.howl import (
     HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX,
     SECTOR_SIZE, bytes_to_sectors,
 )
+from howl_editor.models.sca import ScaFile, ScaFormat, ScaMetadata
 from howl_editor.models.vag import VagSample
 
 __all__ = [
@@ -33,4 +34,7 @@ __all__ = [
     "VagSample",
     "BankSample",
     "BankBuildResult",
+    "ScaFile",
+    "ScaFormat",
+    "ScaMetadata",
 ]

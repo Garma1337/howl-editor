@@ -23,6 +23,8 @@ A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspe
 - **Replace or remove** individual sequences within a song
 - **Export** songs as `.cseq` or MIDI files (per-song or per-sequence)
 - **Convert MIDI to CSEQ** with per-track instrument mapping (standalone or add to HWL)
+- **Export Saphi Audio Container** (`.sca`) — bundle one bank + one song + per-sample SPU sizes + name/author metadata into a single file the Saphi runtime can stream into PS1 memory
+- **Import Saphi Audio Container** — append a `.sca`'s bank and song to the loaded HWL
 
 ### Samples
 
@@ -141,7 +143,7 @@ howl_editor/
 
 ## Documentation
 
-- **[User Guide](documentation/user-guide.md)** - Non-obvious behaviors: undo/redo, keyboard shortcuts, drag-and-drop, sample pitch lookup, filter logic, waveform loop markers, reordering caveats, SPU index assignment, MIDI conversion, audio playback accuracy, bank merging, batch export, validation
+- **[User Guide](documentation/user-guide.md)** - Non-obvious behaviors: undo/redo, keyboard shortcuts, drag-and-drop, sample pitch lookup, filter logic, waveform loop markers, reordering caveats, SPU index assignment, MIDI conversion, audio playback accuracy, bank merging, batch export, validation, Saphi container import/export
 - **[Audio Loading](documentation/audio-loading.md)** - How CTR loads audio at runtime: level/character/boss bank selection, song mapping, loading pipeline
 
 Format specifications:
@@ -150,3 +152,4 @@ Format specifications:
 - **[CSEQ Format](documentation/formats/cseq.md)** - Music sequence format, instrument/percussion definitions, song structure, track events and opcodes, VLQ delta time encoding
 - **[Bank Format](documentation/formats/bank.md)** - Sample bank structure, SPU memory management, runtime loading pipeline
 - **[VAG Format](documentation/formats/vag.md)** - PlayStation ADPCM audio samples, header structure, frame encoding, decoding algorithm
+- **[SCA Format](documentation/formats/sca.md)** - Saphi Audio Container, chunked bank + CSEQ + per-sample SPU sizes + metadata for runtime music override
