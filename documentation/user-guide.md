@@ -266,7 +266,7 @@ The Saphi Audio Container (`.sca`) bundles a single bank + song pair into one fi
 
 **Tools > Export Saphi Audio Container...** prompts you to pick one bank and one song from the loaded HWL, plus a track name and author. The editor writes:
 
-- The full bank blob (header + padded sample data), capped at `0x57800` bytes
+- The full bank blob (header + padded sample data), capped at `0x64000` bytes
 - The full CSEQ blob, capped at `0xC000` bytes
 - A per-sample `spuSize` array extracted from the loaded HWL's SPU Address Table (in bank-header order) — this lets the Saphi runtime use the source HWL's sizes even when they differ from the player's ISO HOWL
 - A small UTF-8 JSON metadata chunk with `name` and `author`

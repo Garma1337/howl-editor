@@ -127,7 +127,7 @@ The Saphi runtime reserves a fixed memory region for the container:
 
 | Chunk | Maximum body size                                                                   |
 |-------|-------------------------------------------------------------------------------------|
-| BANK  | `0x57800` (350 KB)                                                                  |
+| BANK  | `0x64000` (400 KB)                                                                  |
 | CSEQ  | `0xC000`  (48 KB)                                                                   |
 | SIZE  | `256 entries` (512 bytes) — one per sample, capped by the maximum bank sample count |
 | META  | Unconstrained in the format; in practice fits comfortably under 1 KB                |
