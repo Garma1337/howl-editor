@@ -123,7 +123,7 @@ class TestRenderSong:
         track = CseqTrack(events=[
             CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=0),
             CseqEvent(delta=0, event_type=CseqEventType.VELOCITY, pitch=50),
-            CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=60, velocity=0),
+            CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=60, velocity=100),
             CseqEvent(delta=50, event_type=CseqEventType.END_TRACK),
         ])
 
@@ -175,7 +175,9 @@ class TestRenderSong:
 
         assert isinstance(pcm, bytes)
 
-    def test_velocity_zero_defaults_to_127(self):
+    def test_velocity_zero_is_silent(self):
+        # CTR's noteon opcode multiplies SPU volume by note velocity, so vel=0
+        # produces silent output. Match that behavior — don't substitute a default.
         renderer = _renderer()
 
         track = CseqTrack(events=[
@@ -192,7 +194,8 @@ class TestRenderSong:
 
         pcm = renderer.render_song(cseq, 0, {0: _tone_vag_frames()})
 
-        assert len(pcm) > 0
+        # No audible samples should be produced — every output sample must be zero.
+        assert all(b == 0 for b in pcm)
 
     def test_mid_note_velocity_changes_gain(self):
         renderer = _renderer()

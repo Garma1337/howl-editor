@@ -158,11 +158,13 @@ class CseqRenderer:
                         events.append((pos, _BEND, list(live_voices), distort))
 
                 elif event.event_type == CseqEventType.NOTE_ON:
+                    if event.velocity == 0:
+                        continue
+
                     start = self._tick_to_sample(tick, samples_per_tick)
-                    note_vel = event.velocity if event.velocity > 0 else 127
                     voice = self._create_voice(
                         cseq, track.is_drum, patch_idx, event.pitch,
-                        note_vel, seq_vol, cur_pan, distort,
+                        event.velocity, seq_vol, cur_pan, distort,
                         sample_data, decoded_cache, output_rate,
                     )
 
