@@ -1,0 +1,141 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+KEEP_QT_MODULES = {
+    "Core",
+    "Gui",
+    "Widgets",
+    "Multimedia",
+    "MultimediaWidgets",
+    "Network",
+    "DBus",
+}
+
+PYSIDE6_PYTHON_EXCLUDES = [
+    "PySide6.QtAsyncio",
+    "PySide6.QtConcurrent",
+    "PySide6.QtDesigner",
+    "PySide6.QtHelp",
+    "PySide6.QtOpenGL",
+    "PySide6.QtOpenGLWidgets",
+    "PySide6.QtPrintSupport",
+    "PySide6.QtQml",
+    "PySide6.QtQmlCore",
+    "PySide6.QtQmlWorkerScript",
+    "PySide6.QtQuick",
+    "PySide6.QtQuickControls2",
+    "PySide6.QtQuickTest",
+    "PySide6.QtQuickWidgets",
+    "PySide6.QtSql",
+    "PySide6.QtStateMachine",
+    "PySide6.QtSvg",
+    "PySide6.QtSvgWidgets",
+    "PySide6.QtTest",
+    "PySide6.QtUiTools",
+    "PySide6.QtXml",
+]
+
+MISC_EXCLUDES = [
+    "tkinter",
+    "unittest",
+    "test",
+    "tests",
+    "pytest",
+    "setuptools",
+    "pip",
+    "doctest",
+    "pdb",
+]
+
+
+def _path_modules(dest: str) -> set[str]:
+    lowered = dest.replace("\\", "/").lower()
+    found: set[str] = set()
+
+    prefixes = ("libqt6", "libqt", "qt6", "qt")
+    separators = ".-_"
+
+    for part in lowered.split("/"):
+        for prefix in prefixes:
+            if not part.startswith(prefix):
+                continue
+
+            tail = part[len(prefix):]
+            cut = min(
+                (tail.find(s) for s in separators if s in tail),
+                default=len(tail),
+            )
+            candidate = tail[:cut]
+
+            if candidate:
+                found.add(candidate)
+
+            break
+
+    return found
+
+
+def _is_excluded(dest: str) -> bool:
+    modules = _path_modules(dest)
+    if not modules:
+        return False
+
+    keep_lower = {m.lower() for m in KEEP_QT_MODULES}
+    return all(m not in keep_lower for m in modules)
+
+
+a = Analysis(
+    ["main.py"],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ("howl_editor/gui/templates", "howl_editor/gui/templates"),
+    ],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=PYSIDE6_PYTHON_EXCLUDES + MISC_EXCLUDES,
+    noarchive=False,
+    optimize=2,
+)
+
+_before_binaries = len(a.binaries)
+_before_datas = len(a.datas)
+
+a.binaries = [b for b in a.binaries if not _is_excluded(b[0])]
+a.datas = [d for d in a.datas if not _is_excluded(d[0])]
+
+print(
+    f"[howl_editor.spec] Dropped "
+    f"{_before_binaries - len(a.binaries)} binaries and "
+    f"{_before_datas - len(a.datas)} data files "
+    f"for excluded Qt modules."
+)
+
+
+pyz = PYZ(a.pure)
+
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="HowlEditor",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+)
+
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name="HowlEditor",
+)
