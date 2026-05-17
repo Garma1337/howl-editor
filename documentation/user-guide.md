@@ -12,6 +12,7 @@ This guide covers internal behaviors and details that are not immediately obviou
 - [Reordering Banks and Songs](#reordering-banks-and-songs)
 - [SPU Address Table](#spu-address-table)
   - [How SPU Indices Are Assigned](#how-spu-indices-are-assigned)
+  - [VAG Sample Rate Persistence](#vag-sample-rate-persistence)
   - [Important Considerations](#important-considerations)
 - [Bank Names](#bank-names)
 - [Sample Type Classification](#sample-type-classification)
@@ -87,6 +88,16 @@ When you add a new sample to a bank or build a bank from VAG files, the editor a
 - **Replace sample**: The existing SPU index is kept, but the size entry is updated to match the new data.
 - **Remove sample**: The sample is removed from the bank, but the SPU table entry is **not** deleted (removing it would shift all subsequent indices and break references in other banks and CSEQ files).
 
+### VAG Sample Rate Persistence
+
+The HWL format has no per-sample rate field — playback rate is derived from whichever OtherFX entry, EngineFX entry, or CSEQ instrument references the sample. To keep an imported VAG's header `sample_rate` from being lost on save / reopen, the editor writes it into the FX table on every VAG-import path:
+
+- **Existing OtherFX entries** that reference the affected SPU index have their `pitch` field updated to match the imported VAG.
+- **Replace Sample** stops there — if no FX entry references the sample, nothing changes.
+- **Add Sample / Build Bank from VAGs / drag-and-drop** of a brand-new sample with no existing FX reference will **auto-create** an OtherFX entry pointing at the new SPU index with `pitch` from the VAG header. You'll see this new entry under the Effects node in the tree.
+
+If you don't want an auto-created Effects entry (e.g., the sample is purely a music note that you'll wire into a CSEQ instrument instead), just delete it from the tree — its sole purpose was to remember the rate.
+
 ### Important Considerations
 
 - SPU indices are global across the entire HWL file. If two banks reference the same SPU index, they share the same sample data.
@@ -145,7 +156,7 @@ When exporting a song as MIDI:
 
 ### Sample Playback
 
-Clicking a sample in the tree decodes the VAG ADPCM data to PCM and plays it. The editor automatically looks up the correct playback pitch by checking the OtherFX table, EngineFX table, and CSEQ instrument/percussion definitions (in that order). If the sample isn't referenced anywhere, it falls back to 11025 Hz. The [waveform preview](#waveform-preview) shows the decoded waveform with the loop point marked.
+Clicking a sample in the tree decodes the VAG ADPCM data to PCM and plays it. The editor automatically looks up the correct playback pitch by checking the OtherFX table, EngineFX table, and CSEQ instrument/percussion definitions (in that order). If the sample isn't referenced anywhere, it falls back to 11025 Hz. Imported VAGs preserve their header's sample rate by populating an OtherFX entry — see [VAG Sample Rate Persistence](#vag-sample-rate-persistence). The [waveform preview](#waveform-preview) shows the decoded waveform with the loop point marked.
 
 ### FX Playback
 
