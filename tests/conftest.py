@@ -4,8 +4,12 @@ from struct import pack, pack_into
 
 import pytest
 
+from howl_editor.analysis.blob_modification_detector import BlobModificationDetector
 from howl_editor.analysis.sample_classifier import SampleClassifier
+from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
+from howl_editor.analysis.stock_layout import StockLayout
 from howl_editor.analysis.validator import BankCseqValidator
+from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.bank.builder import BankBuilder
@@ -86,6 +90,22 @@ def sample_classifier(cseq_reader):
 @pytest.fixture
 def validator(bank_reader, cseq_reader):
     return BankCseqValidator(bank_reader, cseq_reader)
+
+@pytest.fixture
+def stock_layout():
+    return StockLayout()
+
+@pytest.fixture
+def blob_modification_detector():
+    return BlobModificationDetector()
+
+@pytest.fixture
+def adventure_hub_mask_table():
+    return AdventureHubMaskTable()
+
+@pytest.fixture
+def semantic_entry_builder(bank_reader, cseq_reader, stock_layout, blob_modification_detector):
+    return SemanticEntryBuilder(bank_reader, cseq_reader, stock_layout, blob_modification_detector)
 
 @pytest.fixture
 def sca_chunk_writer():

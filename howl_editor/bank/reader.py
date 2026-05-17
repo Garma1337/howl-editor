@@ -37,7 +37,7 @@ _BANK_NAMES: dict[int, str] = {
     28: "Boss: Komodo Joe",
     29: "Boss: Pinstripe",
     30: "Boss: N. Oxide",
-    31: "Battle Arenas",
+    31: "Adventure Hub",
     32: "Main Menu",
     33: "Naughty Dog Crate",
     34: "Intro Race",

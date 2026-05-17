@@ -37,7 +37,7 @@ _SONG_NAMES: dict[int, str] = {
     23: "Rocky Road",
     24: "Lab Basement", 
     25: "Boss Race", 
-    26: "Battle Arenas",
+    26: "Adventure Hub",
     27: "Character Select", 
     28: "Naughty Dog Crate", 
     29: "Intro Race",

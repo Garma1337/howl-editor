@@ -2,20 +2,24 @@
 
 from pathlib import Path
 
+from howl_editor.analysis.blob_modification_detector import BlobModificationDetector
 from howl_editor.analysis.sample_classifier import SampleClassifier
+from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
+from howl_editor.analysis.stock_layout import StockLayout
 from howl_editor.analysis.validator import BankCseqValidator
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.decoder.adsr_decoder import AdsrDecoder
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
-from howl_editor.audio.voice import PitchCalculator, GainCalculator
 from howl_editor.audio.sample_lookup import SampleLookup
+from howl_editor.audio.voice import PitchCalculator, GainCalculator
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.bank.builder import BankBuilder
 from howl_editor.bank.reader import BankReader
 from howl_editor.core import Container
 from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.core.vlq import VlqCodec
+from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
 from howl_editor.cseq.editor import CseqEditor
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.cseq.writer import CseqWriter
@@ -117,3 +121,12 @@ container.register("sca_writer", lambda c: ScaWriter(
     c.resolve("sca_metadata_codec"),
 ))
 container.register("sample_sizes_extractor", lambda c: SampleSizesExtractor(c.resolve("bank_reader")))
+container.register("adventure_hub_mask_table", lambda c: AdventureHubMaskTable())
+container.register("stock_layout", lambda c: StockLayout())
+container.register("blob_modification_detector", lambda c: BlobModificationDetector())
+container.register("semantic_entry_builder", lambda c: SemanticEntryBuilder(
+    c.resolve("bank_reader"),
+    c.resolve("cseq_reader"),
+    c.resolve("stock_layout"),
+    c.resolve("blob_modification_detector"),
+))
