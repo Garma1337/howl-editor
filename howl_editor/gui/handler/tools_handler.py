@@ -28,11 +28,16 @@ class ToolsHandler:
 
             if self._window.hwl and self._ask_store_in_hwl("bank"):
                 self._window._editor.add_bank(self._window.hwl, result.bank_data)
+
+                for spu_index, sample_rate in zip(result.new_spu_indices, result.sample_rates):
+                    self._window._editor.attach_sample_rate(self._window.hwl, spu_index, sample_rate)
+
                 self._window._mark_modified()
                 self._window._rebuild_tree()
                 self._window._notify(f"Added bank {len(self._window.hwl.banks) - 1} with {len(files)} samples")
             else:
                 path, _ = QFileDialog.getSaveFileName(self._window, "Save Bank", "bank.bnk", "Bank Files (*.bnk)")
+
                 if path:
                     Path(path).write_bytes(result.bank_data)
                     self._window._notify(f"Saved bank to {Path(path).name}")
@@ -68,6 +73,7 @@ class ToolsHandler:
                 self._window._notify(f"Added song {len(self._window.hwl.songs) - 1}")
             else:
                 save_path, _ = QFileDialog.getSaveFileName(self._window, "Save CSEQ", "song.cseq", "CSEQ Files (*.cseq)")
+
                 if save_path:
                     Path(save_path).write_bytes(cseq_data)
                     self._window._notify(f"Saved CSEQ to {Path(save_path).name}")
@@ -153,6 +159,7 @@ class ToolsHandler:
         path, _ = QFileDialog.getOpenFileName(
             self._window, "Import Saphi Audio Container", "", "Saphi Audio (*.sca);;All Files (*)",
         )
+        
         if not path:
             return
 

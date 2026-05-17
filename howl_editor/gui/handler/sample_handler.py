@@ -64,6 +64,7 @@ class SampleHandler:
         path, _ = QFileDialog.getOpenFileName(
             self._window, "Add Sample to Bank", "", "VAG Files (*.vag);;All Files (*)",
         )
+
         if not path:
             return
 
@@ -76,7 +77,9 @@ class SampleHandler:
             self._window._undo_stack.push(
                 SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
             )
+
             spu_index = len(self._window.hwl.spu_addrs) - 1
+            self._window._editor.attach_sample_rate(self._window.hwl, spu_index, vag.sample_rate)
             self._window._notify(f"Added sample SPU {spu_index} to bank {bank_index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Add sample failed:\n{e}")
@@ -97,6 +100,7 @@ class SampleHandler:
             if not self._confirm_size_change(bank_index, sample_index, len(vag.data)):
                 return
 
+            spu_index = self._find_spu_index(bank_index, sample_index)
             new_blob = self._window._bank_builder.replace_sample(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
                 sample_index, vag.data, self._window._bank_reader,
@@ -105,10 +109,35 @@ class SampleHandler:
                 SwapBlobCommand(self._window, f"Replace Sample in Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
             )
 
+            if spu_index is not None:
+                self._propagate_sample_rate_to_fx(spu_index, vag.sample_rate)
+
             self._window._notify(f"Replaced sample {sample_index} in bank {bank_index}")
             self._warn_if_bank_oversized(bank_index, len(new_blob))
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Replace failed:\n{e}")
+
+    def _find_spu_index(self, bank_index: int, sample_index: int) -> int | None:
+        try:
+            samples = self._window._bank_reader.parse(
+                self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
+            )
+
+            if 0 <= sample_index < len(samples):
+                return samples[sample_index].spu_index
+        except Exception:
+            pass
+
+        return None
+
+    def _propagate_sample_rate_to_fx(self, spu_index: int, sample_rate: int) -> None:
+        if sample_rate <= 0:
+            return
+
+        pitch = int(round(sample_rate / 44100.0 * 4096.0))
+        for fx in self._window.hwl.other_fx:
+            if fx.spu_index == spu_index:
+                fx.pitch = pitch
 
     def _confirm_size_change(self, bank_index: int, sample_index: int, new_data_len: int) -> bool:
         samples = self._window._bank_reader.parse(

@@ -933,9 +933,10 @@ class MainWindow(QMainWindow):
             )
 
             self._editor.replace_bank(self.hwl, bank_index, new_blob)
+            spu_index = len(self.hwl.spu_addrs) - 1
+            self._editor.attach_sample_rate(self.hwl, spu_index, vag.sample_rate)
             self._mark_modified()
             self._rebuild_tree()
-            spu_index = len(self.hwl.spu_addrs) - 1
             self.status.showMessage(f"Added SPU {spu_index} to bank {bank_index} from {Path(path).name}")
         except Exception as e:
             self.status.showMessage(f"Failed to add sample: {e}")

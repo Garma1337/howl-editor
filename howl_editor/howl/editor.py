@@ -1,6 +1,6 @@
 # coding: utf-8
 
-from howl_editor.models import HowlFile
+from howl_editor.models import HowlFile, OtherFX
 
 
 class HowlEditor:
@@ -51,6 +51,40 @@ class HowlEditor:
 
         song = hwl.songs.pop(from_index)
         hwl.songs.insert(to_index, song)
+
+    def set_sample_rate(self, hwl: HowlFile, spu_index: int, sample_rate: int) -> int:
+        """Write a sample rate (Hz) into every OtherFX entry that references this
+        sample. Returns the number of FX entries touched."""
+        if sample_rate <= 0:
+            return 0
+
+        pitch = self._encode_pitch(sample_rate)
+        touched = 0
+
+        for fx in hwl.other_fx:
+            if fx.spu_index == spu_index:
+                fx.pitch = pitch
+                touched += 1
+
+        return touched
+
+    def attach_sample_rate(self, hwl: HowlFile, spu_index: int, sample_rate: int) -> None:
+        """Persist a sample rate for a newly imported sample: update existing
+        OtherFX entries, or create one if none reference this SPU index."""
+        if sample_rate <= 0:
+            return
+
+        if self.set_sample_rate(hwl, spu_index, sample_rate) == 0:
+            hwl.other_fx.append(OtherFX(
+                flags=0,
+                volume=255,
+                pitch=self._encode_pitch(sample_rate),
+                spu_index=spu_index,
+                duration=0,
+            ))
+
+    def _encode_pitch(self, sample_rate: int) -> int:
+        return int(round(sample_rate / 44100.0 * 4096.0))
 
     def _validate_index(self, index: int, length: int, label: str) -> None:
         if index < 0 or index >= length:

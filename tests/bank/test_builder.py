@@ -56,6 +56,29 @@ class TestBuildFromSamples:
         # Data starts at sector boundary
         assert blob[SECTOR_SIZE:SECTOR_SIZE + 80] == b"\xFF" * 80
 
+    def test_records_sample_rate_per_vag(self, bank_builder):
+        # Different headered VAGs should produce a parallel sample_rates list
+        # so callers can propagate the rates into OtherFX entries.
+        samples = [
+            VagSample(data=b"\x01" * 80, sample_rate=44100),
+            VagSample(data=b"\x02" * 80, sample_rate=22050),
+            VagSample(data=b"\x03" * 80, sample_rate=11025),
+        ]
+        spu_addrs: list[SpuAddrEntry] = []
+        result = bank_builder.build_from_samples(samples, spu_addrs, start_index=0)
+
+        assert result.sample_rates == [44100, 22050, 11025]
+        assert len(result.sample_rates) == len(result.new_spu_indices)
+
+    def test_sample_rates_default_when_header_absent(self, bank_builder):
+        # VagSample defaults sample_rate to 44100 for headerless data;
+        # the builder must carry that default through verbatim.
+        samples = [VagSample(data=b"\x00" * 80)]
+        spu_addrs: list[SpuAddrEntry] = []
+        result = bank_builder.build_from_samples(samples, spu_addrs, start_index=0)
+
+        assert result.sample_rates == [44100]
+
 
 class TestBuildFromRaw:
 

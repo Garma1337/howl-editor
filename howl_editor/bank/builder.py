@@ -43,7 +43,12 @@ class BankBuilder:
             self._ensure_spu_addr(spu_addrs, idx, len(sample.data))
 
         blob = self._assemble_blob(new_indices, [s.data for s in samples])
-        return BankBuildResult(bank_data=blob, new_spu_indices=new_indices)
+
+        return BankBuildResult(
+            bank_data=blob,
+            new_spu_indices=new_indices,
+            sample_rates=[s.sample_rate for s in samples],
+        )
 
     def build_from_raw(self, sample_data: list[tuple[int, bytes]]) -> bytes:
         """Build a bank from pre-indexed (spu_index, raw_data) pairs."""

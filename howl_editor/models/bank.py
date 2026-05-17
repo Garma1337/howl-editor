@@ -15,3 +15,4 @@ class BankBuildResult:
     """Result of building a bank from VAG files."""
     bank_data: bytes
     new_spu_indices: list[int] = field(default_factory=list)
+    sample_rates: list[int] = field(default_factory=list)
