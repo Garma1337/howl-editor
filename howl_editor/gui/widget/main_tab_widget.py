@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
 
 from howl_editor.analysis.entry_leaves import EntryLeavesBuilder
 from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
+from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
+from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.category_detail_widget import CategoryDetailWidget
 from howl_editor.gui.widget.category_grid_widget import CategoryGridWidget
@@ -26,18 +28,18 @@ class MainTabWidget(QWidget):
     showing every entry's leaves (sequences / samples) with per-leaf Play.
     """
 
-    # Parent-level actions (Replace whole / Export whole / Reset).
     sig_row_replace = Signal(object)         # EntryRow
     sig_row_export = Signal(object)
     sig_row_reset = Signal(object)
     sig_row_play = Signal(object)            # only used by FX entries
     sig_row_drop = Signal(object, str)
 
-    # Leaf-level actions (per sample / sequence).
     sig_leaf_play = Signal(object)           # EntryLeaf
     sig_leaf_replace = Signal(object)
     sig_leaf_export = Signal(object)
     sig_leaf_drop = Signal(object, str)
+
+    sig_play_hub_preview = Signal(int, object, str)
 
     def __init__(
         self,
@@ -45,12 +47,16 @@ class MainTabWidget(QWidget):
         leaves_builder: EntryLeavesBuilder,
         snapshot: BlobSnapshot,
         stylesheet_loader: StylesheetLoader,
+        hub_mask_table: AdventureHubMaskTable,
+        icon_resolver: CategoryIconResolver,
     ):
         super().__init__()
         self._builder = entry_builder
         self._leaves_builder = leaves_builder
         self._snapshot = snapshot
         self._stylesheets = stylesheet_loader
+        self._hub_mask = hub_mask_table
+        self._icon_resolver = icon_resolver
         self._hwl: HowlFile | None = None
         self._groups: list[EntryGroup] = []
         self._build_ui()
@@ -70,13 +76,15 @@ class MainTabWidget(QWidget):
         self._empty_label.setObjectName("mainTabEmpty")
         self._stack.addWidget(self._empty_label)
 
-        self._grid = CategoryGridWidget(self._stylesheets)
+        self._grid = CategoryGridWidget(self._stylesheets, self._icon_resolver)
         self._grid.sig_category_clicked.connect(self._on_category_clicked)
         self._stack.addWidget(self._grid)
 
         self._detail = CategoryDetailWidget(
             self._leaves_builder, self._snapshot, self._stylesheets,
+            self._hub_mask, self._icon_resolver,
         )
+
         self._detail.sig_back.connect(self._on_back)
         self._detail.sig_replace_parent.connect(self.sig_row_replace)
         self._detail.sig_export_parent.connect(self.sig_row_export)
@@ -89,6 +97,7 @@ class MainTabWidget(QWidget):
         self._detail.sig_row_replace.connect(self.sig_row_replace)
         self._detail.sig_row_export.connect(self.sig_row_export)
         self._detail.sig_row_drop.connect(self.sig_row_drop)
+        self._detail.sig_play_hub_preview.connect(self.sig_play_hub_preview)
         self._stack.addWidget(self._detail)
 
         self._stack.setCurrentIndex(_PAGE_EMPTY)
@@ -116,8 +125,6 @@ class MainTabWidget(QWidget):
         }
         self._grid.populate(self._groups, modified)
 
-        # Preserve current detail view if the user was in one and the category
-        # still exists; otherwise go back to the grid.
         if self._stack.currentIndex() == _PAGE_DETAIL:
             current_title = self._detail._title.text()
             match = next((g for g in self._groups if g.name == current_title), None)

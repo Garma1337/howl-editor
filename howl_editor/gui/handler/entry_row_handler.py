@@ -114,6 +114,13 @@ class EntryRowHandler:
                 leaf.bank_index, leaf.sample_index or 0,
             )
 
+    def play_hub_preview(self, song_index: int, seq_indices: list[int], label: str) -> None:
+        """Render the layered hub preview for the selected hub and play it."""
+        if not self._w.hwl:
+            return
+
+        self._w._playback.play_layered(song_index, list(seq_indices), label)
+
     def drop_leaf(self, leaf: EntryLeaf, file_path: str) -> None:
         # Direct file → leaf replacement, skipping the file picker that
         # replace_leaf normally opens.

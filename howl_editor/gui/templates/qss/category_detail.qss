@@ -81,14 +81,58 @@ QFrame#entryParent QPushButton#parentToggle:hover {
     border-radius: 4px;
 }
 
+QFrame#entryParent QTabWidget::pane {
+    background: palette(window);
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+    margin-top: 0;
+    padding: 4px;
+    top: -1px;
+}
+
+/* Tabless body used when the entry only has one kind of leaf — same look as
+   the tab pane so the container reads consistently. */
+QFrame#entryBodyContainer {
+    background: palette(window);
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+}
+
+QFrame#entryParent QTabBar {
+    qproperty-drawBase: 0;
+}
+
+QFrame#entryParent QTabBar::tab {
+    background: palette(button);
+    color: palette(text);
+    padding: 6px 18px;
+    margin: 0;
+    margin-right: 3px;
+    border: 1px solid palette(mid);
+    border-bottom: none;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    font-size: 11px;
+}
+
+QFrame#entryParent QTabBar::tab:selected {
+    background: palette(window);
+    font-weight: 700;
+}
+
+QFrame#entryParent QTabBar::tab:hover:!selected {
+    background: palette(midlight);
+}
+
 QFrame#leafRow {
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
 }
 
 QFrame#leafRow:hover {
-    background: palette(alternate-base);
-    border-radius: 6px;
+    background: palette(button);
+    border-color: palette(mid);
 }
 
 QLabel#leafIcon {
@@ -101,6 +145,7 @@ QLabel#leafName {
     font-size: 12px;
     background: transparent;
 }
+
 QLabel#leafDetail {
     color: palette(text);
     font-size: 11px;

@@ -17,6 +17,7 @@ class ConvertMidiDialog(QDialog):
         self.setWindowTitle("Convert MIDI to CSEQ - Instrument Mapping")
         self.resize(650, 500)
         self.midi_info = midi_info
+        self._max_spu = max_spu_index
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_info_group())
@@ -78,6 +79,7 @@ class ConvertMidiDialog(QDialog):
 
         spu_spin = QSpinBox()
         spu_spin.setRange(0, 65535)
+        spu_spin.setValue(self._default_spu_for_row(row))
         self.table.setCellWidget(row, 2, spu_spin)
 
         freq_spin = QSpinBox()
@@ -90,6 +92,15 @@ class ConvertMidiDialog(QDialog):
             drum_check.setChecked(True)
 
         self.table.setCellWidget(row, 4, drum_check)
+
+    def _default_spu_for_row(self, row: int) -> int:
+        """Prefill SPU sample IDs sequentially within the available range, so
+        a music maker can usually accept the defaults if the bank was filled
+        in the same order as the MIDI tracks."""
+        if self._max_spu <= 0:
+            return 0
+
+        return min(row, self._max_spu - 1)
 
     def _build_buttons(self) -> QDialogButtonBox:
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)

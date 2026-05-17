@@ -3,6 +3,7 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QGridLayout, QScrollArea, QVBoxLayout, QWidget
 
+from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.category_card_widget import CategoryCardWidget
 from howl_editor.models import EntryGroup
@@ -16,9 +17,14 @@ class CategoryGridWidget(QWidget):
 
     sig_category_clicked = Signal(object)  # EntryGroup
 
-    def __init__(self, stylesheet_loader: StylesheetLoader):
+    def __init__(
+        self,
+        stylesheet_loader: StylesheetLoader,
+        icon_resolver: CategoryIconResolver,
+    ):
         super().__init__()
         self._stylesheets = stylesheet_loader
+        self._icon_resolver = icon_resolver
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -45,7 +51,8 @@ class CategoryGridWidget(QWidget):
             col = index % _CARDS_PER_ROW
 
             card = CategoryCardWidget(
-                group, modified_counts.get(group.name, 0), self._stylesheets,
+                group, modified_counts.get(group.name, 0),
+                self._stylesheets, self._icon_resolver,
             )
             card.sig_clicked.connect(self.sig_category_clicked)
             self._grid.addWidget(card, row, col)

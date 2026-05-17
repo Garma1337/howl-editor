@@ -7,6 +7,7 @@ from howl_editor.analysis.entry_leaves import EntryLeavesBuilder
 from howl_editor.analysis.sample_classifier import SampleClassifier
 from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
 from howl_editor.analysis.stock_layout import StockLayout
+from howl_editor.analysis.stock_names import StockNames
 from howl_editor.analysis.validator import BankCseqValidator
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
@@ -26,6 +27,7 @@ from howl_editor.cseq.reader import CseqReader
 from howl_editor.cseq.track_mask_layout import TrackMaskLayout
 from howl_editor.cseq.writer import CseqWriter
 from howl_editor.export.batch_exporter import BatchExporter
+from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
@@ -52,17 +54,21 @@ from howl_editor.vag.writer import VagWriter
 
 _TEMPLATE_DIR = Path(__file__).parent / "gui" / "templates"
 _QSS_DIR = _TEMPLATE_DIR / "qss"
+_IMAGE_DIR = _TEMPLATE_DIR / "images"
 
 container = Container()
 container.register("vlq_codec", lambda c: VlqCodec())
+container.register("stock_names", lambda c: StockNames())
 container.register("howl_reader", lambda c: HowlReader())
 container.register("howl_writer", lambda c: HowlWriter())
 container.register("howl_editor", lambda c: HowlEditor())
-container.register("cseq_reader", lambda c: CseqReader(c.resolve("vlq_codec")))
+container.register("cseq_reader", lambda c: CseqReader(
+    c.resolve("vlq_codec"), c.resolve("stock_names"),
+))
 container.register("cseq_writer", lambda c: CseqWriter(c.resolve("vlq_codec")))
 container.register("vag_reader", lambda c: VagReader())
 container.register("vag_writer", lambda c: VagWriter())
-container.register("bank_reader", lambda c: BankReader())
+container.register("bank_reader", lambda c: BankReader(c.resolve("stock_names")))
 container.register("cseq_editor", lambda c: CseqEditor(
     c.resolve("cseq_reader"),
     c.resolve("cseq_writer")
@@ -150,3 +156,4 @@ container.register("semantic_entry_builder", lambda c: SemanticEntryBuilder(
 container.register("blob_snapshot", lambda c: BlobSnapshot())
 container.register("entry_drop_router", lambda c: EntryDropRouter())
 container.register("stylesheet_loader", lambda c: StylesheetLoader(_QSS_DIR))
+container.register("category_icon_resolver", lambda c: CategoryIconResolver(_IMAGE_DIR))

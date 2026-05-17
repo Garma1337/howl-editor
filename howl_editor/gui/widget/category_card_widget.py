@@ -1,11 +1,14 @@
 # coding: utf-8
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
+from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.models import EntryGroup
+
+_ICON_PX = 64
 
 
 class CategoryCardWidget(QFrame):
@@ -22,10 +25,12 @@ class CategoryCardWidget(QFrame):
         group: EntryGroup,
         modified_count: int,
         stylesheet_loader: StylesheetLoader,
+        icon_resolver: CategoryIconResolver,
     ):
         super().__init__()
         self._group = group
         self._modified_count = modified_count
+        self._icon_resolver = icon_resolver
         self.setObjectName("categoryCard")
         self.setStyleSheet(stylesheet_loader.load("category_card.qss"))
         self.setCursor(Qt.PointingHandCursor)
@@ -37,10 +42,7 @@ class CategoryCardWidget(QFrame):
         outer.setContentsMargins(14, 14, 14, 12)
         outer.setSpacing(6)
 
-        icon = QLabel(self._group.icon)
-        icon.setObjectName("categoryIcon")
-        icon.setAlignment(Qt.AlignCenter)
-        outer.addWidget(icon)
+        outer.addWidget(self._build_icon_label())
 
         name = QLabel(self._group.name)
         name.setObjectName("categoryName")
@@ -65,6 +67,30 @@ class CategoryCardWidget(QFrame):
 
         chips.addStretch(1)
         outer.addLayout(chips)
+
+    def _build_icon_label(self) -> QLabel:
+        """Prefer a custom image if one is registered for this category;
+        otherwise fall back to the emoji configured on the group."""
+        label = QLabel()
+        label.setObjectName("categoryIcon")
+        label.setAlignment(Qt.AlignCenter)
+
+        image_path = self._icon_resolver.resolve(self._group.name)
+
+        if image_path is not None:
+            pixmap = QPixmap(str(image_path))
+
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    _ICON_PX, _ICON_PX,
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                )
+                label.setPixmap(scaled)
+                label.setFixedHeight(_ICON_PX)
+                return label
+
+        label.setText(self._group.icon)
+        return label
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.LeftButton:

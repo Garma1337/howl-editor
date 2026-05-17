@@ -25,8 +25,10 @@ from howl_editor.audio.decoder.vag_decoder import VagDecoder
 from howl_editor.audio.sample_lookup import SampleLookup
 from howl_editor.bank import BankReader, BankBuilder
 from howl_editor.cseq import CseqReader, CseqWriter
+from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
 from howl_editor.cseq.editor import CseqEditor
 from howl_editor.export import BatchExporter
+from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
 from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
@@ -95,10 +97,12 @@ class MainWindow(QMainWindow):
         blob_snapshot: BlobSnapshot | None = None,
         entry_drop_router: EntryDropRouter | None = None,
         stylesheet_loader: StylesheetLoader | None = None,
+        adventure_hub_mask_table: AdventureHubMaskTable | None = None,
+        category_icon_resolver: CategoryIconResolver | None = None,
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
-        self.resize(1100, 700)
+        self.resize(1300, 900)
 
         self._reader = howl_reader
         self._writer = howl_writer
@@ -129,6 +133,8 @@ class MainWindow(QMainWindow):
         self._snapshot = blob_snapshot
         self._drop_router = entry_drop_router
         self._stylesheets = stylesheet_loader
+        self._hub_mask = adventure_hub_mask_table
+        self._icon_resolver = category_icon_resolver
         self._sample_types: dict[int, set] = {}
 
         self.hwl: HowlFile | None = None
@@ -159,12 +165,12 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         self.tabs = QTabWidget()
 
-        if (self._entry_builder and self._leaves_builder
-                and self._snapshot and self._stylesheets):
+        if self._entry_builder and self._leaves_builder and self._snapshot and self._stylesheets and self._hub_mask and self._icon_resolver:
             self.main_tab = MainTabWidget(
                 self._entry_builder, self._leaves_builder, self._snapshot,
-                self._stylesheets,
+                self._stylesheets, self._hub_mask, self._icon_resolver,
             )
+
             self.tabs.addTab(self.main_tab, "Main")
             self._wire_main_tab_signals()
         else:
@@ -192,6 +198,7 @@ class MainWindow(QMainWindow):
         self.main_tab.sig_leaf_replace.connect(h.replace_leaf)
         self.main_tab.sig_leaf_export.connect(h.export_leaf)
         self.main_tab.sig_leaf_drop.connect(h.drop_leaf)
+        self.main_tab.sig_play_hub_preview.connect(h.play_hub_preview)
 
     def _build_file_content_tab(self) -> QWidget:
         splitter = QSplitter(Qt.Horizontal)

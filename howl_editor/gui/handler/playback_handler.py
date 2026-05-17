@@ -67,6 +67,41 @@ class PlaybackHandler:
         except Exception as e:
             self._window.status.showMessage(f"Playback failed: {e}")
 
+    def play_layered(self, song_index: int, seq_indices: list[int], label: str) -> None:
+        """Render and play several sequences mixed together (Adventure Hub preview).
+
+        The mix mirrors what CTR's runtime does when multiple sequences in the
+        hub song are unmuted simultaneously by `advHubSongSetBytes`.
+        """
+        if not self._window.hwl or not self.can_play():
+            self._show_no_audio()
+            return
+
+        if not seq_indices:
+            self._window.status.showMessage("No sequences to preview for this hub")
+            return
+
+        try:
+            lookup = self._window._sample_lookup
+            cseq = self._window._cseq_reader.read(self._window.hwl.songs[song_index])
+            sample_data = lookup.collect_song_samples(self._window.hwl, cseq)
+
+            self._window.status.showMessage(
+                f"Rendering {label} ({len(seq_indices)} layered sequences)...",
+            )
+            QApplication.processEvents()
+
+            wav = self._window._cseq_renderer.render_layered_to_wav(
+                cseq, seq_indices, sample_data,
+            )
+
+            self._play_wav(
+                wav, label,
+                lambda: self.play_layered(song_index, seq_indices, label),
+            )
+        except Exception as e:
+            self._window.status.showMessage(f"Playback failed: {e}")
+
     def play_other_fx(self, index: int) -> None:
         if not self._window.hwl or index >= len(self._window.hwl.other_fx):
             return

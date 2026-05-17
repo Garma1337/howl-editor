@@ -2,6 +2,7 @@
 
 from struct import unpack_from
 
+from howl_editor.analysis.stock_names import StockNames
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.models import (
     CseqFile, CseqInstrument, CseqPercussion, CseqInfo,
@@ -9,44 +10,6 @@ from howl_editor.models import (
     CSEQ_EVENT_PARAMS, CSEQ_TERMINAL_EVENTS,
 )
 
-# Missing indices are songs without names
-_SONG_NAMES: dict[int, str] = {
-    0: "Dingo Canyon", 
-    1: "Dragon Mines", 
-    2: "Blizzard Bluff",
-    3: "Crash Cove", 
-    4: "Tiger Temple", 
-    5: "Papu's Pyramid",
-    6: "Roo's Tubes", 
-    7: "Hot Air Skyway", 
-    8: "Sewer Speedway",
-    9: "Mystery Caves", 
-    10: "Cortex Castle", 
-    11: "N. Gin Labs",
-    12: "Polar Pass", 
-    13: "Oxide Station", 
-    14: "Coco Park",
-    15: "Tiny Arena", 
-    16: "Slide Coliseum", 
-    17: "Turbo Track",
-    18: "Nitro Court",
-    19: "Rampage Ruins", 
-    20: "Parking Lot",
-    21: "Skull Rock", 
-    22: "The North Bowl", 
-    23: "Rocky Road",
-    24: "Lab Basement", 
-    25: "Boss Race", 
-    26: "Adventure Hub",
-    27: "Character Select", 
-    28: "Naughty Dog Crate", 
-    29: "Intro Race",
-    30: "Oxide Ending (Any%)", 
-    31: "Oxide Ending (100%)", 
-    32: "Credits",
-}
-
-_FIRST_CUSTOM_SONG = 33
 _OFFSET_SIZE = 2
 _SONG_HEADER_SIZE = 6
 _TRACK_HEADER_SIZE = 2
@@ -55,14 +18,12 @@ _ALIGNMENT = 4
 
 class CseqReader:
 
-    def __init__(self, vlq_codec: VlqCodec):
+    def __init__(self, vlq_codec: VlqCodec, stock_names: StockNames | None = None):
         self._vlq = vlq_codec
+        self._names = stock_names or StockNames()
 
     def get_name(self, index: int) -> str:
-        if index >= _FIRST_CUSTOM_SONG:
-            return "Custom"
-
-        return _SONG_NAMES.get(index, "")
+        return self._names.song_name(index)
 
     def read(self, data: bytes) -> CseqFile:
         """Parse raw CSEQ bytes into a CseqFile."""

@@ -1,5 +1,6 @@
 # coding: utf-8
 
+from array import array
 from struct import pack
 
 from howl_editor.audio.decoder.adsr_decoder import AdsrDecoder, AdsrEnvelope
@@ -72,6 +73,69 @@ class CseqRenderer:
         """Render a CSEQ song to a complete WAV file."""
         pcm = self.render_song(cseq, song_index, sample_data, output_rate)
         return self._wav_writer.write(pcm, output_rate, channels=2)
+
+    def render_layered(
+        self,
+        cseq: CseqFile,
+        song_indices: list[int],
+        sample_data: dict[int, bytes],
+        output_rate: int = 22050,
+    ) -> bytes:
+        """Render multiple CSEQ songs as if played simultaneously (mixed PCM).
+
+        Used by the Adventure Hub preview: layered hub music plays several
+        sequences in parallel at runtime, controlled by a per-sequence mask.
+        Each sequence is rendered independently then summed sample-wise.
+        """
+        streams = [
+            self.render_song(cseq, idx, sample_data, output_rate)
+            for idx in song_indices
+            if idx < len(cseq.songs)
+        ]
+        streams = [s for s in streams if s]
+
+        if not streams:
+            return b""
+
+        if len(streams) == 1:
+            return streams[0]
+
+        return self._mix_pcm_streams(streams)
+
+    def render_layered_to_wav(
+        self,
+        cseq: CseqFile,
+        song_indices: list[int],
+        sample_data: dict[int, bytes],
+        output_rate: int = 22050,
+    ) -> bytes:
+        """Render a layered set of CSEQ sequences to a complete WAV file."""
+        pcm = self.render_layered(cseq, song_indices, sample_data, output_rate)
+        return self._wav_writer.write(pcm, output_rate, channels=2)
+
+    def _mix_pcm_streams(self, streams: list[bytes]) -> bytes:
+        """Sum int16 stereo PCM streams sample-wise, clamping to int16 range.
+
+        Shorter streams are padded with silence so the result is the length of
+        the longest input (so a long melodic layer isn't truncated by a short
+        drum loop, for example).
+        """
+        max_byte_len = max(len(s) for s in streams)
+        sample_count = max_byte_len // 2  # int16 samples (stereo interleaved)
+        accumulator = [0] * sample_count
+
+        for stream in streams:
+            buf = array("h")
+            buf.frombytes(stream)
+
+            for i, value in enumerate(buf):
+                accumulator[i] += value
+
+        clamped = array("h", (
+            max(_SAMPLE_CLAMP_MIN, min(_SAMPLE_CLAMP_MAX, v)) for v in accumulator
+        ))
+
+        return clamped.tobytes()
 
     def _interleave_stereo(self, left: list[int], right: list[int]) -> bytes:
         out = bytearray(len(left) * 4)

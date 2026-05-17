@@ -2,19 +2,19 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.models import EntryLeaf, LeafKind
 
-
-# Accepted file extensions per leaf kind for drop-to-replace.
 _LEAF_ACCEPTS = {
     LeafKind.SEQUENCE: (".cseq", ".mid"),
     LeafKind.SAMPLE: (".vag", ".wav"),
 }
+
+_LEAF_ICON_PX = 22
 
 
 class LeafRowWidget(QFrame):
@@ -25,9 +25,15 @@ class LeafRowWidget(QFrame):
     sig_export = Signal(object)
     sig_drop = Signal(object, str)   # EntryLeaf, file_path
 
-    def __init__(self, leaf: EntryLeaf, stylesheet_loader: StylesheetLoader):
+    def __init__(
+        self,
+        leaf: EntryLeaf,
+        stylesheet_loader: StylesheetLoader,
+        icon_image_path: Path | None = None,
+    ):
         super().__init__()
         self._leaf = leaf
+        self._icon_image_path = icon_image_path
         self.setObjectName("leafRow")
         # Stylesheet is set by the parent panel (category_detail.qss covers all leaves)
         # so we don't double-apply it here.
@@ -47,10 +53,7 @@ class LeafRowWidget(QFrame):
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(8)
 
-        icon = QLabel(self._leaf.icon)
-        icon.setObjectName("leafIcon")
-        icon.setFixedWidth(22)
-        layout.addWidget(icon)
+        layout.addWidget(self._build_icon_label())
 
         name = QLabel(self._leaf.name)
         name.setObjectName("leafName")
@@ -60,21 +63,41 @@ class LeafRowWidget(QFrame):
         detail.setObjectName("leafDetail")
         layout.addWidget(detail)
 
-        play_btn = QPushButton("▶  Play")
+        play_btn = QPushButton("▶️  Play")
         play_btn.setObjectName("leafPlay")
         play_btn.setFixedWidth(64)
         play_btn.clicked.connect(lambda: self.sig_play.emit(self._leaf))
         layout.addWidget(play_btn)
 
-        replace_btn = QPushButton("↻  Replace")
+        replace_btn = QPushButton("🔄  Replace")
         replace_btn.setFixedWidth(82)
         replace_btn.clicked.connect(lambda: self.sig_replace.emit(self._leaf))
         layout.addWidget(replace_btn)
 
-        export_btn = QPushButton("⤓  Export")
+        export_btn = QPushButton("💾  Export")
         export_btn.setFixedWidth(78)
         export_btn.clicked.connect(lambda: self.sig_export.emit(self._leaf))
         layout.addWidget(export_btn)
+
+    def _build_icon_label(self) -> QLabel:
+        label = QLabel()
+        label.setObjectName("leafIcon")
+        label.setAlignment(Qt.AlignCenter)
+        label.setFixedWidth(_LEAF_ICON_PX + 2)
+
+        if self._icon_image_path is not None:
+            pixmap = QPixmap(str(self._icon_image_path))
+
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    _LEAF_ICON_PX, _LEAF_ICON_PX,
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                )
+                label.setPixmap(scaled)
+                return label
+
+        label.setText(self._leaf.icon)
+        return label
 
     def _format_detail(self) -> str:
         if self._leaf.kind == LeafKind.SEQUENCE and self._leaf.seq_index is not None:
