@@ -91,12 +91,13 @@ python -m howl_editor
 
 ## Building an Executable
 
+PyInstaller is already in `requirements.txt`, so the setup step above installs it. To build:
+
 ```bash
-pip install pyinstaller
 pyinstaller HowlEditor.spec
 ```
 
-The output is in `dist/HowlEditor/`.
+The output is in `dist/HowlEditor/`. The spec trims unused PySide6 / Qt modules so the bundle stays small (Multimedia is kept for `QMediaPlayer`).
 
 ## Running Tests
 
@@ -113,12 +114,13 @@ documentation/
 
 howl_editor/
     core/               DI container, template engine, VLQ codec
-    models/             Data models (HowlFile, CseqFile, VagSample, BankSample, ...)
+    models/             Data models (HowlFile, CseqFile, VagSample, BankSample, BankBuildResult, ScaFile, ScaMetadata, ScaFormat)
     howl/               HWL reader, writer, editor, version detector
     cseq/               CSEQ reader, writer, editor
     vag/                VAG reader, writer
     bank/               Bank reader, builder
     midi/               MIDI to CSEQ converter and CSEQ to MIDI exporter
+    sca/                Saphi Audio Container reader, writer, chunk iterator, metadata codec, sample-sizes extractor, size caps
     audio/
         settings/       PS1 hardware constants, CTR lookup tables
         decoder/        VAG ADPCM decoder, ADSR envelope decoder
@@ -132,13 +134,12 @@ howl_editor/
     gui/
         detail/         Detail formatters (HOWL, FX, bank, song)
         templates/      HTML templates and CSS for detail panel
-        dialog/         Dialogs (merge bank, convert MIDI)
+        dialog/         Dialogs (merge bank, convert MIDI, Saphi audio container export)
         handler/        Action handlers (bank, sample, song, playback, tools)
         widget/         Widgets (filter bar, player bar, waveform)
         command/        Undo commands (swap blob, remove item, move item/sequence)
         main_window.py  Main window shell
     services.py         Service registrations
-    constants.py        Format constants and struct definitions
 ```
 
 ## Documentation
