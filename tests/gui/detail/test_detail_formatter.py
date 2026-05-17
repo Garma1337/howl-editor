@@ -11,6 +11,7 @@ from howl_editor.gui.detail.detail_formatter import DetailFormatter
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
 from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
+from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.howl.version import HowlVersionDetector
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
@@ -21,12 +22,13 @@ class TestDetailFormatter:
     def test_facade_exposes_sub_formatters(self):
         vlq = VlqCodec()
         engine = TemplateEngine(_TEMPLATE_DIR)
+        sizes = SizeFormatter()
 
         fmt = DetailFormatter(
-            howl_formatter=HowlDetailFormatter(HowlVersionDetector(), engine),
+            howl_formatter=HowlDetailFormatter(HowlVersionDetector(), engine, sizes),
             fx_formatter=FxDetailFormatter(engine),
-            bank_formatter=BankDetailFormatter(BankReader(), engine),
-            song_formatter=SongDetailFormatter(CseqReader(vlq), engine),
+            bank_formatter=BankDetailFormatter(BankReader(), engine, sizes),
+            song_formatter=SongDetailFormatter(CseqReader(vlq), engine, sizes),
         )
 
         assert isinstance(fmt.howl, HowlDetailFormatter)

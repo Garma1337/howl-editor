@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from howl_editor.analysis.blob_modification_detector import BlobModificationDetector
+from howl_editor.analysis.entry_leaves import EntryLeavesBuilder
 from howl_editor.analysis.sample_classifier import SampleClassifier
 from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
 from howl_editor.analysis.stock_layout import StockLayout
@@ -22,6 +23,7 @@ from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
 from howl_editor.cseq.editor import CseqEditor
 from howl_editor.cseq.reader import CseqReader
+from howl_editor.cseq.track_mask_layout import TrackMaskLayout
 from howl_editor.cseq.writer import CseqWriter
 from howl_editor.export.batch_exporter import BatchExporter
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
@@ -29,6 +31,10 @@ from howl_editor.gui.detail.detail_formatter import DetailFormatter
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
 from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
+from howl_editor.gui.entry_drop_router import EntryDropRouter
+from howl_editor.gui.size_formatter import SizeFormatter
+from howl_editor.gui.stylesheet_loader import StylesheetLoader
+from howl_editor.howl.blob_snapshot import BlobSnapshot
 from howl_editor.howl.editor import HowlEditor
 from howl_editor.howl.reader import HowlReader
 from howl_editor.howl.version import HowlVersionDetector
@@ -45,6 +51,7 @@ from howl_editor.vag.reader import VagReader
 from howl_editor.vag.writer import VagWriter
 
 _TEMPLATE_DIR = Path(__file__).parent / "gui" / "templates"
+_QSS_DIR = _TEMPLATE_DIR / "qss"
 
 container = Container()
 container.register("vlq_codec", lambda c: VlqCodec())
@@ -93,16 +100,20 @@ container.register("batch_exporter", lambda c: BatchExporter(
     c.resolve("midi_exporter"),
 ))
 container.register("template_engine", lambda c: TemplateEngine(_TEMPLATE_DIR))
+container.register("size_formatter", lambda c: SizeFormatter())
 container.register("howl_detail_formatter", lambda c: HowlDetailFormatter(
     c.resolve("version_detector"),
-    c.resolve("template_engine")))
+    c.resolve("template_engine"),
+    c.resolve("size_formatter")))
 container.register("fx_detail_formatter", lambda c: FxDetailFormatter(c.resolve("template_engine")))
 container.register("bank_detail_formatter", lambda c: BankDetailFormatter(
     c.resolve("bank_reader"),
-    c.resolve("template_engine")))
+    c.resolve("template_engine"),
+    c.resolve("size_formatter")))
 container.register("song_detail_formatter", lambda c: SongDetailFormatter(
     c.resolve("cseq_reader"),
-    c.resolve("template_engine")))
+    c.resolve("template_engine"),
+    c.resolve("size_formatter")))
 container.register("detail_formatter", lambda c: DetailFormatter(
     c.resolve("howl_detail_formatter"),
     c.resolve("fx_detail_formatter"),
@@ -122,6 +133,12 @@ container.register("sca_writer", lambda c: ScaWriter(
 ))
 container.register("sample_sizes_extractor", lambda c: SampleSizesExtractor(c.resolve("bank_reader")))
 container.register("adventure_hub_mask_table", lambda c: AdventureHubMaskTable())
+container.register("track_mask_layout", lambda c: TrackMaskLayout())
+container.register("entry_leaves_builder", lambda c: EntryLeavesBuilder(
+    c.resolve("bank_reader"),
+    c.resolve("cseq_reader"),
+    c.resolve("track_mask_layout"),
+))
 container.register("stock_layout", lambda c: StockLayout())
 container.register("blob_modification_detector", lambda c: BlobModificationDetector())
 container.register("semantic_entry_builder", lambda c: SemanticEntryBuilder(
@@ -130,3 +147,6 @@ container.register("semantic_entry_builder", lambda c: SemanticEntryBuilder(
     c.resolve("stock_layout"),
     c.resolve("blob_modification_detector"),
 ))
+container.register("blob_snapshot", lambda c: BlobSnapshot())
+container.register("entry_drop_router", lambda c: EntryDropRouter())
+container.register("stylesheet_loader", lambda c: StylesheetLoader(_QSS_DIR))

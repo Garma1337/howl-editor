@@ -39,17 +39,17 @@ class SemanticEntryBuilder:
 
         groups = [
             self._track_group(
-                "Race Tracks", "[R]", self._layout.RACE_TRACK_SONG_RANGE,
+                "Race Tracks", "🏁", self._layout.RACE_TRACK_SONG_RANGE,
                 n_banks, n_songs, modified_banks, modified_songs,
             ),
             self._track_group(
-                "Battle Arenas", "[B]", self._layout.BATTLE_ARENA_SONG_RANGE,
+                "Battle Arenas", "⚔️", self._layout.BATTLE_ARENA_SONG_RANGE,
                 n_banks, n_songs, modified_banks, modified_songs,
             ),
             self._adventure_hub_group(hwl, modified_banks, modified_songs),
             self._boss_group(n_banks, n_songs, modified_banks, modified_songs),
             self._track_group(
-                "Menus & Cinematics", "[M]", self._layout.MENU_SONG_RANGE,
+                "Menus & Cinematics", "🎬", self._layout.MENU_SONG_RANGE,
                 n_banks, n_songs, modified_banks, modified_songs,
             ),
             self._character_group(n_banks, modified_banks),
@@ -91,7 +91,7 @@ class SemanticEntryBuilder:
         return group
 
     def _adventure_hub_group(self, hwl, modified_banks, modified_songs) -> EntryGroup:
-        group = EntryGroup(name="Adventure Hub", icon="[H]")
+        group = EntryGroup(name="Adventure Hub", icon="🌍")
         song_idx = ADVENTURE_HUB_SONG_INDEX
         bank_idx = ADVENTURE_HUB_BANK_INDEX
 
@@ -113,7 +113,7 @@ class SemanticEntryBuilder:
         return group
 
     def _boss_group(self, n_banks, n_songs, modified_banks, modified_songs) -> EntryGroup:
-        group = EntryGroup(name="Boss Themes", icon="[X]")
+        group = EntryGroup(name="Boss Themes", icon="👹")
         boss_song_idx = self._layout.BOSS_SONG_INDEX
 
         if boss_song_idx < n_songs:
@@ -140,7 +140,7 @@ class SemanticEntryBuilder:
         return group
 
     def _character_group(self, n_banks, modified_banks) -> EntryGroup:
-        group = EntryGroup(name="Characters", icon="[C]", collapsed_by_default=True)
+        group = EntryGroup(name="Characters", icon="🏎️", collapsed_by_default=True)
 
         for bank_idx in self._layout.CHARACTER_BANK_RANGE:
             if bank_idx >= n_banks:
@@ -157,7 +157,7 @@ class SemanticEntryBuilder:
         return group
 
     def _sfx_universal_group(self, n_banks, modified_banks) -> EntryGroup:
-        group = EntryGroup(name="SFX (universal)", icon="[S]", collapsed_by_default=True)
+        group = EntryGroup(name="SFX (universal)", icon="📦", collapsed_by_default=True)
         bank_idx = self._layout.SFX_UNIVERSAL_BANK
 
         if bank_idx < n_banks:
@@ -172,7 +172,7 @@ class SemanticEntryBuilder:
         return group
 
     def _other_fx_group(self, hwl) -> EntryGroup:
-        group = EntryGroup(name="Sound Effects (OtherFX)", icon="[F]", collapsed_by_default=True)
+        group = EntryGroup(name="Sound Effects (OtherFX)", icon="🔊", collapsed_by_default=True)
 
         for i, _ in enumerate(hwl.other_fx):
             group.rows.append(EntryRow(
@@ -185,7 +185,7 @@ class SemanticEntryBuilder:
         return group
 
     def _engine_fx_group(self, hwl) -> EntryGroup:
-        group = EntryGroup(name="Engine Sounds (EngineFX)", icon="[E]", collapsed_by_default=True)
+        group = EntryGroup(name="Engine Sounds (EngineFX)", icon="🚗", collapsed_by_default=True)
 
         for i, _ in enumerate(hwl.engine_fx):
             group.rows.append(EntryRow(
@@ -198,7 +198,7 @@ class SemanticEntryBuilder:
         return group
 
     def _custom_group(self, n_banks, n_songs, modified_banks, modified_songs) -> EntryGroup:
-        group = EntryGroup(name="Custom", icon="[*]")
+        group = EntryGroup(name="Custom", icon="✨")
 
         for song_idx in range(self._layout.FIRST_CUSTOM_SONG, n_songs):
             group.rows.append(EntryRow(

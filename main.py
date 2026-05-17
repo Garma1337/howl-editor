@@ -10,6 +10,9 @@ from howl_editor.services import container
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
+    stylesheet_loader = container.resolve("stylesheet_loader")
+    app.setStyleSheet(stylesheet_loader.load("app.qss"))
+
     window = MainWindow(
         howl_reader=container.resolve("howl_reader"),
         howl_writer=container.resolve("howl_writer"),
@@ -35,6 +38,11 @@ if __name__ == "__main__":
         sca_reader=container.resolve("sca_reader"),
         sca_writer=container.resolve("sca_writer"),
         sample_sizes_extractor=container.resolve("sample_sizes_extractor"),
+        semantic_entry_builder=container.resolve("semantic_entry_builder"),
+        entry_leaves_builder=container.resolve("entry_leaves_builder"),
+        blob_snapshot=container.resolve("blob_snapshot"),
+        entry_drop_router=container.resolve("entry_drop_router"),
+        stylesheet_loader=stylesheet_loader,
     )
 
     window.show()

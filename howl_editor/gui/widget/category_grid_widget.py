@@ -1,0 +1,62 @@
+# coding: utf-8
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QGridLayout, QScrollArea, QVBoxLayout, QWidget
+
+from howl_editor.gui.stylesheet_loader import StylesheetLoader
+from howl_editor.gui.widget.category_card_widget import CategoryCardWidget
+from howl_editor.models import EntryGroup
+
+
+_CARDS_PER_ROW = 4
+
+
+class CategoryGridWidget(QWidget):
+    """The Main tab's default page: a responsive grid of category cards."""
+
+    sig_category_clicked = Signal(object)  # EntryGroup
+
+    def __init__(self, stylesheet_loader: StylesheetLoader):
+        super().__init__()
+        self._stylesheets = stylesheet_loader
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QScrollArea.NoFrame)
+        outer.addWidget(self._scroll)
+
+        self._inner = QWidget()
+        self._grid = QGridLayout(self._inner)
+        self._grid.setContentsMargins(24, 20, 24, 24)
+        self._grid.setSpacing(14)
+        self._scroll.setWidget(self._inner)
+
+    def populate(self, groups: list[EntryGroup], modified_counts: dict[str, int]) -> None:
+        self._clear()
+
+        for index, group in enumerate(groups):
+            row = index // _CARDS_PER_ROW
+            col = index % _CARDS_PER_ROW
+
+            card = CategoryCardWidget(
+                group, modified_counts.get(group.name, 0), self._stylesheets,
+            )
+            card.sig_clicked.connect(self.sig_category_clicked)
+            self._grid.addWidget(card, row, col)
+
+        # Add a stretch row at the bottom so cards don't expand to fill height.
+        self._grid.setRowStretch(self._grid.rowCount(), 1)
+
+    def _clear(self) -> None:
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            w = item.widget()
+
+            if w is not None:
+                w.deleteLater()

@@ -1,0 +1,18 @@
+QWidget#mainTabRoot {
+    background: palette(window);
+}
+
+QScrollArea#mainTabScroll {
+    background: palette(window);
+    border: none;
+}
+
+QWidget#mainTabScrollInner {
+    background: palette(window);
+}
+
+QLabel#mainTabEmpty {
+    color: palette(text);
+    padding: 48px;
+    font-size: 13px;
+}

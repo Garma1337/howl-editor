@@ -1,0 +1,40 @@
+QFrame#categoryCard {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 10px;
+}
+
+QFrame#categoryCard:hover {
+    background: palette(alternate-base);
+    border-color: palette(highlight);
+}
+
+QLabel#categoryIcon {
+    font-size: 40px;
+    background: transparent;
+}
+
+QLabel#categoryName {
+    font-size: 14px;
+    font-weight: 700;
+    color: palette(text);
+    background: transparent;
+}
+
+QLabel#categoryCount {
+    color: palette(text);
+    background: palette(midlight);
+    padding: 2px 10px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QLabel#categoryModified {
+    color: white;
+    background: #ff9500;
+    padding: 2px 10px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 600;
+}

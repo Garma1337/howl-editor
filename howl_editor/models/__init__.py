@@ -11,6 +11,7 @@ from howl_editor.models.howl import (
     SECTOR_SIZE, bytes_to_sectors,
 )
 from howl_editor.models.sca import ScaFile, ScaFormat, ScaMetadata
+from howl_editor.models.entry_leaf import EntryLeaf, LeafKind
 from howl_editor.models.semantic_entry import EntryGroup, EntryKind, EntryRow
 from howl_editor.models.vag import VagSample
 
@@ -41,4 +42,6 @@ __all__ = [
     "EntryGroup",
     "EntryKind",
     "EntryRow",
+    "EntryLeaf",
+    "LeafKind",
 ]

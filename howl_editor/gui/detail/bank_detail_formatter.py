@@ -4,14 +4,21 @@ from struct import unpack_from
 
 from howl_editor.bank.reader import BankReader
 from howl_editor.core.template_engine import TemplateEngine
+from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.models import HowlFile
 
 
 class BankDetailFormatter:
 
-    def __init__(self, bank_reader: BankReader, template_engine: TemplateEngine):
+    def __init__(
+        self,
+        bank_reader: BankReader,
+        template_engine: TemplateEngine,
+        size_formatter: SizeFormatter,
+    ):
         self._bank_reader = bank_reader
         self._template_engine = template_engine
+        self._sizes = size_formatter
 
     def format_summary(self, hwl: HowlFile) -> str:
         total = sum(len(b) for b in hwl.banks)
@@ -19,7 +26,7 @@ class BankDetailFormatter:
             {
                 "index": str(i),
                 "samples": str(self._bank_sample_count(bank)),
-                "size": f"{len(bank):,}",
+                "size": self._sizes.format_bytes(len(bank)),
                 "name": self._bank_reader.get_name(i),
             }
             for i, bank in enumerate(hwl.banks)
@@ -36,11 +43,13 @@ class BankDetailFormatter:
         return self._template_engine.render("document.html", body=body)
 
     def format_tree_info(self, bank_data: bytes) -> str:
+        size = self._sizes.format_bytes(len(bank_data))
         ns = self._bank_sample_count(bank_data)
-        if ns > 0:
-            return f"{ns} samples, {len(bank_data):,} bytes"
 
-        return f"{len(bank_data):,} bytes"
+        if ns > 0:
+            return f"{ns} samples, {size}"
+
+        return size
 
     def format_details(self, hwl: HowlFile, index: int) -> str:
         bank = hwl.banks[index]
@@ -62,14 +71,18 @@ class BankDetailFormatter:
                 for i, sid in enumerate(ids):
                     if 0 <= sid < len(hwl.spu_addrs):
                         e = hwl.spu_addrs[sid]
-                        samples.append({"index": str(i), "spu_id": str(sid), "size": str(e.size), "bytes": f"{e.byte_size:,}"})
+                        samples.append({
+                            "index": str(i), "spu_id": str(sid),
+                            "size": str(e.size),
+                            "bytes": self._sizes.format_bytes(e.byte_size),
+                        })
                     else:
                         samples.append({"index": str(i), "spu_id": str(sid), "size": "?", "bytes": "?"})
 
         body = self._template_engine.render(
             "bank_details.html",
             title=title,
-            size=f"{len(bank):,} bytes",
+            size=self._sizes.format_bytes(len(bank)),
             samples=samples,
             sample_count=sample_count,
             sample_ids=sample_ids,
@@ -100,7 +113,7 @@ class BankDetailFormatter:
         body = self._template_engine.render(
             "sample_details.html",
             spu_index=str(sample.spu_index),
-            data_size=f"{len(sample.data):,} bytes",
+            data_size=self._sizes.format_bytes(len(sample.data)),
             bank_label=bank_label,
             position=str(sample_index),
             classification=classification,

@@ -2,14 +2,21 @@
 
 from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.cseq.reader import CseqReader
+from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.models import HowlFile
 
 
 class SongDetailFormatter:
 
-    def __init__(self, cseq_reader: CseqReader, template_engine: TemplateEngine):
+    def __init__(
+        self,
+        cseq_reader: CseqReader,
+        template_engine: TemplateEngine,
+        size_formatter: SizeFormatter,
+    ):
         self._cseq_reader = cseq_reader
         self._template_engine = template_engine
+        self._sizes = size_formatter
 
     def format_summary(self, hwl: HowlFile) -> str:
         total = sum(len(s) for s in hwl.songs)
@@ -40,7 +47,7 @@ class SongDetailFormatter:
     def format_tree_info(self, song_data: bytes) -> str:
         info = self._cseq_reader.get_info(song_data)
         if info.file_size == 0:
-            return f"{len(song_data):,} bytes"
+            return self._sizes.format_bytes(len(song_data))
         return f"{info.num_instruments}i/{info.num_percussions}p, {info.num_songs} seq"
 
     def format_details(self, hwl: HowlFile, index: int) -> str:
@@ -53,7 +60,7 @@ class SongDetailFormatter:
         except Exception as e:
             body = (
                 self._template_engine.render("fx_details.html", title=title,
-                                             rows=[{"key": "Raw size", "value": f"{len(data):,} bytes"}])
+                                             rows=[{"key": "Raw size", "value": self._sizes.format_bytes(len(data))}])
                 + f"<p>Parse error: {e}</p>"
             )
             return self._template_engine.render("document.html", body=body)
@@ -96,7 +103,7 @@ class SongDetailFormatter:
         body = self._template_engine.render(
             "song_details.html",
             title=title,
-            raw_size=f"{len(data):,} bytes",
+            raw_size=self._sizes.format_bytes(len(data)),
             instrument_count=str(len(parsed.instruments)),
             percussion_count=str(len(parsed.percussions)),
             sequence_count=str(len(parsed.songs)),

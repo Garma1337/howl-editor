@@ -6,6 +6,7 @@ from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
+from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.models import CseqInstrument
 from howl_editor.models import HowlFile
 from tests.conftest import build_cseq_bytes
@@ -14,7 +15,7 @@ _TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_edi
 
 
 def _formatter():
-    return SongDetailFormatter(CseqReader(VlqCodec()), TemplateEngine(_TEMPLATE_DIR))
+    return SongDetailFormatter(CseqReader(VlqCodec()), TemplateEngine(_TEMPLATE_DIR), SizeFormatter())
 
 
 class TestSongDetailFormatter:
@@ -53,7 +54,7 @@ class TestSongDetailFormatter:
         fmt = _formatter()
         text = fmt.format_tree_info(b"\x00")
 
-        assert "bytes" in text
+        assert "1 B" in text
 
     def test_format_details(self):
         fmt = _formatter()

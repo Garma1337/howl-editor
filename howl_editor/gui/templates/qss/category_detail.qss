@@ -1,0 +1,131 @@
+QFrame#categoryDetailHeader {
+    background: palette(window);
+    border: none;
+}
+
+QPushButton#backButton {
+    background: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
+    border-radius: 5px;
+    padding: 5px 12px;
+    font-size: 12px;
+}
+
+QPushButton#backButton:hover {
+    background: palette(midlight);
+}
+
+QLabel#detailTitle {
+    color: palette(text);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#detailIcon {
+    font-size: 24px;
+    background: transparent;
+}
+
+QFrame#entryParent {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 8px;
+}
+
+QLabel#entryParentName {
+    color: palette(text);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QLabel#entryParentIcon {
+    font-size: 18px;
+    background: transparent;
+}
+
+QFrame#entryParent QPushButton {
+    background: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+QFrame#entryParent QPushButton:hover {
+    background: palette(midlight);
+}
+
+QFrame#entryParent QPushButton#parentReset {
+    background: transparent;
+    color: palette(text);
+    border: none;
+}
+
+QFrame#entryParent QPushButton#parentReset:hover {
+    background: rgba(255, 149, 0, 60);
+    color: #ff9500;
+}
+
+QFrame#entryParent QPushButton#parentToggle {
+    background: transparent;
+    color: palette(text);
+    border: none;
+    font-size: 14px;
+    padding: 2px 6px;
+}
+
+QFrame#entryParent QPushButton#parentToggle:hover {
+    background: palette(midlight);
+    border-radius: 4px;
+}
+
+QFrame#leafRow {
+    background: transparent;
+    border: none;
+}
+
+QFrame#leafRow:hover {
+    background: palette(alternate-base);
+    border-radius: 6px;
+}
+
+QLabel#leafIcon {
+    font-size: 14px;
+    background: transparent;
+}
+
+QLabel#leafName {
+    color: palette(text);
+    font-size: 12px;
+    background: transparent;
+}
+QLabel#leafDetail {
+    color: palette(text);
+    font-size: 11px;
+    background: transparent;
+}
+
+QFrame#leafRow QPushButton {
+    background: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+QFrame#leafRow QPushButton:hover {
+    background: palette(midlight);
+}
+
+QFrame#leafRow QPushButton#leafPlay {
+    background: #007aff;
+    color: white;
+    border: none;
+}
+
+QFrame#leafRow QPushButton#leafPlay:hover {
+    background: #2a8aff;
+}

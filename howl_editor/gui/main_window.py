@@ -6,8 +6,8 @@ from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QAction, QKeySequence, QShortcut, QUndoStack
 from PySide6.QtWidgets import (
     QMainWindow, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
-    QSplitter, QTextEdit, QWidget, QVBoxLayout, QMenu, QToolBar, QStatusBar,
-    QFileDialog, QMessageBox, QHeaderView, QAbstractItemView,
+    QSplitter, QTabWidget, QTextEdit, QWidget, QVBoxLayout, QMenu, QToolBar,
+    QStatusBar, QFileDialog, QMessageBox, QHeaderView, QAbstractItemView,
 )
 
 try:
@@ -17,6 +17,8 @@ except ImportError:
     HAS_MULTIMEDIA = False
 
 from howl_editor.analysis import SampleClassifier, BankCseqValidator
+from howl_editor.analysis.entry_leaves import EntryLeavesBuilder
+from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
@@ -26,14 +28,19 @@ from howl_editor.cseq import CseqReader, CseqWriter
 from howl_editor.cseq.editor import CseqEditor
 from howl_editor.export import BatchExporter
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
+from howl_editor.gui.entry_drop_router import EntryDropRouter
+from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.handler.bank_handler import BankHandler
+from howl_editor.gui.handler.entry_row_handler import EntryRowHandler
 from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
 from howl_editor.gui.handler.tools_handler import ToolsHandler
 from howl_editor.gui.command import MoveItemCommand, MoveSequenceCommand
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
+from howl_editor.gui.widget.main_tab_widget import MainTabWidget
 from howl_editor.howl import HowlReader, HowlWriter, HowlEditor
+from howl_editor.howl.blob_snapshot import BlobSnapshot
 from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
 from howl_editor.midi.exporter import CseqMidiExporter
@@ -83,6 +90,11 @@ class MainWindow(QMainWindow):
         sca_reader: ScaReader | None = None,
         sca_writer: ScaWriter | None = None,
         sample_sizes_extractor: SampleSizesExtractor | None = None,
+        semantic_entry_builder: SemanticEntryBuilder | None = None,
+        entry_leaves_builder: EntryLeavesBuilder | None = None,
+        blob_snapshot: BlobSnapshot | None = None,
+        entry_drop_router: EntryDropRouter | None = None,
+        stylesheet_loader: StylesheetLoader | None = None,
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
@@ -112,6 +124,11 @@ class MainWindow(QMainWindow):
         self._sca_reader = sca_reader
         self._sca_writer = sca_writer
         self._sample_sizes_extractor = sample_sizes_extractor
+        self._entry_builder = semantic_entry_builder
+        self._leaves_builder = entry_leaves_builder
+        self._snapshot = blob_snapshot
+        self._drop_router = entry_drop_router
+        self._stylesheets = stylesheet_loader
         self._sample_types: dict[int, set] = {}
 
         self.hwl: HowlFile | None = None
@@ -130,6 +147,7 @@ class MainWindow(QMainWindow):
         self._song_handler = SongHandler(self)
         self._playback = PlaybackHandler(self)
         self._tools = ToolsHandler(self)
+        self._entry_row_handler = EntryRowHandler(self, self._drop_router) if self._drop_router else None
 
         self.setAcceptDrops(True)
 
@@ -139,6 +157,43 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
 
     def _setup_ui(self):
+        self.tabs = QTabWidget()
+
+        if (self._entry_builder and self._leaves_builder
+                and self._snapshot and self._stylesheets):
+            self.main_tab = MainTabWidget(
+                self._entry_builder, self._leaves_builder, self._snapshot,
+                self._stylesheets,
+            )
+            self.tabs.addTab(self.main_tab, "Main")
+            self._wire_main_tab_signals()
+        else:
+            self.main_tab = None
+
+        self.tabs.addTab(self._build_file_content_tab(), "File Content")
+
+        self.setCentralWidget(self.tabs)
+
+        self.status = QStatusBar()
+        self.setStatusBar(self.status)
+        self.status.showMessage("Ready - Open or create a new HWL file")
+
+    def _wire_main_tab_signals(self) -> None:
+        if not self._entry_row_handler:
+            return
+
+        h = self._entry_row_handler
+        self.main_tab.sig_row_play.connect(h.play)
+        self.main_tab.sig_row_replace.connect(h.replace)
+        self.main_tab.sig_row_export.connect(h.export)
+        self.main_tab.sig_row_reset.connect(h.reset)
+        self.main_tab.sig_row_drop.connect(h.on_drop)
+        self.main_tab.sig_leaf_play.connect(h.play_leaf)
+        self.main_tab.sig_leaf_replace.connect(h.replace_leaf)
+        self.main_tab.sig_leaf_export.connect(h.export_leaf)
+        self.main_tab.sig_leaf_drop.connect(h.drop_leaf)
+
+    def _build_file_content_tab(self) -> QWidget:
         splitter = QSplitter(Qt.Horizontal)
 
         # Left panel: filter bar + tree
@@ -194,11 +249,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
         splitter.setSizes([660, 440])
-        self.setCentralWidget(splitter)
-
-        self.status = QStatusBar()
-        self.setStatusBar(self.status)
-        self.status.showMessage("Ready - Open or create a new HWL file")
+        return splitter
 
     def _setup_menus(self):
         menubar = self.menuBar()
@@ -292,12 +343,20 @@ class MainWindow(QMainWindow):
         self.modified = False
         self._sample_types = {}
         self._undo_stack.clear()
+
+        if self._snapshot:
+            self._snapshot.clear()
+
         self.tree.clear()
         self.details.clear()
         self.waveform.clear()
         self.waveform.setVisible(False)
         self.player_widget.clear()
         self.filter_widget.reset()
+
+        if self.main_tab:
+            self.main_tab.clear()
+
         self._set_file_actions_enabled(False)
         self.status.showMessage("Ready - Open or create a new HWL file")
         self._update_title()
@@ -310,6 +369,10 @@ class MainWindow(QMainWindow):
         self.file_path = None
         self.modified = False
         self._undo_stack.clear()
+
+        if self._snapshot:
+            self._snapshot.clear()
+
         self._rebuild_tree()
         self._set_file_actions_enabled(True)
         self.status.showMessage("New HWL file created")
@@ -485,6 +548,9 @@ class MainWindow(QMainWindow):
             self._populate_song_sequences(song_node, i)
 
         self._restore_tree_state(expanded, selected_path)
+
+        if self.main_tab:
+            self.main_tab.refresh(self.hwl)
 
     def _get_item_label(self, prefix: str, index: int, name: str) -> str:
         if name:
@@ -859,6 +925,10 @@ class MainWindow(QMainWindow):
             self.file_path = path
             self.modified = False
             self._undo_stack.clear()
+
+            if self._snapshot:
+                self._snapshot.capture(self.hwl)
+
             self._rebuild_tree()
             self._set_file_actions_enabled(True)
             self._add_to_recent(path)
