@@ -5,6 +5,7 @@ import io
 import pytest
 
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType
+from howl_editor.midi.exporter import CseqMidiExporter
 
 try:
     import mido
@@ -13,8 +14,6 @@ except ImportError:
     HAS_MIDO = False
 
 pytestmark = pytest.mark.skipif(not HAS_MIDO, reason="mido not installed")
-
-from howl_editor.midi.exporter import CseqMidiExporter
 
 
 @pytest.fixture

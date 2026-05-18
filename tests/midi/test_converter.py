@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from howl_editor.core.vlq import VlqCodec
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
+from howl_editor.ctr.formats.cseq.models import CseqEventType
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.writer import CseqWriter
 from howl_editor.midi.converter import MidiConverter
@@ -12,8 +14,6 @@ from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
 from howl_editor.midi.models import (
     MidiConvertSettings, InstrumentMapping, DrumPitchMapping,
 )
-from howl_editor.ctr.formats.cseq.models import CseqEventType
-from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 
 try:
     import mido

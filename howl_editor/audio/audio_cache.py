@@ -4,11 +4,12 @@ import hashlib
 from collections import OrderedDict
 from pathlib import Path
 
+from howl_editor.file_format_registry import FileFormatRegistry
+
 
 class AudioCache:
     """Two-tier cache for rendered audio WAVs."""
 
-    _EXT = ".wav"
     _NONE_SENTINEL = b"\x00\xff\xff\xff"
 
     def __init__(self, cache_dir: str | Path, memory_limit: int = 8):
@@ -65,7 +66,7 @@ class AudioCache:
     def clear_disk(self) -> int:
         count = 0
 
-        for f in self._dir.glob(f"*{self._EXT}"):
+        for f in self._dir.glob(f"*{FileFormatRegistry.WAV.extension}"):
             try:
                 f.unlink()
                 count += 1
@@ -115,4 +116,4 @@ class AudioCache:
             self._memory.popitem(last=False)
 
     def _path_for(self, key: str) -> Path:
-        return self._dir / f"{key}{self._EXT}"
+        return self._dir / f"{key}{FileFormatRegistry.WAV.extension}"

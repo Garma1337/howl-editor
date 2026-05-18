@@ -4,8 +4,8 @@ from struct import pack
 
 import pytest
 
-from howl_editor.saphi.formats.sca.models import ScaFile, ScaFormat, ScaMetadata
 from howl_editor.saphi.formats.sca.chunk_reader import ScaChunk
+from howl_editor.saphi.formats.sca.models import ScaFile, ScaFormat, ScaMetadata
 from howl_editor.saphi.formats.sca.reader import ScaReader
 
 

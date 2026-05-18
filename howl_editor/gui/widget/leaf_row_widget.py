@@ -6,15 +6,15 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 
+from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
+from howl_editor.gui.layout import ButtonWidth, IconSize
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 
 _LEAF_ACCEPTS = {
-    LeafKind.SEQUENCE: (".cseq", ".mid"),
-    LeafKind.SAMPLE: (".vag", ".wav"),
+    LeafKind.SEQUENCE: (FileFormatRegistry.CSEQ.extension, FileFormatRegistry.MIDI.extension),
+    LeafKind.SAMPLE: (FileFormatRegistry.VAG.extension, FileFormatRegistry.WAV.extension),
 }
-
-_LEAF_ICON_PX = 22
 
 
 class LeafRowWidget(QFrame):
@@ -73,19 +73,19 @@ class LeafRowWidget(QFrame):
         if self._show_play:
             play_btn = QPushButton("▶️  Play")
             play_btn.setObjectName("leafPlay")
-            play_btn.setFixedWidth(64)
+            play_btn.setFixedWidth(ButtonWidth.LEAF_PLAY)
             play_btn.clicked.connect(lambda: self.sig_play.emit(self._leaf))
             layout.addWidget(play_btn)
 
         if self._show_replace:
             replace_btn = QPushButton("🔄  Replace")
-            replace_btn.setFixedWidth(82)
+            replace_btn.setFixedWidth(ButtonWidth.LEAF_REPLACE)
             replace_btn.clicked.connect(lambda: self.sig_replace.emit(self._leaf))
             layout.addWidget(replace_btn)
 
         if self._show_export:
             export_btn = QPushButton("💾  Export")
-            export_btn.setFixedWidth(78)
+            export_btn.setFixedWidth(ButtonWidth.LEAF_EXPORT)
             export_btn.clicked.connect(lambda: self.sig_export.emit(self._leaf))
             layout.addWidget(export_btn)
 
@@ -93,14 +93,14 @@ class LeafRowWidget(QFrame):
         label = QLabel()
         label.setObjectName("leafIcon")
         label.setAlignment(Qt.AlignCenter)
-        label.setFixedWidth(_LEAF_ICON_PX + 2)
+        label.setFixedWidth(IconSize.LEAF + 2)
 
         if self._icon_image_path is not None:
             pixmap = QPixmap(str(self._icon_image_path))
 
             if not pixmap.isNull():
                 scaled = pixmap.scaled(
-                    _LEAF_ICON_PX, _LEAF_ICON_PX,
+                    IconSize.LEAF, IconSize.LEAF,
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 )
                 label.setPixmap(scaled)

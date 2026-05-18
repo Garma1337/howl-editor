@@ -4,8 +4,8 @@ from struct import unpack_from
 
 import pytest
 
-from howl_editor.ps1.formats.vag.decoder import VagDecoder
 from howl_editor.audio.wav_writer import WavWriter
+from howl_editor.ps1.formats.vag.decoder import VagDecoder
 
 
 @pytest.fixture

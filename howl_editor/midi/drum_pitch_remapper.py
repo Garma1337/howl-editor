@@ -2,6 +2,7 @@
 
 
 from howl_editor.midi import format as midi_fmt
+from howl_editor.midi.mido_message_type import MidoMessageType
 
 
 class DrumPitchRemapper:
@@ -35,7 +36,7 @@ class DrumPitchRemapper:
         pitches: set[int] = set()
 
         for msg in midi_track:
-            if msg.type in ("note_on", "note_off") and hasattr(msg, "note"):
+            if msg.type in (MidoMessageType.NOTE_ON, MidoMessageType.NOTE_OFF) and hasattr(msg, "note"):
                 pitches.add(msg.note)
 
         return sorted(pitches)
@@ -47,7 +48,7 @@ class DrumPitchRemapper:
         return pitch_table.index(midi_pitch)
 
     def _is_drum_note(self, msg) -> bool:
-        if msg.type not in ("note_on", "note_off"):
+        if msg.type not in (MidoMessageType.NOTE_ON, MidoMessageType.NOTE_OFF):
             return False
 
         if not hasattr(msg, "channel") or not hasattr(msg, "note"):

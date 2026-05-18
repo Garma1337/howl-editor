@@ -2,8 +2,6 @@
 
 from struct import unpack_from
 
-import pytest
-
 from howl_editor.saphi.formats.sca.models import ScaFile, ScaMetadata
 from howl_editor.saphi.formats.sca.writer import ScaWriter
 

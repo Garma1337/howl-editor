@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.entries.semantic_entry import EntryKind
 from howl_editor.gui.entries.semantic_entry import EntryRow
 
@@ -40,37 +41,37 @@ class EntryDropRouter:
     def _action_for(self, kind: EntryKind, ext: str) -> str | None:
         # Track or shared song: route by source file type.
         if kind in (EntryKind.TRACK, EntryKind.SHARED_SONG, EntryKind.CUSTOM_SONG):
-            if ext == ".cseq":
+            if ext == FileFormatRegistry.CSEQ.extension:
                 return DropAction.REPLACE_SONG
 
-            if ext == ".mid":
+            if ext == FileFormatRegistry.MIDI.extension:
                 return DropAction.CONVERT_MIDI_TO_SONG
 
-            if ext == ".sca":
+            if ext == FileFormatRegistry.SCA.extension:
                 return DropAction.IMPORT_SCA_INTO_TRACK
 
             return None
 
         # Adventure Hub: same as track but no .sca path (mask layering would break).
         if kind == EntryKind.ADVENTURE_HUB:
-            if ext == ".cseq":
+            if ext == FileFormatRegistry.CSEQ.extension:
                 return DropAction.REPLACE_SONG
 
-            if ext == ".mid":
+            if ext == FileFormatRegistry.MIDI.extension:
                 return DropAction.CONVERT_MIDI_TO_SONG
 
             return None
 
         # Bank-only entries (characters, boss banks, SFX universal, custom banks).
         if kind in (EntryKind.BANK_ONLY, EntryKind.CUSTOM_BANK):
-            if ext == ".bnk":
+            if ext == FileFormatRegistry.BANK.extension:
                 return DropAction.REPLACE_BANK
 
             return None
 
         # FX entries take a raw sample.
         if kind in (EntryKind.OTHER_FX, EntryKind.ENGINE_FX):
-            if ext in (".vag", ".wav"):
+            if ext in (FileFormatRegistry.VAG.extension, FileFormatRegistry.WAV.extension):
                 return DropAction.REPLACE_FX_SAMPLE
 
             return None

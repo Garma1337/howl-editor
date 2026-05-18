@@ -6,6 +6,7 @@ from pathlib import Path
 from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEventType
 from howl_editor.midi import format as midi_fmt
+from howl_editor.midi.mido_message_type import MidoMessageType
 
 try:
     import mido
@@ -35,8 +36,8 @@ class CseqMidiExporter:
         mid = mido.MidiFile(type=1, ticks_per_beat=song.tpqn)
 
         tempo_track = mido.MidiTrack()
-        tempo_track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(song.bpm), time=0))
-        tempo_track.append(mido.MetaMessage("end_of_track", time=0))
+        tempo_track.append(mido.MetaMessage(MidoMessageType.SET_TEMPO, tempo=mido.bpm2tempo(song.bpm), time=0))
+        tempo_track.append(mido.MetaMessage(MidoMessageType.END_OF_TRACK, time=0))
         mid.tracks.append(tempo_track)
 
         next_channel = 0
@@ -71,37 +72,37 @@ class CseqMidiExporter:
 
             if event.event_type == CseqEventType.CHANGE_PATCH:
                 midi_track.append(mido.Message(
-                    "program_change", program=event.pitch, channel=channel, time=delta,
+                    MidoMessageType.PROGRAM_CHANGE, program=event.pitch, channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.NOTE_ON:
                 midi_track.append(mido.Message(
-                    "note_on", note=event.pitch, velocity=event.velocity,
+                    MidoMessageType.NOTE_ON, note=event.pitch, velocity=event.velocity,
                     channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.NOTE_OFF:
                 midi_track.append(mido.Message(
-                    "note_off", note=event.pitch, velocity=0,
+                    MidoMessageType.NOTE_OFF, note=event.pitch, velocity=0,
                     channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.VELOCITY:
                 midi_track.append(mido.Message(
-                    "control_change", control=midi_fmt.CC_VOLUME, value=event.pitch,
+                    MidoMessageType.CONTROL_CHANGE, control=midi_fmt.CC_VOLUME, value=event.pitch,
                     channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.PAN:
                 midi_track.append(mido.Message(
-                    "control_change", control=midi_fmt.CC_PAN, value=event.pitch,
+                    MidoMessageType.CONTROL_CHANGE, control=midi_fmt.CC_PAN, value=event.pitch,
                     channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.PITCH_BEND:
                 pitch_val = self._cseq_bend_to_midi(event.pitch)
                 midi_track.append(mido.Message(
-                    "pitchwheel", pitch=pitch_val,
+                    MidoMessageType.PITCHWHEEL, pitch=pitch_val,
                     channel=channel, time=delta,
                 ))
 
@@ -110,11 +111,11 @@ class CseqMidiExporter:
                 CseqEventType.END_TRACK_2,
                 CseqEventType.TERMINATOR,
             ):
-                midi_track.append(mido.MetaMessage("end_of_track", time=delta))
+                midi_track.append(mido.MetaMessage(MidoMessageType.END_OF_TRACK, time=delta))
                 break
 
         if not midi_track or not isinstance(midi_track[-1], mido.MetaMessage):
-            midi_track.append(mido.MetaMessage("end_of_track", time=0))
+            midi_track.append(mido.MetaMessage(MidoMessageType.END_OF_TRACK, time=0))
 
         return midi_track
 

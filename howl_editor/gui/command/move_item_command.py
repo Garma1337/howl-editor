@@ -2,11 +2,13 @@
 
 from PySide6.QtGui import QUndoCommand
 
+from howl_editor.ctr.formats.howl.collections import HowlCollection
+
 
 class MoveItemCommand(QUndoCommand):
     """Moves a bank or song between positions, reverses on undo."""
 
-    def __init__(self, window, description: str, collection: str, from_index: int, to_index: int):
+    def __init__(self, window, description: str, collection: HowlCollection, from_index: int, to_index: int):
         super().__init__(description)
         self._window = window
         self._collection = collection

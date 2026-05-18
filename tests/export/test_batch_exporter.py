@@ -2,18 +2,18 @@
 
 import pytest
 
-from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
-from howl_editor.ps1.formats.vag.decoder import VagDecoder
 from howl_editor.audio.wav_writer import WavWriter
-from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.core.vlq import VlqCodec
+from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
+from howl_editor.ctr.formats.bank.reader import BankReader
+from howl_editor.ctr.formats.cseq.models import CseqInstrument, CseqPercussion
 from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry, OtherFX
 from howl_editor.export.batch_exporter import BatchExporter
 from howl_editor.midi.exporter import CseqMidiExporter
-from howl_editor.ctr.formats.cseq.models import CseqInstrument, CseqPercussion
-from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry, OtherFX
+from howl_editor.ps1.formats.vag.decoder import VagDecoder
 from howl_editor.ps1.formats.vag.writer import VagWriter
-from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from tests.conftest import build_cseq_bytes, build_bank_blob
 
 

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 
 from howl_editor.ctr.formats.bank.models import BankSample
 from howl_editor.ctr.formats.howl.models import SpuAddrEntry
+from howl_editor.gui.layout import WindowSize
 
 
 class MergeBankDialog(QDialog):
@@ -24,7 +25,7 @@ class MergeBankDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle(f"Merge Bank: {source_label} into {target_label}")
-        self.resize(750, 550)
+        self.resize(WindowSize.MERGE_BANK_WIDTH, WindowSize.MERGE_BANK_HEIGHT)
 
         self._spu_addrs = spu_addrs
         self._source_pool: list[BankSample] = list(source_samples)

@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QMessageBox, QVBoxLayout,
 )
 
+from howl_editor.gui.layout import WindowSize
+
 
 @dataclass
 class SaphiExportSelection:
@@ -23,7 +25,7 @@ class SaphiExportDialog(QDialog):
                  bank_sizes: list[int], bank_max_size: int):
         super().__init__(parent)
         self.setWindowTitle("Export for Saphi")
-        self.resize(420, 220)
+        self.resize(WindowSize.SAPHI_EXPORT_WIDTH, WindowSize.SAPHI_EXPORT_HEIGHT)
 
         self._bank_sizes = bank_sizes
         self._bank_max_size = bank_max_size

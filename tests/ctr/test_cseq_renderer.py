@@ -2,13 +2,14 @@
 
 from struct import unpack_from
 
+from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.ctr.cseq_renderer import CseqRenderer
-from howl_editor.ps1.adsr_decoder import AdsrDecoder
-from howl_editor.ps1.formats.vag.decoder import VagDecoder
+from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, \
+    CseqPercussion
 from howl_editor.ctr.voice.gain_calculator import GainCalculator
 from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
-from howl_editor.audio.wav_writer import WavWriter
-from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, CseqPercussion
+from howl_editor.ps1.adsr_decoder import AdsrDecoder
+from howl_editor.ps1.formats.vag.decoder import VagDecoder
 
 
 def _renderer():

@@ -7,9 +7,15 @@ from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.entries import category_metadata as cat
 from howl_editor.gui.entries.blob_modification_detector import BlobModificationDetector
 from howl_editor.gui.entries.semantic_entry import EntryGroup, EntryKind, EntryRow
+
+_ACCEPTS_TRACK = (FileFormatRegistry.MIDI.extension, FileFormatRegistry.CSEQ.extension, FileFormatRegistry.SCA.extension)
+_ACCEPTS_SHARED_SONG = (FileFormatRegistry.MIDI.extension, FileFormatRegistry.CSEQ.extension)
+_ACCEPTS_BANK = (FileFormatRegistry.BANK.extension,)
+_ACCEPTS_SAMPLE = (FileFormatRegistry.VAG.extension, FileFormatRegistry.WAV.extension)
 
 
 class SemanticEntryBuilder:
@@ -91,7 +97,7 @@ class SemanticEntryBuilder:
                 song_index=song_idx,
                 bank_index=bank_idx,
                 is_modified=is_mod,
-                accepts=(".mid", ".cseq", ".sca"),
+                accepts=_ACCEPTS_TRACK,
             ))
 
         return group
@@ -117,7 +123,7 @@ class SemanticEntryBuilder:
                 (song_present and song_idx in modified_songs)
                 or (bank_present and bank_idx in modified_banks)
             ),
-            accepts=(".mid", ".cseq"),
+            accepts=_ACCEPTS_SHARED_SONG,
         ))
 
         return group
@@ -132,7 +138,7 @@ class SemanticEntryBuilder:
                 name=self._cseq.get_name(boss_song_idx) or "Boss Race",
                 song_index=boss_song_idx,
                 is_modified=boss_song_idx in modified_songs,
-                accepts=(".mid", ".cseq"),
+                accepts=_ACCEPTS_SHARED_SONG,
             ))
 
         for bank_idx in layout.BOSS_BANK_RANGE:
@@ -144,7 +150,7 @@ class SemanticEntryBuilder:
                 name=self._bank.get_name(bank_idx) or f"Bank {bank_idx}",
                 bank_index=bank_idx,
                 is_modified=bank_idx in modified_banks,
-                accepts=(".bnk",),
+                accepts=_ACCEPTS_BANK,
             ))
 
         return group
@@ -164,7 +170,7 @@ class SemanticEntryBuilder:
                 name=self._bank.get_name(bank_idx) or f"Bank {bank_idx}",
                 bank_index=bank_idx,
                 is_modified=bank_idx in modified_banks,
-                accepts=(".bnk",),
+                accepts=_ACCEPTS_BANK,
             ))
 
             podium_idx = self._layout.podium_bank_for_character(bank_idx)
@@ -176,7 +182,7 @@ class SemanticEntryBuilder:
                 name=self._bank.get_name(podium_idx) or f"Bank {podium_idx}",
                 bank_index=podium_idx,
                 is_modified=podium_idx in modified_banks,
-                accepts=(".bnk",),
+                accepts=_ACCEPTS_BANK,
             ))
 
         return group
@@ -194,7 +200,7 @@ class SemanticEntryBuilder:
                 name=self._bank.get_name(bank_idx) or cat.SFX_UNIVERSAL_NAME,
                 bank_index=bank_idx,
                 is_modified=bank_idx in modified_banks,
-                accepts=(".bnk",),
+                accepts=_ACCEPTS_BANK,
             ))
 
         return group
@@ -210,7 +216,7 @@ class SemanticEntryBuilder:
                 kind=EntryKind.OTHER_FX,
                 name=f"FX #{i}",
                 fx_index=i,
-                accepts=(".vag", ".wav"),
+                accepts=_ACCEPTS_SAMPLE,
             ))
 
         return group
@@ -226,7 +232,7 @@ class SemanticEntryBuilder:
                 kind=EntryKind.ENGINE_FX,
                 name=f"Engine #{i}",
                 fx_index=i,
-                accepts=(".vag", ".wav"),
+                accepts=_ACCEPTS_SAMPLE,
             ))
 
         return group
@@ -240,7 +246,7 @@ class SemanticEntryBuilder:
                 name=f"Custom song #{song_idx}",
                 song_index=song_idx,
                 is_modified=song_idx in modified_songs,
-                accepts=(".mid", ".cseq", ".sca"),
+                accepts=_ACCEPTS_TRACK,
             ))
 
         for bank_idx in range(layout.FIRST_CUSTOM_BANK, n_banks):
@@ -249,7 +255,7 @@ class SemanticEntryBuilder:
                 name=f"Custom bank #{bank_idx}",
                 bank_index=bank_idx,
                 is_modified=bank_idx in modified_banks,
-                accepts=(".bnk",),
+                accepts=_ACCEPTS_BANK,
             ))
 
         return group

@@ -2,6 +2,7 @@
 
 from PySide6.QtGui import QUndoCommand
 
+from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 
 
@@ -12,7 +13,7 @@ class SwapBlobCommand(QUndoCommand):
     Covers: replace bank, replace song, add/remove/replace sample, add/remove/replace sequence.
     """
 
-    def __init__(self, window, description: str, collection: str, index: int, new_blob: bytes, snapshot_spu: bool = False):
+    def __init__(self, window, description: str, collection: HowlCollection, index: int, new_blob: bytes, snapshot_spu: bool = False):
         super().__init__(description)
         self._window = window
         self._collection = collection

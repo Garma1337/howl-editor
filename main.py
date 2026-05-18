@@ -44,7 +44,7 @@ if __name__ == "__main__":
         blob_snapshot=container.resolve("blob_snapshot"),
         entry_drop_router=container.resolve("entry_drop_router"),
         stylesheet_loader=stylesheet_loader,
-        adventure_hub_mask_table=container.resolve("adventure_hub_mask_table"),
+        adventure_hub_mask_table_query=container.resolve("adventure_hub_mask_table_query"),
         category_icon_resolver=container.resolve("category_icon_resolver"),
         cseq_size_validator=container.resolve("cseq_size_validator"),
         drum_names=container.resolve("gm_drum_names"),

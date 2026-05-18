@@ -28,10 +28,12 @@ from howl_editor.ctr.formats.cseq.editor import CseqEditor
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.howl import HowlReader, HowlWriter, HowlEditor
 from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
+from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr.formats.howl.version import HowlVersionDetector
 from howl_editor.ctr.sample_lookup import SampleLookup
 from howl_editor.export import BatchExporter
+from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.command import MoveItemCommand, MoveSequenceCommand
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
@@ -44,6 +46,7 @@ from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
 from howl_editor.gui.handler.tools_handler import ToolsHandler
+from howl_editor.gui.layout import WindowSize
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.gui.widget.main_tab_widget import MainTabWidget
@@ -102,7 +105,7 @@ class MainWindow(QMainWindow):
         blob_snapshot: BlobSnapshot | None = None,
         entry_drop_router: EntryDropRouter | None = None,
         stylesheet_loader: StylesheetLoader | None = None,
-        adventure_hub_mask_table: AdventureHubMaskTableQuery | None = None,
+        adventure_hub_mask_table_query: AdventureHubMaskTableQuery | None = None,
         category_icon_resolver: CategoryIconResolver | None = None,
         cseq_size_validator: CseqSizeValidator | None = None,
         drum_names: DrumNameResolver | None = None,
@@ -110,7 +113,7 @@ class MainWindow(QMainWindow):
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
-        self.resize(1300, 900)
+        self.resize(WindowSize.MAIN_WIDTH, WindowSize.MAIN_HEIGHT)
 
         self._reader = howl_reader
         self._writer = howl_writer
@@ -142,7 +145,7 @@ class MainWindow(QMainWindow):
         self._snapshot = blob_snapshot
         self._drop_router = entry_drop_router
         self._stylesheets = stylesheet_loader
-        self._hub_mask = adventure_hub_mask_table
+        self._hub_mask_table_query = adventure_hub_mask_table_query
         self._icon_resolver = category_icon_resolver
         self._cseq_size_validator = cseq_size_validator
         self._drum_names = drum_names
@@ -181,12 +184,12 @@ class MainWindow(QMainWindow):
 
         if (
             self._entry_builder and self._leaves_builder and self._snapshot
-            and self._stylesheets and self._hub_mask and self._icon_resolver
+            and self._stylesheets and self._hub_mask_table_query and self._icon_resolver
             and self._leaf_info_formatter
         ):
             self.main_tab = MainTabWidget(
                 self._entry_builder, self._leaves_builder, self._snapshot,
-                self._stylesheets, self._hub_mask, self._icon_resolver,
+                self._stylesheets, self._hub_mask_table_query, self._icon_resolver,
                 self._leaf_info_formatter,
             )
 
@@ -446,7 +449,7 @@ class MainWindow(QMainWindow):
         if not self._check_unsaved():
             return
 
-        path, _ = QFileDialog.getOpenFileName(self, "Open HWL File", "", "HWL Files (*.hwl);;All Files (*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open HWL File", "", f"{FileFormatRegistry.HOWL.file_filter};;All Files (*)")
         if path:
             self._load_file(path)
 
@@ -471,7 +474,7 @@ class MainWindow(QMainWindow):
         if not self.hwl:
             return
 
-        path, _ = QFileDialog.getSaveFileName(self, "Save HWL File", "", "HWL Files (*.hwl);;All Files (*)")
+        path, _ = QFileDialog.getSaveFileName(self, "Save HWL File", "", f"{FileFormatRegistry.HOWL.file_filter};;All Files (*)")
         if path:
             self.file_path = path
             self._save_file()
@@ -827,7 +830,7 @@ class MainWindow(QMainWindow):
     def _move_bank(self, from_index: int, to_index: int) -> None:
         try:
             self._undo_stack.push(
-                MoveItemCommand(self, f"Move Bank {from_index} to {to_index}", "banks", from_index, to_index),
+                MoveItemCommand(self, f"Move Bank {from_index} to {to_index}", HowlCollection.BANKS, from_index, to_index),
             )
 
             self.status.showMessage(f"Moved bank {from_index} to position {to_index}")
@@ -837,7 +840,7 @@ class MainWindow(QMainWindow):
     def _move_song(self, from_index: int, to_index: int) -> None:
         try:
             self._undo_stack.push(
-                MoveItemCommand(self, f"Move Song {from_index} to {to_index}", "songs", from_index, to_index),
+                MoveItemCommand(self, f"Move Song {from_index} to {to_index}", HowlCollection.SONGS, from_index, to_index),
             )
 
             self.status.showMessage(f"Moved song {from_index} to position {to_index}")
@@ -1006,7 +1009,7 @@ class MainWindow(QMainWindow):
             for url in event.mimeData().urls():
                 path = url.toLocalFile().lower()
 
-                if path.endswith((".hwl", ".bnk", ".cseq", ".vag")):
+                if path.endswith((FileFormatRegistry.HOWL.extension, FileFormatRegistry.BANK.extension, FileFormatRegistry.CSEQ.extension, FileFormatRegistry.VAG.extension)):
                     event.acceptProposedAction()
                     return
 
@@ -1015,26 +1018,26 @@ class MainWindow(QMainWindow):
             path = url.toLocalFile()
             ext = Path(path).suffix.lower()
 
-            if ext == ".hwl":
+            if ext == FileFormatRegistry.HOWL.extension:
                 if self._check_unsaved():
                     self._load_file(path)
 
-            elif ext == ".bnk" and self.hwl:
+            elif ext == FileFormatRegistry.BANK.extension and self.hwl:
                 self._editor.add_bank(self.hwl, Path(path).read_bytes())
                 self._mark_modified()
                 self._rebuild_tree()
                 self.status.showMessage(f"Added bank from {Path(path).name}")
 
-            elif ext == ".cseq" and self.hwl:
+            elif ext == FileFormatRegistry.CSEQ.extension and self.hwl:
                 self._editor.add_song(self.hwl, Path(path).read_bytes())
                 self._mark_modified()
                 self._rebuild_tree()
                 self.status.showMessage(f"Added song from {Path(path).name}")
 
-            elif ext == ".vag" and self.hwl:
+            elif ext == FileFormatRegistry.VAG.extension and self.hwl:
                 self._drop_vag_file(path)
 
-            elif not self.hwl and ext != ".hwl":
+            elif not self.hwl and ext != FileFormatRegistry.HOWL.extension:
                 self.status.showMessage("Open a HWL file first before dropping banks, songs, or samples")
 
     def _drop_vag_file(self, path: str):

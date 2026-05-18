@@ -1,8 +1,8 @@
 # coding: utf-8
 
-import pytest
-
 from struct import unpack_from
+
+import pytest
 
 
 class TestWrite:

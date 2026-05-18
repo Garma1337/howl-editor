@@ -2,7 +2,9 @@
 
 import pytest
 
-from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, CseqPercussion, CseqInfo
+from howl_editor.ctr.formats.cseq.models import (
+    CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, CseqPercussion, CseqInfo
+)
 from tests.conftest import build_cseq_bytes
 
 

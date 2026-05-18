@@ -4,6 +4,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
+from howl_editor.ctr.formats.howl.collections import HowlCollection
+from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.ps1.formats.vag.models import VagSample
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
@@ -26,7 +28,7 @@ class SampleHandler:
             sample = samples[sample_index]
             path, _ = QFileDialog.getSaveFileName(
                 self._window, f"Export Sample SPU {sample.spu_index}",
-                f"sample_{sample.spu_index}.vag", "VAG Files (*.vag)",
+                f"sample_{sample.spu_index}{FileFormatRegistry.VAG.extension}", FileFormatRegistry.VAG.file_filter,
             )
 
             if path:
@@ -47,7 +49,7 @@ class SampleHandler:
             sample = samples[sample_index]
             path, _ = QFileDialog.getSaveFileName(
                 self._window, f"Export WAV SPU {sample.spu_index}",
-                f"sample_{sample.spu_index}.wav", "WAV Files (*.wav)",
+                f"sample_{sample.spu_index}{FileFormatRegistry.WAV.extension}", FileFormatRegistry.WAV.file_filter,
             )
 
             if path:
@@ -62,7 +64,7 @@ class SampleHandler:
             return
 
         path, _ = QFileDialog.getOpenFileName(
-            self._window, "Add Sample to Bank", "", "VAG Files (*.vag);;All Files (*)",
+            self._window, "Add Sample to Bank", "", f"{FileFormatRegistry.VAG.file_filter};;All Files (*)",
         )
 
         if not path:
@@ -75,7 +77,7 @@ class SampleHandler:
                 vag.data, self._window._bank_reader,
             )
             self._window._undo_stack.push(
-                SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
+                SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),
             )
 
             spu_index = len(self._window.hwl.spu_addrs) - 1
@@ -89,7 +91,7 @@ class SampleHandler:
             return
 
         path, _ = QFileDialog.getOpenFileName(
-            self._window, "Replace Sample", "", "VAG Files (*.vag);;All Files (*)",
+            self._window, "Replace Sample", "", f"{FileFormatRegistry.VAG.file_filter};;All Files (*)",
         )
         if not path:
             return
@@ -106,7 +108,7 @@ class SampleHandler:
                 sample_index, vag.data, self._window._bank_reader,
             )
             self._window._undo_stack.push(
-                SwapBlobCommand(self._window, f"Replace Sample in Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
+                SwapBlobCommand(self._window, f"Replace Sample in Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),
             )
 
             if spu_index is not None:
@@ -196,7 +198,7 @@ class SampleHandler:
                 sample_index, self._window._bank_reader,
             )
             self._window._undo_stack.push(
-                SwapBlobCommand(self._window, f"Remove Sample {sample_index} from Bank {bank_index}", "banks", bank_index, new_blob, snapshot_spu=True),
+                SwapBlobCommand(self._window, f"Remove Sample {sample_index} from Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),
             )
             self._window._notify(f"Removed sample {sample_index} from bank {bank_index}")
         except Exception as e:

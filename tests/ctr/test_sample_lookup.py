@@ -1,12 +1,12 @@
 # coding: utf-8
 
-from howl_editor.ctr.sample_lookup import SampleLookup
-from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.core.vlq import VlqCodec
-from howl_editor.ctr.formats.cseq.reader import CseqReader
-from howl_editor.ctr.formats.cseq.models import CseqInstrument, CseqPercussion
-from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry, OtherFX, EngineFX
 from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
+from howl_editor.ctr.formats.bank.reader import BankReader
+from howl_editor.ctr.formats.cseq.models import CseqInstrument, CseqPercussion
+from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry, OtherFX, EngineFX
+from howl_editor.ctr.sample_lookup import SampleLookup
 from tests.conftest import build_bank_blob, build_cseq_bytes
 
 

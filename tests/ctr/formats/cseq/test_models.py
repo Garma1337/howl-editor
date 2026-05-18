@@ -1,6 +1,8 @@
 # coding: utf-8
 
-from howl_editor.ctr.formats.cseq.models import CseqInstrument, CseqPercussion, CseqTrack, CseqEventType, CseqInfo, CSEQ_EVENT_PARAMS, CSEQ_TERMINAL_EVENTS
+from howl_editor.ctr.formats.cseq.models import (
+    CseqInstrument, CseqPercussion, CseqTrack, CseqEventType, CseqInfo, CSEQ_EVENT_PARAMS, CSEQ_TERMINAL_EVENTS
+)
 
 
 class TestCseqInstrument:

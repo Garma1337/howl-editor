@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QDialogButtonBox,
 )
 
+from howl_editor.gui.layout import WindowSize
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.models import (
     MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping,
@@ -36,7 +37,7 @@ class ConvertMidiDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle("Convert MIDI to CSEQ - Instrument Mapping")
-        self.resize(720, 520)
+        self.resize(WindowSize.CONVERT_MIDI_WIDTH, WindowSize.CONVERT_MIDI_HEIGHT)
         self.midi_info = midi_info
         self._max_spu = max_spu_index
         self._drum_names = drum_names or DrumNameResolver()

@@ -15,11 +15,10 @@ from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
 from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
 from howl_editor.gui.entries.semantic_entry import EntryGroup
 from howl_editor.gui.entries.semantic_entry import EntryKind, EntryRow
+from howl_editor.gui.layout import ButtonWidth, IconSize
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.entry_parent_widget import EntryParentWidget
 from howl_editor.gui.widget.leaf_row_widget import LeafRowWidget
-
-_TITLE_ICON_PX = 40
 
 
 class CategoryDetailWidget(QWidget):
@@ -97,7 +96,7 @@ class CategoryDetailWidget(QWidget):
 
         back = QPushButton("←  Categories")
         back.setObjectName("backButton")
-        back.setFixedWidth(130)
+        back.setFixedWidth(ButtonWidth.BACK)
         back.clicked.connect(self.sig_back)
         layout.addWidget(back)
 
@@ -126,11 +125,11 @@ class CategoryDetailWidget(QWidget):
 
             if not pixmap.isNull():
                 scaled = pixmap.scaled(
-                    _TITLE_ICON_PX, _TITLE_ICON_PX,
+                    IconSize.CATEGORY_TITLE, IconSize.CATEGORY_TITLE,
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 )
                 self._title_icon.setPixmap(scaled)
-                self._title_icon.setFixedHeight(_TITLE_ICON_PX)
+                self._title_icon.setFixedHeight(IconSize.CATEGORY_TITLE)
                 return
 
         self._title_icon.clear()

@@ -9,6 +9,8 @@ try:
 except ImportError:
     HAS_MULTIMEDIA = False
 
+from howl_editor.gui.layout import ButtonWidth
+
 
 class PlayerWidget(QWidget):
     """Audio transport bar with play/stop buttons, seek slider, and elapsed
@@ -34,19 +36,19 @@ class PlayerWidget(QWidget):
         layout.setContentsMargins(4, 2, 4, 2)
 
         self._play_btn = QPushButton("\u25B6")
-        self._play_btn.setFixedWidth(32)
+        self._play_btn.setFixedWidth(ButtonWidth.PLAYER_BUTTON)
         self._play_btn.setToolTip("Play")
         self._play_btn.clicked.connect(self._on_play)
         layout.addWidget(self._play_btn)
 
         self._stop_btn = QPushButton("\u25A0")
-        self._stop_btn.setFixedWidth(32)
+        self._stop_btn.setFixedWidth(ButtonWidth.PLAYER_BUTTON)
         self._stop_btn.setToolTip("Stop")
         self._stop_btn.clicked.connect(self._on_stop)
         layout.addWidget(self._stop_btn)
 
         self._label = QLabel("No audio")
-        self._label.setMinimumWidth(100)
+        self._label.setMinimumWidth(ButtonWidth.PLAYER_LABEL_MIN)
         layout.addWidget(self._label, stretch=1)
 
         self._seek_slider = QSlider(Qt.Horizontal)
@@ -59,7 +61,7 @@ class PlayerWidget(QWidget):
 
         self._time_label = QLabel("0:00 / 0:00")
         self._time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._time_label.setFixedWidth(90)
+        self._time_label.setFixedWidth(ButtonWidth.PLAYER_TIME)
         layout.addWidget(self._time_label)
 
         self._loop_check = QCheckBox("\uD83D\uDD01  Loop")

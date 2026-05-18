@@ -13,16 +13,14 @@ from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
 from howl_editor.gui.entries.semantic_entry import EntryKind
 from howl_editor.gui.entries.semantic_entry import EntryRow
+from howl_editor.gui.layout import ButtonWidth, IconSize, Inset
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.leaf_row_widget import LeafRowWidget
 
 _KIND_ICON_FALLBACK = "•"
-_ENTRY_ICON_PX = 32
 
 _TAB_SAMPLES = 0
 _TAB_SEQUENCES = 1
-
-_BODY_INSET = 8
 
 
 class EntryParentWidget(QFrame):
@@ -114,7 +112,7 @@ class EntryParentWidget(QFrame):
         container.setObjectName("entryBodyContainer")
 
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(_BODY_INSET, _BODY_INSET, _BODY_INSET, _BODY_INSET)
+        layout.setContentsMargins(Inset.BODY, Inset.BODY, Inset.BODY, Inset.BODY)
         layout.setSpacing(2)
 
         for leaf in self._leaves:
@@ -194,7 +192,7 @@ class EntryParentWidget(QFrame):
         page.setAttribute(Qt.WA_StyledBackground, True)
 
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(_BODY_INSET, _BODY_INSET, _BODY_INSET, _BODY_INSET)
+        layout.setContentsMargins(Inset.BODY, Inset.BODY, Inset.BODY, Inset.BODY)
         layout.setSpacing(2)
 
         leaves = [leaf for leaf in self._leaves if leaf.kind == kind]
@@ -230,7 +228,7 @@ class EntryParentWidget(QFrame):
 
         self._toggle_btn = QPushButton("▾" if default_expanded else "▸")
         self._toggle_btn.setObjectName("parentToggle")
-        self._toggle_btn.setFixedWidth(26)
+        self._toggle_btn.setFixedWidth(ButtonWidth.ENTRY_TOGGLE)
         self._toggle_btn.setCheckable(True)
         self._toggle_btn.setChecked(default_expanded)
         self._toggle_btn.setToolTip("Show / hide this entry's sequences and samples")
@@ -260,7 +258,7 @@ class EntryParentWidget(QFrame):
                 "▶️ Play hub. Different hubs unmute different tracks of the "
                 "shared main-music sub-song.",
             )
-            self._hub_combo.setIconSize(QSize(22, 22))
+            self._hub_combo.setIconSize(QSize(IconSize.LEAF, IconSize.LEAF))
 
             for hub_idx, hub_name in enumerate(self._hub_names):
                 icon = self._resolve_hub_icon(hub_name)
@@ -272,7 +270,7 @@ class EntryParentWidget(QFrame):
             header.addWidget(self._hub_combo)
 
             play_hub_btn = QPushButton("▶️  Play hub")
-            play_hub_btn.setFixedWidth(122)
+            play_hub_btn.setFixedWidth(ButtonWidth.HUB_PLAY)
             play_hub_btn.setToolTip(
                 "Play the Adventure Hub main music with only the tracks the "
                 "selected hub plays in-game. Each hub unmutes a different "
@@ -283,13 +281,13 @@ class EntryParentWidget(QFrame):
 
         if self._row.accepts:
             replace_btn = QPushButton("🔄  Replace")
-            replace_btn.setFixedWidth(126)
+            replace_btn.setFixedWidth(ButtonWidth.HUB_REPLACE)
             replace_btn.setToolTip("Replace the entire song or bank with a file")
             replace_btn.clicked.connect(lambda: self.sig_replace_parent.emit(self._row))
             header.addWidget(replace_btn)
 
         export_btn = QPushButton("💾  Export")
-        export_btn.setFixedWidth(118)
+        export_btn.setFixedWidth(ButtonWidth.ENTRY_EXPORT)
         export_btn.setToolTip("Export the entire song or bank")
         export_btn.clicked.connect(lambda: self.sig_export_parent.emit(self._row))
         header.addWidget(export_btn)
@@ -297,7 +295,7 @@ class EntryParentWidget(QFrame):
         if can_reset and self._row.is_modified:
             reset_btn = QPushButton("↩️  Reset")
             reset_btn.setObjectName("parentReset")
-            reset_btn.setFixedWidth(74)
+            reset_btn.setFixedWidth(ButtonWidth.ENTRY_RESET)
             reset_btn.setToolTip("Restore the originally-loaded content for this slot")
             reset_btn.clicked.connect(lambda: self.sig_reset_parent.emit(self._row))
             header.addWidget(reset_btn)
@@ -310,14 +308,14 @@ class EntryParentWidget(QFrame):
         label = QLabel()
         label.setObjectName("entryParentIcon")
         label.setAlignment(Qt.AlignCenter)
-        label.setFixedWidth(_ENTRY_ICON_PX + 4)
+        label.setFixedWidth(IconSize.ENTRY + 4)
 
         if self._icon_image_path is not None:
             pixmap = QPixmap(str(self._icon_image_path))
 
             if not pixmap.isNull():
                 scaled = pixmap.scaled(
-                    _ENTRY_ICON_PX, _ENTRY_ICON_PX,
+                    IconSize.ENTRY, IconSize.ENTRY,
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 )
                 label.setPixmap(scaled)

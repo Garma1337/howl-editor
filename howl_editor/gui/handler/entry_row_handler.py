@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 from howl_editor.ctr import adventure_hub as hub
+from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
@@ -72,7 +73,7 @@ class EntryRowHandler:
 
             if original is not None:
                 self._w._undo_stack.push(SwapBlobCommand(
-                    self._w, f"Reset song {row.song_index}", "songs",
+                    self._w, f"Reset song {row.song_index}", HowlCollection.SONGS,
                     row.song_index, original,
                 ))
                 self._w._notify(f"Reset {row.name} to stock")
@@ -82,7 +83,7 @@ class EntryRowHandler:
 
             if original is not None:
                 self._w._undo_stack.push(SwapBlobCommand(
-                    self._w, f"Reset bank {row.bank_index}", "banks",
+                    self._w, f"Reset bank {row.bank_index}", HowlCollection.BANKS,
                     row.bank_index, original,
                 ))
                 self._w._notify(f"Reset {row.name} to stock")
@@ -174,7 +175,7 @@ class EntryRowHandler:
             return
 
         self._w._undo_stack.push(SwapBlobCommand(
-            self._w, f"Replace song {row.song_index}", "songs",
+            self._w, f"Replace song {row.song_index}", HowlCollection.SONGS,
             row.song_index, blob,
         ))
         self._w._notify(f"Replaced {row.name} with {Path(file_path).name}")
@@ -217,7 +218,7 @@ class EntryRowHandler:
 
         blob = Path(file_path).read_bytes()
         self._w._undo_stack.push(SwapBlobCommand(
-            self._w, f"Replace bank {row.bank_index}", "banks",
+            self._w, f"Replace bank {row.bank_index}", HowlCollection.BANKS,
             row.bank_index, blob,
         ))
         self._w._notify(f"Replaced {row.name} with {Path(file_path).name}")
@@ -246,7 +247,7 @@ class EntryRowHandler:
             return
 
         self._w._undo_stack.push(SwapBlobCommand(
-            self._w, f"Replace song {row.song_index} from MIDI", "songs",
+            self._w, f"Replace song {row.song_index} from MIDI", HowlCollection.SONGS,
             row.song_index, cseq_blob,
         ))
         self._w._notify(f"Replaced {row.name} with {Path(file_path).name}")
@@ -263,11 +264,11 @@ class EntryRowHandler:
             return
 
         self._w._undo_stack.push(SwapBlobCommand(
-            self._w, f"Replace bank {row.bank_index} from SCA", "banks",
+            self._w, f"Replace bank {row.bank_index} from SCA", HowlCollection.BANKS,
             row.bank_index, sca.bank,
         ))
         self._w._undo_stack.push(SwapBlobCommand(
-            self._w, f"Replace song {row.song_index} from SCA", "songs",
+            self._w, f"Replace song {row.song_index} from SCA", HowlCollection.SONGS,
             row.song_index, sca.cseq,
         ))
         self._w._notify(

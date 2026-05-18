@@ -2,7 +2,9 @@
 
 from struct import unpack_from
 
-from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, CseqPercussion
+from howl_editor.ctr.formats.cseq.models import (
+    CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, CseqPercussion
+)
 
 
 class TestSerializeMinimal:

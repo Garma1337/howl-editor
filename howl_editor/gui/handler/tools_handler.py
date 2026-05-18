@@ -6,6 +6,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox, QDialog, QInputDialog
 
 from howl_editor.ctr.constants import MAX_CSEQ_BYTES
+from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.dialog.saphi_export_dialog import SaphiExportDialog
 from howl_editor.midi.converter import HAS_MIDO
@@ -19,7 +20,7 @@ class ToolsHandler:
         self._window = window
 
     def build_bank_from_vags(self):
-        files, _ = QFileDialog.getOpenFileNames(self._window, "Select VAG Files", "", "VAG Files (*.vag);;All Files (*)")
+        files, _ = QFileDialog.getOpenFileNames(self._window, "Select VAG Files", "", f"{FileFormatRegistry.VAG.file_filter};;All Files (*)")
         if not files:
             return
 
@@ -37,7 +38,7 @@ class ToolsHandler:
                 self._window._rebuild_tree()
                 self._window._notify(f"Added bank {len(self._window.hwl.banks) - 1} with {len(files)} samples")
             else:
-                path, _ = QFileDialog.getSaveFileName(self._window, "Save Bank", "bank.bnk", "Bank Files (*.bnk)")
+                path, _ = QFileDialog.getSaveFileName(self._window, "Save Bank", f"bank{FileFormatRegistry.BANK.extension}", FileFormatRegistry.BANK.file_filter)
 
                 if path:
                     Path(path).write_bytes(result.bank_data)
@@ -49,7 +50,7 @@ class ToolsHandler:
         if not HAS_MIDO:
             return
 
-        path, _ = QFileDialog.getOpenFileName(self._window, "Select MIDI", "", "MIDI Files (*.mid *.midi)")
+        path, _ = QFileDialog.getOpenFileName(self._window, "Select MIDI", "", FileFormatRegistry.MIDI.file_filter)
         if not path:
             return
 
@@ -76,7 +77,7 @@ class ToolsHandler:
                 self._window._rebuild_tree()
                 self._window._notify(f"Added song {len(self._window.hwl.songs) - 1}")
             else:
-                save_path, _ = QFileDialog.getSaveFileName(self._window, "Save CSEQ", "song.cseq", "CSEQ Files (*.cseq)")
+                save_path, _ = QFileDialog.getSaveFileName(self._window, "Save CSEQ", f"song{FileFormatRegistry.CSEQ.extension}", FileFormatRegistry.CSEQ.file_filter)
 
                 if save_path:
                     Path(save_path).write_bytes(cseq_data)
@@ -132,7 +133,7 @@ class ToolsHandler:
         selection = dialog.get_selection()
         path, _ = QFileDialog.getSaveFileName(
             self._window, "Save Saphi Export",
-            f"{selection.name}.sca", "Saphi Audio (*.sca)",
+            f"{selection.name}{FileFormatRegistry.SCA.extension}", FileFormatRegistry.SCA.file_filter,
         )
 
         if not path:
@@ -161,7 +162,7 @@ class ToolsHandler:
             return
 
         path, _ = QFileDialog.getOpenFileName(
-            self._window, "Import Saphi Audio Container", "", "Saphi Audio (*.sca);;All Files (*)",
+            self._window, "Import Saphi Audio Container", "", f"{FileFormatRegistry.SCA.file_filter};;All Files (*)",
         )
         
         if not path:

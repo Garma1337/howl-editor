@@ -4,6 +4,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog, QInputDialog
 
+from howl_editor.ctr.formats.howl.collections import HowlCollection
+from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.command import RemoveItemCommand, SwapBlobCommand
 from howl_editor.gui.dialog.merge_bank_dialog import MergeBankDialog
 from howl_editor.ps1.formats.vag.models import VagSample
@@ -18,7 +20,7 @@ class BankHandler:
         if not self._window.hwl:
             return
 
-        path, _ = QFileDialog.getOpenFileName(self._window, "Add Bank", "", "Bank Files (*.bnk);;All Files (*)")
+        path, _ = QFileDialog.getOpenFileName(self._window, "Add Bank", "", f"{FileFormatRegistry.BANK.file_filter};;All Files (*)")
         if not path:
             return
 
@@ -28,7 +30,7 @@ class BankHandler:
         self._window._notify(f"Added bank from {Path(path).name}")
 
     def export_bank(self, index: int):
-        path, _ = QFileDialog.getSaveFileName(self._window, f"Export Bank {index}", f"bank_{index}.bnk", "Bank Files (*.bnk)")
+        path, _ = QFileDialog.getSaveFileName(self._window, f"Export Bank {index}", f"bank_{index}{FileFormatRegistry.BANK.extension}", FileFormatRegistry.BANK.file_filter)
         if path:
             Path(path).write_bytes(self._window.hwl.banks[index])
             self._window.status.showMessage(f"Exported bank {index}")
@@ -106,18 +108,18 @@ class BankHandler:
         new_blob = self._window._bank_builder.merge(result)
 
         self._window._undo_stack.push(
-            SwapBlobCommand(self._window, f"Merge into Bank {index}", "banks", index, new_blob),
+            SwapBlobCommand(self._window, f"Merge into Bank {index}", HowlCollection.BANKS, index, new_blob),
         )
 
         self._window._notify(f"Merged {len(result)} samples into bank {index}")
 
     def replace_bank(self, index: int):
-        path, _ = QFileDialog.getOpenFileName(self._window, f"Replace Bank {index}", "", "Bank Files (*.bnk);;All Files (*)")
+        path, _ = QFileDialog.getOpenFileName(self._window, f"Replace Bank {index}", "", f"{FileFormatRegistry.BANK.file_filter};;All Files (*)")
         if not path:
             return
 
         self._window._undo_stack.push(
-            SwapBlobCommand(self._window, f"Replace Bank {index}", "banks", index, Path(path).read_bytes()),
+            SwapBlobCommand(self._window, f"Replace Bank {index}", HowlCollection.BANKS, index, Path(path).read_bytes()),
         )
 
         self._window._notify(f"Replaced bank {index} with {Path(path).name}")
@@ -125,7 +127,7 @@ class BankHandler:
     def remove_bank(self, index: int):
         if QMessageBox.question(self._window, "Remove Bank", f"Remove bank {index}?") == QMessageBox.Yes:
             self._window._undo_stack.push(
-                RemoveItemCommand(self._window, f"Remove Bank {index}", "banks", index),
+                RemoveItemCommand(self._window, f"Remove Bank {index}", HowlCollection.BANKS, index),
             )
 
             self._window._notify(f"Removed bank {index}")

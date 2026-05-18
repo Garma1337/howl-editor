@@ -2,9 +2,9 @@
 
 from struct import unpack_from
 
+from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry, OtherFX
 from howl_editor.ctr.formats.howl.models import HowlHeader
 from howl_editor.ctr.formats.howl.writer import HowlLayout
-from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry, OtherFX
 from howl_editor.ps1.constants import SECTOR_SIZE
 
 

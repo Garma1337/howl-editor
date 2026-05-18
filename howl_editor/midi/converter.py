@@ -15,6 +15,7 @@ from howl_editor.ctr.formats.cseq.models import (
 from howl_editor.ctr.formats.cseq.writer import CseqWriter
 from howl_editor.midi import format as midi_fmt
 from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
+from howl_editor.midi.mido_message_type import MidoMessageType
 from howl_editor.midi.models import (
     MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping, DrumPitchMapping,
 )
@@ -33,7 +34,7 @@ class MidiConverter:
         tracks = []
 
         for i, track in enumerate(mid.tracks):
-            note_count = sum(1 for msg in track if msg.type == "note_on")
+            note_count = sum(1 for msg in track if msg.type == MidoMessageType.NOTE_ON)
             channels = sorted({msg.channel for msg in track if hasattr(msg, "channel")})
             drum_pitches = self._drum_remapper.collect_drum_pitches(track)
             tracks.append(MidiTrackInfo(
@@ -86,14 +87,14 @@ class MidiConverter:
     def _extract_tempo(self, mid, song: CseqSong) -> None:
         for track in mid.tracks:
             for msg in track:
-                if msg.type == "set_tempo":
+                if msg.type == MidoMessageType.SET_TEMPO:
                     song.bpm = max(1, int(mido.tempo2bpm(msg.tempo)))
                     return
 
     def _collect_note_tracks(self, mid) -> list[tuple[int, list]]:
         return [
             (i, track) for i, track in enumerate(mid.tracks)
-            if any(msg.type in ("note_on", "note_off") for msg in track)
+            if any(msg.type in (MidoMessageType.NOTE_ON, MidoMessageType.NOTE_OFF) for msg in track)
         ]
 
     def _create_instruments(
@@ -209,20 +210,20 @@ class MidiConverter:
     ) -> CseqEvent | None:
         delta = current_tick - last_tick
 
-        if msg.type == "note_on" and msg.velocity > 0:
+        if msg.type == MidoMessageType.NOTE_ON and msg.velocity > 0:
             return CseqEvent(
                 delta=delta, event_type=CseqEventType.NOTE_ON,
                 pitch=self._note_pitch(msg.note, drum_pitch_table),
                 velocity=msg.velocity,
             )
 
-        if msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
+        if msg.type == MidoMessageType.NOTE_OFF or (msg.type == MidoMessageType.NOTE_ON and msg.velocity == 0):
             return CseqEvent(
                 delta=delta, event_type=CseqEventType.NOTE_OFF,
                 pitch=self._note_pitch(msg.note, drum_pitch_table),
             )
 
-        if msg.type == "control_change":
+        if msg.type == MidoMessageType.CONTROL_CHANGE:
             if msg.control == midi_fmt.CC_VOLUME:
                 return CseqEvent(
                     delta=delta, event_type=CseqEventType.VELOCITY,
@@ -235,7 +236,7 @@ class MidiConverter:
                     pitch=self._midi_cc_to_cseq_byte(msg.value),
                 )
 
-        if msg.type == "pitchwheel":
+        if msg.type == MidoMessageType.PITCHWHEEL:
             bend = self._midi_bend_to_cseq(msg.pitch)
             return CseqEvent(delta=delta, event_type=CseqEventType.PITCH_BEND, pitch=bend)
 

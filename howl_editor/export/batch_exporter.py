@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier, SampleType
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.reader import CseqReader
@@ -43,8 +44,8 @@ class BatchExporter:
         result = BatchExportResult()
         output_dir = Path(output_dir)
 
-        self._export_banks(hwl, output_dir / "banks", result)
-        self._export_songs(hwl, output_dir / "songs", result)
+        self._export_banks(hwl, output_dir / HowlCollection.BANKS, result)
+        self._export_songs(hwl, output_dir / HowlCollection.SONGS, result)
         self._export_samples(hwl, output_dir / "samples", result)
 
         return result

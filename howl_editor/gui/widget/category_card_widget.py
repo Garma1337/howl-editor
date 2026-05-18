@@ -6,9 +6,8 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.entries.semantic_entry import EntryGroup
+from howl_editor.gui.layout import IconSize
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
-
-_ICON_PX = 64
 
 
 class CategoryCardWidget(QFrame):
@@ -82,11 +81,11 @@ class CategoryCardWidget(QFrame):
 
             if not pixmap.isNull():
                 scaled = pixmap.scaled(
-                    _ICON_PX, _ICON_PX,
+                    IconSize.CARD, IconSize.CARD,
                     Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 )
                 label.setPixmap(scaled)
-                label.setFixedHeight(_ICON_PX)
+                label.setFixedHeight(IconSize.CARD)
                 return label
 
         label.setText(self._group.icon)
