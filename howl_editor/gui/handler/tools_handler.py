@@ -59,12 +59,15 @@ class ToolsHandler:
             return
 
         max_spu = len(self._window.hwl.spu_addrs) if self._window.hwl else 0
-        dialog = ConvertMidiDialog(self._window, info, max_spu)
+        dialog = ConvertMidiDialog(self._window, info, max_spu, self._window._drum_names)
         if dialog.exec() != QDialog.Accepted:
             return
 
         try:
             cseq_data = self._window._midi_converter.convert(path, dialog.get_settings())
+
+            if not self._confirm_cseq_size(cseq_data):
+                return
 
             if self._window.hwl and self._ask_store_in_hwl("song"):
                 self._window._editor.add_song(self._window.hwl, cseq_data)
@@ -207,3 +210,24 @@ class ToolsHandler:
             self._window, "Add to HWL?",
             f"Add {item_type} to the loaded HWL file?\n\nSelect No to save as a standalone file instead.",
         ) == QMessageBox.Yes
+
+    def _confirm_cseq_size(self, cseq_data: bytes) -> bool:
+        validator = self._window._cseq_size_validator
+
+        if validator is None or validator.is_within_limit(cseq_data):
+            return True
+
+        size = len(cseq_data)
+        overflow = validator.calculate_overflow_bytes(cseq_data)
+        limit = validator.MAX_CSEQ_BYTES
+
+        answer = QMessageBox.warning(
+            self._window, "CSEQ exceeds engine limit",
+            f"This CSEQ is {size} bytes ({overflow} over the {limit}-byte "
+            f"(0x5800) engine limit). The game will refuse to load songs "
+            f"above this size. Consider shortening the song, removing "
+            f"tracks, or reducing event density.\n\nContinue anyway?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+
+        return answer == QMessageBox.Yes

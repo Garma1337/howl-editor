@@ -1,7 +1,7 @@
 # coding: utf-8
 
-from howl_editor.analysis.entry_leaves import EntryLeavesBuilder
-from howl_editor.models import EntryRow, HowlFile, LeafKind, SpuAddrEntry
+from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.models import EntryRow, HowlFile, LeafKind, SpuAddrEntry, CseqEventType, CseqEvent, CseqTrack, CseqSong
 from howl_editor.models.semantic_entry import EntryKind
 from tests.conftest import build_bank_blob, build_cseq_bytes
 
@@ -13,8 +13,6 @@ def _builder(bank_reader, cseq_reader, track_mask_layout):
 class TestSongLeaves:
 
     def test_named_mask_slots_for_song_in_range(self, bank_reader, cseq_reader, track_mask_layout):
-        from howl_editor.models import CseqSong, CseqTrack, CseqEvent, CseqEventType
-
         # Build a song with 3 sequences — for song_index 8 (Sewer Speedway).
         track = CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
         cseq_bytes = build_cseq_bytes(songs=[
@@ -37,8 +35,6 @@ class TestSongLeaves:
         assert leaves[0].seq_index == 0
 
     def test_generic_names_for_song_outside_mask_range(self, bank_reader, cseq_reader, track_mask_layout):
-        from howl_editor.models import CseqSong, CseqTrack, CseqEvent, CseqEventType
-
         track = CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
         cseq_bytes = build_cseq_bytes(songs=[
             CseqSong(bpm=120, tpqn=480, tracks=[track]),
@@ -72,6 +68,28 @@ class TestBankLeaves:
         assert leaves[1].spu_index == 3
 
 
+class TestAdventureHubLeaves:
+    """The Adventure Hub song reuses the race-track mask convention: sub-song
+    0 is the main music, 1/2 are the Aku/Uka mask variants. The 20-track hub
+    mask isn't applied here — it's applied at render time on sub-song 0's
+    tracks. So the leaves builder just emits the standard mask leaves."""
+
+    def test_adventure_hub_leaves_use_mask_names(self, bank_reader, cseq_reader, track_mask_layout):
+        track = CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
+        cseq_bytes = build_cseq_bytes(songs=[
+            CseqSong(bpm=120, tpqn=480, tracks=[track]),
+            CseqSong(bpm=120, tpqn=480, tracks=[track]),
+            CseqSong(bpm=120, tpqn=480, tracks=[track]),
+        ])
+        hwl = HowlFile(songs=[b""] * 26 + [cseq_bytes])
+        row = EntryRow(kind=EntryKind.ADVENTURE_HUB, name="Adventure Hub music", song_index=26)
+
+        leaves = _builder(bank_reader, cseq_reader, track_mask_layout).build(hwl, row)
+        names = [leaf.name for leaf in leaves if leaf.kind == LeafKind.SEQUENCE]
+
+        assert names == ["Main music", "Aku Aku mask", "Uka Uka mask"]
+
+
 class TestFxEntries:
 
     def test_other_fx_has_no_sub_leaves(self, bank_reader, cseq_reader, track_mask_layout):
@@ -91,8 +109,6 @@ class TestFxEntries:
 class TestCombinedEntry:
 
     def test_track_with_paired_bank_lists_both_sets(self, bank_reader, cseq_reader, track_mask_layout):
-        from howl_editor.models import CseqSong, CseqTrack, CseqEvent, CseqEventType
-
         track = CseqTrack(events=[CseqEvent(event_type=CseqEventType.END_TRACK)])
         cseq_bytes = build_cseq_bytes(songs=[CseqSong(bpm=120, tpqn=480, tracks=[track])])
 

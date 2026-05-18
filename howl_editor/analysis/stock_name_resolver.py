@@ -39,6 +39,22 @@ _BANK_NAMES: dict[int, str] = {
     35: "Oxide Ending (Any%)",
     36: "Oxide Ending (100%)",
     37: "Credits",
+    38: "Crash Bandicoot (Podium)",
+    39: "Dr. Neo Cortex (Podium)",
+    40: "Tiny Tiger (Podium)",
+    41: "Coco Bandicoot (Podium)",
+    42: "N. Gin (Podium)",
+    43: "Dingodile (Podium)",
+    44: "Polar (Podium)",
+    45: "Pura (Podium)",
+    46: "Pinstripe (Podium)",
+    47: "Papu Papu (Podium)",
+    48: "Ripper Roo (Podium)",
+    49: "Komodo Joe (Podium)",
+    50: "N. Tropy (Podium)",
+    51: "Penta Penguin (Podium)",
+    52: "Fake Crash (Podium)",
+    53: "Oxide (Podium)",
     54: "8-Driver Shared",
     55: "Crash Bandicoot",
     56: "Dr. Neo Cortex",
@@ -100,7 +116,7 @@ _FIRST_CUSTOM_SONG = 33
 _CUSTOM_LABEL = "Custom"
 
 
-class StockNames:
+class StockNameResolver:
     FIRST_CUSTOM_BANK = _FIRST_CUSTOM_BANK
     FIRST_CUSTOM_SONG = _FIRST_CUSTOM_SONG
     CUSTOM_LABEL = _CUSTOM_LABEL

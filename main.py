@@ -29,6 +29,7 @@ if __name__ == "__main__":
         vag_decoder=container.resolve("vag_decoder"),
         cseq_renderer=container.resolve("cseq_renderer"),
         audio_player=container.resolve("audio_player"),
+        audio_cache=container.resolve("audio_cache"),
         sample_lookup=container.resolve("sample_lookup"),
         version_detector=container.resolve("version_detector"),
         sample_classifier=container.resolve("sample_classifier"),
@@ -43,6 +44,11 @@ if __name__ == "__main__":
         blob_snapshot=container.resolve("blob_snapshot"),
         entry_drop_router=container.resolve("entry_drop_router"),
         stylesheet_loader=stylesheet_loader,
+        adventure_hub_mask_table=container.resolve("adventure_hub_mask_table"),
+        category_icon_resolver=container.resolve("category_icon_resolver"),
+        cseq_size_validator=container.resolve("cseq_size_validator"),
+        drum_names=container.resolve("gm_drum_names"),
+        leaf_info_formatter=container.resolve("leaf_info_formatter"),
     )
 
     window.show()

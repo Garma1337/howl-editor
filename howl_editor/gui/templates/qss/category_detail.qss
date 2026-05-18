@@ -86,15 +86,21 @@ QFrame#entryParent QTabWidget::pane {
     border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 0;
-    padding: 4px;
     top: -1px;
 }
 
-/* Tabless body used when the entry only has one kind of leaf — same look as
-   the tab pane so the container reads consistently. */
+QFrame#entryParent QTabWidget::tab-bar {
+    left: 8px;
+}
+
 QFrame#entryBodyContainer {
     background: palette(window);
     border: 1px solid palette(mid);
+    border-radius: 6px;
+}
+
+QWidget#entryTabPage {
+    background: palette(window);
     border-radius: 6px;
 }
 
@@ -115,6 +121,8 @@ QFrame#entryParent QTabBar::tab {
     font-size: 11px;
 }
 
+/* Selected tab matches the pane's palette(window) so its bottom edge merges
+   into the body — bold text alone marks it as active. */
 QFrame#entryParent QTabBar::tab:selected {
     background: palette(window);
     font-weight: 700;

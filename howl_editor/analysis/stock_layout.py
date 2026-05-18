@@ -8,6 +8,8 @@ class StockLayout:
     BOSS_SONG_INDEX = 25                        # shared song; banks 26-30
     BOSS_BANK_RANGE = range(26, 31)
     MENU_SONG_RANGE = range(27, 33)             # banks 32-37
+    PODIUM_BANK_RANGE = range(38, 54)
+    PODIUM_BANK_OFFSET = 17
     CHARACTER_BANK_RANGE = range(54, 71)
     SFX_UNIVERSAL_BANK = 0
     FIRST_CUSTOM_SONG = 33
@@ -38,6 +40,17 @@ class StockLayout:
 
     def is_character_bank(self, bank_index: int) -> bool:
         return bank_index in self.CHARACTER_BANK_RANGE
+
+    def is_podium_bank(self, bank_index: int) -> bool:
+        return bank_index in self.PODIUM_BANK_RANGE
+
+    def podium_bank_for_character(self, character_bank_index: int) -> int | None:
+        candidate = character_bank_index - self.PODIUM_BANK_OFFSET
+
+        if candidate in self.PODIUM_BANK_RANGE:
+            return candidate
+
+        return None
 
     def is_boss_bank(self, bank_index: int) -> bool:
         return bank_index in self.BOSS_BANK_RANGE

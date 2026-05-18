@@ -17,8 +17,9 @@ except ImportError:
     HAS_MULTIMEDIA = False
 
 from howl_editor.analysis import SampleClassifier, BankCseqValidator
-from howl_editor.analysis.entry_leaves import EntryLeavesBuilder
-from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
+from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.analysis.semantic_entry_builder import SemanticEntryBuilder
+from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.decoder.vag_decoder import VagDecoder
@@ -28,7 +29,9 @@ from howl_editor.cseq import CseqReader, CseqWriter
 from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
 from howl_editor.cseq.editor import CseqEditor
 from howl_editor.export import BatchExporter
+from howl_editor.cseq.size_validator import CseqSizeValidator
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
+from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
 from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
@@ -83,6 +86,7 @@ class MainWindow(QMainWindow):
         vag_decoder: VagDecoder | None = None,
         cseq_renderer: CseqRenderer | None = None,
         audio_player: AudioPlayer | None = None,
+        audio_cache: AudioCache | None = None,
         sample_lookup: SampleLookup | None = None,
         version_detector: HowlVersionDetector | None = None,
         sample_classifier: SampleClassifier | None = None,
@@ -99,6 +103,9 @@ class MainWindow(QMainWindow):
         stylesheet_loader: StylesheetLoader | None = None,
         adventure_hub_mask_table: AdventureHubMaskTable | None = None,
         category_icon_resolver: CategoryIconResolver | None = None,
+        cseq_size_validator: CseqSizeValidator | None = None,
+        drum_names: DrumNameResolver | None = None,
+        leaf_info_formatter=None,
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
@@ -119,6 +126,7 @@ class MainWindow(QMainWindow):
         self._vag_decoder = vag_decoder
         self._cseq_renderer = cseq_renderer
         self._audio_player = audio_player
+        self._audio_cache = audio_cache
         self._sample_lookup = sample_lookup
         self._version_detector = version_detector
         self._sample_classifier = sample_classifier
@@ -135,6 +143,9 @@ class MainWindow(QMainWindow):
         self._stylesheets = stylesheet_loader
         self._hub_mask = adventure_hub_mask_table
         self._icon_resolver = category_icon_resolver
+        self._cseq_size_validator = cseq_size_validator
+        self._drum_names = drum_names
+        self._leaf_info_formatter = leaf_info_formatter
         self._sample_types: dict[int, set] = {}
 
         self.hwl: HowlFile | None = None
@@ -163,16 +174,25 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
 
     def _setup_ui(self):
+        self.player_widgets: list = []
+        self.waveforms: list = []
         self.tabs = QTabWidget()
 
-        if self._entry_builder and self._leaves_builder and self._snapshot and self._stylesheets and self._hub_mask and self._icon_resolver:
+        if (
+            self._entry_builder and self._leaves_builder and self._snapshot
+            and self._stylesheets and self._hub_mask and self._icon_resolver
+            and self._leaf_info_formatter
+        ):
             self.main_tab = MainTabWidget(
                 self._entry_builder, self._leaves_builder, self._snapshot,
                 self._stylesheets, self._hub_mask, self._icon_resolver,
+                self._leaf_info_formatter,
             )
 
-            self.tabs.addTab(self.main_tab, "Main")
+            self.tabs.addTab(self.main_tab, "Categories")
             self._wire_main_tab_signals()
+            self._register_player_widget(self.main_tab.player_widget)
+            self.waveforms.append(self.main_tab.waveform)
         else:
             self.main_tab = None
 
@@ -183,6 +203,26 @@ class MainWindow(QMainWindow):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
         self.status.showMessage("Ready - Open or create a new HWL file")
+
+    def _register_player_widget(self, widget) -> None:
+        if self._audio_player and self._audio_player.media_player:
+            widget.connect_player(
+                self._audio_player.media_player,
+                self._playback.stop,
+                self._audio_player.set_looping,
+            )
+
+        widget.sig_loop_toggled.connect(lambda checked: self._sync_loop_state(widget, checked))
+        self.player_widgets.append(widget)
+
+    def _sync_loop_state(self, source, checked: bool) -> None:
+        for w in self.player_widgets:
+            if w is source:
+                continue
+
+            w.blockSignals(True)
+            w.set_loop_enabled(checked)
+            w.blockSignals(False)
 
     def _wire_main_tab_signals(self) -> None:
         if not self._entry_row_handler:
@@ -198,7 +238,7 @@ class MainWindow(QMainWindow):
         self.main_tab.sig_leaf_replace.connect(h.replace_leaf)
         self.main_tab.sig_leaf_export.connect(h.export_leaf)
         self.main_tab.sig_leaf_drop.connect(h.drop_leaf)
-        self.main_tab.sig_play_hub_preview.connect(h.play_hub_preview)
+        self.main_tab.sig_play_hub.connect(h.play_hub)
 
     def _build_file_content_tab(self) -> QWidget:
         splitter = QSplitter(Qt.Horizontal)
@@ -244,14 +284,11 @@ class MainWindow(QMainWindow):
         self.waveform = WaveformWidget()
         self.waveform.setVisible(False)
         right_layout.addWidget(self.waveform)
+        self.waveforms.append(self.waveform)
 
         self.player_widget = PlayerWidget()
         right_layout.addWidget(self.player_widget)
-
-        if self._audio_player and self._audio_player.media_player:
-            self.player_widget.connect_player(
-                self._audio_player.media_player, self._playback.stop,
-            )
+        self._register_player_widget(self.player_widget)
 
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
@@ -335,8 +372,22 @@ class MainWindow(QMainWindow):
     def _clear_audio_cache(self):
         if self._audio_player:
             self._audio_player.stop()
-            count = self._audio_player.clear_cache()
-            self.status.showMessage(f"Cleared {count} cached audio file(s)")
+
+        decoded = 0
+        rendered = 0
+
+        if self._audio_player:
+            decoded = self._audio_player.clear_cache()
+
+        if self._audio_cache:
+            rendered = self._audio_cache.clear()
+
+        if self._cseq_renderer:
+            self._cseq_renderer.clear_decode_cache()
+
+        self.status.showMessage(
+            f"Cleared {decoded} decoded WAV file(s) and {rendered} rendered song WAV(s)",
+        )
 
     def _close_file(self):
         if not self._check_unsaved():
@@ -344,6 +395,11 @@ class MainWindow(QMainWindow):
 
         if self._audio_player:
             self._audio_player.stop()
+
+        if self._cseq_renderer:
+            self._cseq_renderer.clear_decode_cache()
+
+        self._playback.clear_render_cache()
 
         self.hwl = None
         self.file_path = None

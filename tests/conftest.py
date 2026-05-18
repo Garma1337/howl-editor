@@ -5,9 +5,11 @@ from struct import pack, pack_into
 import pytest
 
 from howl_editor.analysis.blob_modification_detector import BlobModificationDetector
+from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
 from howl_editor.analysis.sample_classifier import SampleClassifier
-from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
+from howl_editor.analysis.semantic_entry_builder import SemanticEntryBuilder
 from howl_editor.analysis.stock_layout import StockLayout
+from howl_editor.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.analysis.validator import BankCseqValidator
 from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
 from howl_editor.cseq.track_mask_layout import TrackMaskLayout
@@ -54,8 +56,12 @@ def vlq_codec():
     return VlqCodec()
 
 @pytest.fixture
-def cseq_reader(vlq_codec):
-    return CseqReader(vlq_codec)
+def stock_names():
+    return StockNameResolver()
+
+@pytest.fixture
+def cseq_reader(vlq_codec, stock_names):
+    return CseqReader(vlq_codec, stock_names)
 
 @pytest.fixture
 def cseq_writer(vlq_codec):
@@ -70,8 +76,8 @@ def vag_writer():
     return VagWriter()
 
 @pytest.fixture
-def bank_reader():
-    return BankReader()
+def bank_reader(stock_names):
+    return BankReader(stock_names)
 
 @pytest.fixture
 def bank_builder(vag_reader):
@@ -116,8 +122,18 @@ def stylesheet_loader():
     return StylesheetLoader(qss_dir)
 
 @pytest.fixture
-def semantic_entry_builder(bank_reader, cseq_reader, stock_layout, blob_modification_detector):
-    return SemanticEntryBuilder(bank_reader, cseq_reader, stock_layout, blob_modification_detector)
+def semantic_entry_builder(
+    bank_reader, cseq_reader, stock_layout, blob_modification_detector,
+    adventure_hub_mask_table,
+):
+    return SemanticEntryBuilder(
+        bank_reader, cseq_reader, stock_layout, blob_modification_detector,
+        adventure_hub_mask_table,
+    )
+
+@pytest.fixture
+def entry_leaves_builder(bank_reader, cseq_reader, track_mask_layout):
+    return EntryLeavesBuilder(bank_reader, cseq_reader, track_mask_layout)
 
 @pytest.fixture
 def sca_chunk_writer():

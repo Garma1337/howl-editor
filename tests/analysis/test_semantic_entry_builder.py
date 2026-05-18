@@ -41,6 +41,10 @@ class TestRaceTrackGroup:
 
 
 class TestAdventureHubGroup:
+    """The Adventure Hub is one entry (song 26 + bank 31). The 20-track hub
+    mask is applied at *track* level inside sub-song 0 (Main music) at preview
+    time — not at the row level — because the cseq only has three sub-songs
+    (Main / Aku Aku / Uka Uka), like a race track."""
 
     def test_present_when_song_26_or_bank_31_exists(self, semantic_entry_builder):
         # 32 songs (indices 0-31) so song 26 exists; bank index 31 not needed.
@@ -55,6 +59,15 @@ class TestAdventureHubGroup:
         assert len(hub_group.rows) == 1
         assert hub_group.rows[0].kind == EntryKind.ADVENTURE_HUB
         assert hub_group.rows[0].song_index == 26
+        assert hub_group.rows[0].name == "Adventure Hub"
+
+    def test_includes_bank_when_present(self, semantic_entry_builder):
+        hwl = HowlFile(songs=[b""] * 32, banks=[b""] * 32)
+
+        groups = semantic_entry_builder.build(hwl)
+        hub_group = next(g for g in groups if g.name == "Adventure Hub")
+
+        assert hub_group.rows[0].bank_index == 31
 
     def test_absent_when_no_song_or_bank(self, semantic_entry_builder):
         hwl = HowlFile(songs=[b""] * 10)  # song 26 not present
@@ -87,6 +100,31 @@ class TestCharacterGroup:
         characters = next(g for g in groups if g.name == "Characters")
 
         assert characters.collapsed_by_default is True
+
+    def test_podium_banks_paired_with_characters(self, semantic_entry_builder):
+        """Each character's main bank is immediately followed by its podium
+        bank (offset -17). A full stock HOWL has 71 banks (0-70)."""
+        hwl = HowlFile(banks=[b""] * 71)
+
+        groups = semantic_entry_builder.build(hwl)
+        characters = next(g for g in groups if g.name == "Characters")
+        bank_order = [row.bank_index for row in characters.rows]
+
+        # Bank 54 = "8-Driver Shared", no podium.
+        # Bank 55 = Crash, paired with podium 38.
+        # Bank 70 = Oxide, paired with podium 53.
+        assert bank_order[:5] == [54, 55, 38, 56, 39]
+        assert bank_order[-2:] == [70, 53]
+
+    def test_shared_driver_bank_54_has_no_podium_row(self, semantic_entry_builder):
+        """Bank 54 is the 8-Driver Shared bank, not a character — it must not
+        emit a podium row (54 - 17 = 37, which is the Credits bank)."""
+        hwl = HowlFile(banks=[b""] * 55)
+
+        groups = semantic_entry_builder.build(hwl)
+        characters = next(g for g in groups if g.name == "Characters")
+
+        assert [row.bank_index for row in characters.rows] == [54]
 
 
 class TestModifiedDetection:

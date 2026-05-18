@@ -5,6 +5,8 @@ from struct import pack
 import pytest
 
 from howl_editor.models import ScaFile, ScaFormat, ScaMetadata
+from howl_editor.sca.chunk_reader import ScaChunk
+from howl_editor.sca.reader import ScaReader
 
 
 def _make_chunk(tag: bytes, body: bytes) -> bytes:
@@ -155,9 +157,6 @@ class TestDependencyInjection:
 
     def test_uses_injected_chunk_reader(self, sca_metadata_codec):
         # A fake chunk reader proves the orchestrator delegates iteration.
-        from howl_editor.sca.chunk_reader import ScaChunk
-        from howl_editor.sca.reader import ScaReader
-
         class FakeChunkReader:
             def __init__(self):
                 self.calls: list[int] = []
@@ -177,8 +176,6 @@ class TestDependencyInjection:
 
     def test_uses_injected_metadata_codec(self, sca_chunk_reader):
         # A fake codec proves the orchestrator passes META bytes through.
-        from howl_editor.sca.reader import ScaReader
-
         class RecordingMetadataCodec:
             def __init__(self):
                 self.decoded: list[bytes] = []

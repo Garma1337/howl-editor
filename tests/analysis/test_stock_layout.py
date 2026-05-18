@@ -58,6 +58,27 @@ class TestCategoryQueries:
         assert stock_layout.is_boss_bank(31) is False
 
 
+class TestPodiumBanks:
+    """Banks 38-53 are character podium-animation banks. Each one pairs to
+    the matching character bank exactly 17 slots higher."""
+
+    def test_podium_bank_boundaries(self, stock_layout):
+        assert stock_layout.is_podium_bank(38) is True
+        assert stock_layout.is_podium_bank(53) is True
+        assert stock_layout.is_podium_bank(37) is False
+        assert stock_layout.is_podium_bank(54) is False
+
+    def test_podium_bank_for_character_pairs_with_offset_17(self, stock_layout):
+        # Crash Bandicoot (55) → podium 38, Oxide (70) → podium 53.
+        assert stock_layout.podium_bank_for_character(55) == 38
+        assert stock_layout.podium_bank_for_character(70) == 53
+
+    def test_shared_driver_bank_54_has_no_podium(self, stock_layout):
+        # 54 is the "8-Driver Shared" bank — it does not represent a character
+        # and there is no podium bank at index 37 (which is the Credits bank).
+        assert stock_layout.podium_bank_for_character(54) is None
+
+
 class TestCustomBoundaries:
 
     def test_custom_song(self, stock_layout):

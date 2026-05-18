@@ -4,7 +4,7 @@ from howl_editor.analysis.blob_modification_detector import BlobModificationDete
 from howl_editor.analysis.stock_layout import StockLayout
 from howl_editor.bank.reader import BankReader
 from howl_editor.cseq.adventure_hub import (
-    ADVENTURE_HUB_BANK_INDEX, ADVENTURE_HUB_SONG_INDEX,
+    ADVENTURE_HUB_BANK_INDEX, ADVENTURE_HUB_SONG_INDEX, AdventureHubMaskTable,
 )
 from howl_editor.cseq.reader import CseqReader
 from howl_editor.models import HowlFile
@@ -20,11 +20,13 @@ class SemanticEntryBuilder:
         cseq_reader: CseqReader,
         stock_layout: StockLayout,
         modification_detector: BlobModificationDetector,
+        hub_mask_table: AdventureHubMaskTable
     ):
         self._bank = bank_reader
         self._cseq = cseq_reader
         self._layout = stock_layout
         self._mod = modification_detector
+        self._hub_mask = hub_mask_table
 
     def build(
         self,
@@ -91,6 +93,7 @@ class SemanticEntryBuilder:
         return group
 
     def _adventure_hub_group(self, hwl, modified_banks, modified_songs) -> EntryGroup:
+        """Adventure Hub music is one CSEQ (#26) and one shared bank (#31)."""
         group = EntryGroup(name="Adventure Hub", icon="🌍")
         song_idx = ADVENTURE_HUB_SONG_INDEX
         bank_idx = ADVENTURE_HUB_BANK_INDEX
@@ -103,10 +106,13 @@ class SemanticEntryBuilder:
 
         group.rows.append(EntryRow(
             kind=EntryKind.ADVENTURE_HUB,
-            name="Adventure Hub (layered)",
+            name="Adventure Hub",
             song_index=song_idx if song_present else None,
             bank_index=bank_idx if bank_present else None,
-            is_modified=(song_idx in modified_songs) or (bank_idx in modified_banks),
+            is_modified=(
+                (song_present and song_idx in modified_songs)
+                or (bank_present and bank_idx in modified_banks)
+            ),
             accepts=(".mid", ".cseq"),
         ))
 
@@ -151,6 +157,18 @@ class SemanticEntryBuilder:
                 name=self._bank.get_name(bank_idx) or f"Bank {bank_idx}",
                 bank_index=bank_idx,
                 is_modified=bank_idx in modified_banks,
+                accepts=(".bnk",),
+            ))
+
+            podium_idx = self._layout.podium_bank_for_character(bank_idx)
+            if podium_idx is None or podium_idx >= n_banks:
+                continue
+
+            group.rows.append(EntryRow(
+                kind=EntryKind.BANK_ONLY,
+                name=self._bank.get_name(podium_idx) or f"Bank {podium_idx}",
+                bank_index=podium_idx,
+                is_modified=podium_idx in modified_banks,
                 accepts=(".bnk",),
             ))
 

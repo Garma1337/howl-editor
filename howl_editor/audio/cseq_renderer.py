@@ -46,6 +46,12 @@ class CseqRenderer:
         self._wav_writer = wav_writer
         self._pitch = pitch_calculator
         self._gain = gain_calculator
+        self._decode_cache: dict[bytes, tuple[list[int], int]] = {}
+
+    def clear_decode_cache(self) -> None:
+        """Drop the VAG-decoded sample cache. Called when the loaded HWL
+        changes so stale sample bytes don't pin memory."""
+        self._decode_cache.clear()
 
     def render_song(
         self,
@@ -53,14 +59,20 @@ class CseqRenderer:
         song_index: int,
         sample_data: dict[int, bytes],
         output_rate: int = 22050,
+        active_tracks: list[int] | None = None,
     ) -> bytes:
         """Render a CSEQ song to 16-bit stereo PCM bytes."""
         if song_index >= len(cseq.songs):
             return b""
 
         song = cseq.songs[song_index]
-        decoded_cache: dict[int, tuple[list[int], int]] = {}
-        left, right = self._mix_song(song, cseq, sample_data, decoded_cache, output_rate)
+        if active_tracks is not None:
+            tracks = [song.tracks[i] for i in active_tracks if 0 <= i < len(song.tracks)]
+            song = type(song)(
+                unk0=song.unk0, bpm=song.bpm, tpqn=song.tpqn, tracks=tracks,
+            )
+
+        left, right = self._mix_song(song, cseq, sample_data, self._decode_cache, output_rate)
         return self._interleave_stereo(left, right)
 
     def render_song_to_wav(
@@ -69,9 +81,10 @@ class CseqRenderer:
         song_index: int,
         sample_data: dict[int, bytes],
         output_rate: int = 22050,
+        active_tracks: list[int] | None = None,
     ) -> bytes:
         """Render a CSEQ song to a complete WAV file."""
-        pcm = self.render_song(cseq, song_index, sample_data, output_rate)
+        pcm = self.render_song(cseq, song_index, sample_data, output_rate, active_tracks)
         return self._wav_writer.write(pcm, output_rate, channels=2)
 
     def render_layered(
@@ -150,7 +163,7 @@ class CseqRenderer:
         song: CseqSong,
         cseq: CseqFile,
         sample_data: dict[int, bytes],
-        decoded_cache: dict[int, tuple[list[int], int]],
+        decoded_cache: dict[bytes, tuple[list[int], int]],
         output_rate: int,
     ) -> tuple[list[int], list[int]]:
         ticks_per_second = self._compute_ticks_per_second(song.bpm, song.tpqn)
@@ -182,7 +195,7 @@ class CseqRenderer:
         song: CseqSong,
         cseq: CseqFile,
         sample_data: dict[int, bytes],
-        decoded_cache: dict[int, tuple[list[int], int]],
+        decoded_cache: dict[bytes, tuple[list[int], int]],
         output_rate: int,
         samples_per_tick: float,
     ) -> list[tuple]:
@@ -348,7 +361,7 @@ class CseqRenderer:
         pan: int,
         distort: int,
         sample_data: dict[int, bytes],
-        decoded_cache: dict[int, tuple[list[int], int]],
+        decoded_cache: dict[bytes, tuple[list[int], int]],
         output_rate: int,
     ) -> Voice | None:
         if is_drum:
@@ -375,10 +388,14 @@ class CseqRenderer:
         if spu_id not in sample_data:
             return None
 
-        if spu_id not in decoded_cache:
-            decoded_cache[spu_id] = self._decoder.decode_with_loop(sample_data[spu_id])
+        sample_bytes = sample_data[spu_id]
+        decoded = decoded_cache.get(sample_bytes)
 
-        samples, loop_start = decoded_cache[spu_id]
+        if decoded is None:
+            decoded = self._decoder.decode_with_loop(sample_bytes)
+            decoded_cache[sample_bytes] = decoded
+
+        samples, loop_start = decoded
         gain_l, gain_r = self._gain.compute(inst.volume, note_vel, seq_vol, pan)
 
         return Voice(

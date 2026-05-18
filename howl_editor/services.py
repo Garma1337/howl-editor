@@ -1,14 +1,16 @@
 # coding: utf-8
 
+import tempfile
 from pathlib import Path
 
 from howl_editor.analysis.blob_modification_detector import BlobModificationDetector
-from howl_editor.analysis.entry_leaves import EntryLeavesBuilder
+from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
 from howl_editor.analysis.sample_classifier import SampleClassifier
-from howl_editor.analysis.semantic_entries import SemanticEntryBuilder
+from howl_editor.analysis.semantic_entry_builder import SemanticEntryBuilder
 from howl_editor.analysis.stock_layout import StockLayout
-from howl_editor.analysis.stock_names import StockNames
+from howl_editor.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.analysis.validator import BankCseqValidator
+from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.cseq_renderer import CseqRenderer
 from howl_editor.audio.decoder.adsr_decoder import AdsrDecoder
@@ -24,6 +26,7 @@ from howl_editor.core.vlq import VlqCodec
 from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
 from howl_editor.cseq.editor import CseqEditor
 from howl_editor.cseq.reader import CseqReader
+from howl_editor.cseq.size_validator import CseqSizeValidator
 from howl_editor.cseq.track_mask_layout import TrackMaskLayout
 from howl_editor.cseq.writer import CseqWriter
 from howl_editor.export.batch_exporter import BatchExporter
@@ -32,6 +35,7 @@ from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
 from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
+from howl_editor.gui.detail.leaf_info_formatter import LeafInfoFormatter
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
 from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.size_formatter import SizeFormatter
@@ -42,6 +46,8 @@ from howl_editor.howl.reader import HowlReader
 from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.howl.writer import HowlWriter
 from howl_editor.midi.converter import MidiConverter
+from howl_editor.midi.drum_name_resolver import DrumNameResolver
+from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
 from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.sca.chunk_reader import ScaChunkReader
 from howl_editor.sca.chunk_writer import ScaChunkWriter
@@ -55,10 +61,11 @@ from howl_editor.vag.writer import VagWriter
 _TEMPLATE_DIR = Path(__file__).parent / "gui" / "templates"
 _QSS_DIR = _TEMPLATE_DIR / "qss"
 _IMAGE_DIR = _TEMPLATE_DIR / "images"
+_AUDIO_CACHE_DIR = Path(tempfile.gettempdir()) / "howl-editor" / "renders"
 
 container = Container()
 container.register("vlq_codec", lambda c: VlqCodec())
-container.register("stock_names", lambda c: StockNames())
+container.register("stock_names", lambda c: StockNameResolver())
 container.register("howl_reader", lambda c: HowlReader())
 container.register("howl_writer", lambda c: HowlWriter())
 container.register("howl_editor", lambda c: HowlEditor())
@@ -66,6 +73,7 @@ container.register("cseq_reader", lambda c: CseqReader(
     c.resolve("vlq_codec"), c.resolve("stock_names"),
 ))
 container.register("cseq_writer", lambda c: CseqWriter(c.resolve("vlq_codec")))
+container.register("cseq_size_validator", lambda c: CseqSizeValidator())
 container.register("vag_reader", lambda c: VagReader())
 container.register("vag_writer", lambda c: VagWriter())
 container.register("bank_reader", lambda c: BankReader(c.resolve("stock_names")))
@@ -74,7 +82,12 @@ container.register("cseq_editor", lambda c: CseqEditor(
     c.resolve("cseq_writer")
 ))
 container.register("bank_builder", lambda c: BankBuilder(c.resolve("vag_reader")))
-container.register("midi_converter", lambda c: MidiConverter(c.resolve("cseq_writer")))
+container.register("drum_pitch_remapper", lambda c: DrumPitchRemapper())
+container.register("gm_drum_names", lambda c: DrumNameResolver())
+container.register("midi_converter", lambda c: MidiConverter(
+    c.resolve("cseq_writer"),
+    c.resolve("drum_pitch_remapper"),
+))
 container.register("midi_exporter", lambda c: CseqMidiExporter())
 container.register("wav_writer", lambda c: WavWriter())
 container.register("vag_decoder", lambda c: VagDecoder(c.resolve("wav_writer")))
@@ -88,6 +101,7 @@ container.register("cseq_renderer", lambda c: CseqRenderer(
     c.resolve("pitch_calculator"),
     c.resolve("gain_calculator")))
 container.register("audio_player", lambda c: AudioPlayer())
+container.register("audio_cache", lambda c: AudioCache(_AUDIO_CACHE_DIR))
 container.register("sample_lookup", lambda c: SampleLookup(
     c.resolve("bank_reader"),
     c.resolve("cseq_reader")
@@ -112,6 +126,13 @@ container.register("howl_detail_formatter", lambda c: HowlDetailFormatter(
     c.resolve("template_engine"),
     c.resolve("size_formatter")))
 container.register("fx_detail_formatter", lambda c: FxDetailFormatter(c.resolve("template_engine")))
+container.register("leaf_info_formatter", lambda c: LeafInfoFormatter(
+    c.resolve("template_engine"),
+    c.resolve("bank_reader"),
+    c.resolve("cseq_reader"),
+    c.resolve("sample_lookup"),
+    c.resolve("size_formatter"),
+))
 container.register("bank_detail_formatter", lambda c: BankDetailFormatter(
     c.resolve("bank_reader"),
     c.resolve("template_engine"),
@@ -152,6 +173,7 @@ container.register("semantic_entry_builder", lambda c: SemanticEntryBuilder(
     c.resolve("cseq_reader"),
     c.resolve("stock_layout"),
     c.resolve("blob_modification_detector"),
+    c.resolve("adventure_hub_mask_table"),
 ))
 container.register("blob_snapshot", lambda c: BlobSnapshot())
 container.register("entry_drop_router", lambda c: EntryDropRouter())

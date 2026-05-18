@@ -2,7 +2,7 @@
 
 from struct import unpack_from
 
-from howl_editor.analysis.stock_names import StockNames
+from howl_editor.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.models import (
     CseqFile, CseqInstrument, CseqPercussion, CseqInfo,
@@ -18,12 +18,12 @@ _ALIGNMENT = 4
 
 class CseqReader:
 
-    def __init__(self, vlq_codec: VlqCodec, stock_names: StockNames | None = None):
+    def __init__(self, vlq_codec: VlqCodec, stock_names: StockNameResolver):
         self._vlq = vlq_codec
-        self._names = stock_names or StockNames()
+        self._name_resolver = stock_names
 
     def get_name(self, index: int) -> str:
-        return self._names.song_name(index)
+        return self._name_resolver.song_name(index)
 
     def read(self, data: bytes) -> CseqFile:
         """Parse raw CSEQ bytes into a CseqFile."""

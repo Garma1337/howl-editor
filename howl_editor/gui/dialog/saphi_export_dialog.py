@@ -80,7 +80,7 @@ class SaphiExportDialog(QDialog):
         size = self._bank_sizes[idx]
         if size > self._bank_max_size:
             self._size_warning.setText(
-                f"⚠ Bank is {size} bytes ({size / 1024:.1f} KB) — "
+                f"⚠️ Bank is {size} bytes ({size / 1024:.1f} KB) — "
                 f"exceeds Saphi limit of {self._bank_max_size} bytes "
                 f"({self._bank_max_size / 1024:.0f} KB). Saphi will reject this file."
             )

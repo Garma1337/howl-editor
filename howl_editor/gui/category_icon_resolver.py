@@ -20,6 +20,9 @@ class CategoryIconResolver:
 
     _EXTENSIONS = (".png", ".jpg", ".jpeg", ".svg", ".webp")
     _NON_ALNUM = re.compile(r"[^a-z0-9]+")
+    _SHARED_ENTRY_SUFFIXES: dict[str, str] = {
+        " (Podium)": "podium",
+    }
 
     def __init__(self, image_dir: str | Path):
         self._dir = Path(image_dir)
@@ -48,9 +51,22 @@ class CategoryIconResolver:
     def resolve_entry(self, entry_name: str, category_name: str) -> Path | None:
         """Find a per-entry icon (e.g. character portrait, boss avatar).
 
-        Lookup path: `<images>/<category_slug>/<entry_slug>.<ext>`.
+        Lookup path: `<images>/<category_slug>/<entry_slug>.<ext>`. Entries
+        whose names end with a known shared suffix (see `_SHARED_ENTRY_SUFFIXES`)
+        resolve to a single shared icon instead of a per-name file.
         """
+        shared_slug = self._shared_slug_for(entry_name)
+        if shared_slug is not None:
+            return self.resolve(shared_slug, sub_dir=category_name)
+
         return self.resolve(entry_name, sub_dir=category_name)
+
+    def _shared_slug_for(self, entry_name: str) -> str | None:
+        for suffix, slug in self._SHARED_ENTRY_SUFFIXES.items():
+            if entry_name.endswith(suffix):
+                return slug
+
+        return None
 
     def resolve_leaf(self, leaf_name: str) -> Path | None:
         """Find a per-leaf icon — used for shared leaf names like the Aku Aku

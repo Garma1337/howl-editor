@@ -2,25 +2,26 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QIcon, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QTabWidget,
-    QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+    QTabWidget, QVBoxLayout, QWidget,
 )
 
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.leaf_row_widget import LeafRowWidget
 from howl_editor.models import EntryLeaf, EntryRow, LeafKind
-
+from howl_editor.models.semantic_entry import EntryKind
 
 _KIND_ICON_FALLBACK = "•"
 _ENTRY_ICON_PX = 32
 
-# Tab indices inside the expanded panel. Samples is the default landing tab.
 _TAB_SAMPLES = 0
 _TAB_SEQUENCES = 1
+
+_BODY_INSET = 8
 
 
 class EntryParentWidget(QFrame):
@@ -36,10 +37,17 @@ class EntryParentWidget(QFrame):
     sig_replace_parent = Signal(object)         # EntryRow
     sig_export_parent = Signal(object)
     sig_reset_parent = Signal(object)
+    # Adventure Hub: emits (row, hub_index) when the user clicks Play hub
+    # after picking a hub world from the inline dropdown.
+    sig_play_hub = Signal(object, int)
     sig_leaf_play = Signal(object)              # EntryLeaf
     sig_leaf_replace = Signal(object)
     sig_leaf_export = Signal(object)
     sig_leaf_drop = Signal(object, str)         # EntryLeaf, file_path
+    sig_leaf_selected = Signal(object)          # EntryLeaf — user clicked the row
+    # EntryRow + the entry's leaves — sidebar uses the leaf count + breakdown
+    # so the header no longer needs to surface it inline.
+    sig_entry_selected = Signal(object, object)
 
     def __init__(
         self,
@@ -51,6 +59,7 @@ class EntryParentWidget(QFrame):
         can_reset: bool = False,
         default_expanded: bool = True,
         icon_image_path: Path | None = None,
+        hub_names: tuple[str, ...] | list[str] = (),
     ):
         super().__init__()
         self._row = row
@@ -59,6 +68,8 @@ class EntryParentWidget(QFrame):
         self._stylesheets = stylesheet_loader
         self._icon_resolver = icon_resolver
         self._icon_image_path = icon_image_path
+        self._hub_names = tuple(hub_names)
+        self._hub_combo: QComboBox | None = None
         self.setObjectName("entryParent")
         self._build_ui(can_reset, default_expanded)
 
@@ -102,7 +113,7 @@ class EntryParentWidget(QFrame):
         container.setObjectName("entryBodyContainer")
 
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(_BODY_INSET, _BODY_INSET, _BODY_INSET, _BODY_INSET)
         layout.setSpacing(2)
 
         for leaf in self._leaves:
@@ -110,14 +121,58 @@ class EntryParentWidget(QFrame):
                 continue
 
             leaf_icon = self._icon_resolver.resolve_leaf(leaf.name)
-            row = LeafRowWidget(leaf, self._stylesheets, icon_image_path=leaf_icon)
+            row = LeafRowWidget(
+                leaf, self._stylesheets, icon_image_path=leaf_icon,
+                show_play=self._leaf_supports_solo_play(leaf),
+            )
             row.sig_play.connect(self.sig_leaf_play)
             row.sig_replace.connect(self.sig_leaf_replace)
             row.sig_export.connect(self.sig_leaf_export)
             row.sig_drop.connect(self.sig_leaf_drop)
+            row.sig_selected.connect(self.sig_leaf_selected)
             layout.addWidget(row)
 
         return container
+
+    def _leaf_supports_solo_play(self, leaf: EntryLeaf) -> bool:
+        return True
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Click anywhere on the entry header (outside buttons / combo) fires
+        entry selection. Child widgets like QPushButton consume the event
+        first via Qt's normal propagation, so the bare label / icon / row
+        background still selects without hijacking action clicks."""
+        if event.button() == Qt.LeftButton:
+            self.sig_entry_selected.emit(self._row, self._leaves)
+
+        super().mousePressEvent(event)
+
+    def _resolve_hub_icon(self, hub_name: str) -> QIcon | None:
+        """Look up a per-hub portrait under `images/adventure_hub/<slug>.png`
+        and return it as a QIcon. Falls back to None when no file exists, so
+        the caller can use a text label instead."""
+        if self._icon_resolver is None:
+            return None
+
+        path = self._icon_resolver.resolve_entry(hub_name, "Adventure Hub")
+        if path is None:
+            return None
+
+        pixmap = QPixmap(str(path))
+        if pixmap.isNull():
+            return None
+
+        return QIcon(pixmap)
+
+    def _on_play_hub_clicked(self) -> None:
+        if self._hub_combo is None:
+            return
+
+        hub_index = self._hub_combo.currentData()
+        if hub_index is None:
+            return
+
+        self.sig_play_hub.emit(self._row, int(hub_index))
 
     @staticmethod
     def _size_to_current_tab(tabs: QTabWidget, current_index: int) -> None:
@@ -134,8 +189,11 @@ class EntryParentWidget(QFrame):
         """Build one tab page containing leaf rows of the requested kind, or
         a soft empty-state label when the entry has none."""
         page = QWidget()
+        page.setObjectName("entryTabPage")
+        page.setAttribute(Qt.WA_StyledBackground, True)
+
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 6, 0, 4)
+        layout.setContentsMargins(_BODY_INSET, _BODY_INSET, _BODY_INSET, _BODY_INSET)
         layout.setSpacing(2)
 
         leaves = [leaf for leaf in self._leaves if leaf.kind == kind]
@@ -150,11 +208,15 @@ class EntryParentWidget(QFrame):
 
         for leaf in leaves:
             leaf_icon = self._icon_resolver.resolve_leaf(leaf.name)
-            row = LeafRowWidget(leaf, self._stylesheets, icon_image_path=leaf_icon)
+            row = LeafRowWidget(
+                leaf, self._stylesheets, icon_image_path=leaf_icon,
+                show_play=self._leaf_supports_solo_play(leaf),
+            )
             row.sig_play.connect(self.sig_leaf_play)
             row.sig_replace.connect(self.sig_leaf_replace)
             row.sig_export.connect(self.sig_leaf_export)
             row.sig_drop.connect(self.sig_leaf_drop)
+            row.sig_selected.connect(self.sig_leaf_selected)
             layout.addWidget(row)
 
         layout.addStretch(1)
@@ -185,15 +247,38 @@ class EntryParentWidget(QFrame):
         name.setObjectName("entryParentName")
         header.addWidget(name, stretch=1)
 
-        if self._leaves:
-            leaf_count = QLabel(
-                f"{len(self._leaves)} item{'s' if len(self._leaves) != 1 else ''}"
-            )
-            leaf_count.setObjectName("leafDetail")
-            header.addWidget(leaf_count)
-
         for badge in self._build_badges():
             header.addWidget(badge)
+
+        is_adventure_hub = self._row.kind == EntryKind.ADVENTURE_HUB
+
+        if is_adventure_hub and self._hub_names:
+            self._hub_combo = QComboBox()
+            self._hub_combo.setToolTip(
+                "Pick which Adventure Hub world's mix to hear when you click "
+                "▶️ Play hub. Different hubs unmute different tracks of the "
+                "shared main-music sub-song.",
+            )
+            self._hub_combo.setIconSize(QSize(22, 22))
+
+            for hub_idx, hub_name in enumerate(self._hub_names):
+                icon = self._resolve_hub_icon(hub_name)
+                if icon is not None:
+                    self._hub_combo.addItem(icon, hub_name, hub_idx)
+                else:
+                    self._hub_combo.addItem(f"🌍  {hub_name}", hub_idx)
+
+            header.addWidget(self._hub_combo)
+
+            play_hub_btn = QPushButton("▶️  Play hub")
+            play_hub_btn.setFixedWidth(122)
+            play_hub_btn.setToolTip(
+                "Play the Adventure Hub main music with only the tracks the "
+                "selected hub plays in-game. Each hub unmutes a different "
+                "combination of tracks via the runtime hub-tracks mask.",
+            )
+            play_hub_btn.clicked.connect(self._on_play_hub_clicked)
+            header.addWidget(play_hub_btn)
 
         if self._row.accepts:
             replace_btn = QPushButton("🔄  Replace")
@@ -251,7 +336,7 @@ class EntryParentWidget(QFrame):
             badges.append(self._make_badge("Modified", "#ff9500"))
 
         if self._row.is_broken:
-            badges.append(self._make_badge(f"⚠ Missing {self._row.missing_count}", "#ff3b30"))
+            badges.append(self._make_badge(f"⚠️ Missing {self._row.missing_count}", "#ff3b30"))
 
         return badges
 

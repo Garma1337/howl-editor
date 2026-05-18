@@ -52,6 +52,13 @@ class AudioPlayer:
         self._player.setSource(QUrl.fromLocalFile(str(cached_path)))
         self._player.play()
 
+    def set_looping(self, looping: bool) -> None:
+        """Toggle native gapless loop on the underlying QMediaPlayer."""
+        if not self.available:
+            return
+
+        self._player.setLoops(QMediaPlayer.Loops.Infinite if looping else 1)
+
     def stop(self) -> None:
         if self._player:
             self._player.stop()

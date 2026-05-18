@@ -281,6 +281,44 @@ class TestRenderSong:
         assert len(pcm) > 0
 
 
+class TestRenderSongActiveTracks:
+    """Adventure Hub preview uses `active_tracks` to mute the tracks the
+    selected hub world shouldn't hear. Different hubs must produce different
+    PCM outputs (which is the user-visible bug we're fixing)."""
+
+    def test_subset_of_tracks_produces_different_output_than_full(self):
+        renderer = _renderer()
+        sample_data = {0: _tone_vag_frames()}
+
+        # Two tracks: each plays one distinct note so their PCM differs.
+        track_a = CseqTrack(events=[
+            CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=0),
+            CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=60, velocity=100),
+            CseqEvent(delta=240, event_type=CseqEventType.NOTE_OFF, pitch=60),
+            CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+        ])
+        track_b = CseqTrack(events=[
+            CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=0),
+            CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=72, velocity=100),
+            CseqEvent(delta=240, event_type=CseqEventType.NOTE_OFF, pitch=72),
+            CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+        ])
+
+        inst = CseqInstrument(volume=255, frequency=0x1000, sample_id=0, adsr=0x1FC180FF)
+        cseq = CseqFile(
+            instruments=[inst],
+            songs=[CseqSong(bpm=120, tpqn=480, tracks=[track_a, track_b])],
+        )
+
+        full = renderer.render_song(cseq, 0, sample_data)
+        only_a = renderer.render_song(cseq, 0, sample_data, active_tracks=[0])
+        only_b = renderer.render_song(cseq, 0, sample_data, active_tracks=[1])
+
+        assert only_a != full
+        assert only_b != full
+        assert only_a != only_b
+
+
 class TestRenderSongToWav:
 
     def test_wav_header(self):
@@ -313,3 +351,95 @@ class TestRenderSongToWav:
         rate = unpack_from("<I", wav, 24)[0]
 
         assert rate == 44100
+
+
+class TestMixPcmStreams:
+
+    def test_empty_streams_handled(self):
+        renderer = _renderer()
+        # Internal helper — touching it via render_layered with no songs.
+        pcm = renderer.render_layered(CseqFile(songs=[]), [0, 1], {})
+
+        assert pcm == b""
+
+    def test_single_stream_passes_through(self):
+        renderer = _renderer()
+        stream = bytes([0x10, 0x00, 0x20, 0x00])  # one stereo sample: L=16, R=32
+
+        out = renderer._mix_pcm_streams([stream])
+
+        assert out == stream
+
+    def test_sample_wise_sum(self):
+        renderer = _renderer()
+        # Two stereo streams, one stereo sample each. L+L, R+R.
+        # Stream A: L=100, R=200. Stream B: L=50, R=-100.
+        from struct import pack
+        a = pack("<hh", 100, 200)
+        b = pack("<hh", 50, -100)
+
+        out = renderer._mix_pcm_streams([a, b])
+
+        l, r = unpack_from("<hh", out, 0)
+        assert l == 150
+        assert r == 100
+
+    def test_clamps_to_int16(self):
+        renderer = _renderer()
+        from struct import pack
+        # Two streams that would overflow int16 if summed.
+        a = pack("<hh", 30000, -30000)
+        b = pack("<hh", 30000, -30000)
+
+        out = renderer._mix_pcm_streams([a, b])
+        l, r = unpack_from("<hh", out, 0)
+
+        assert l == 32767     # clamped positive
+        assert r == -32768    # clamped negative
+
+    def test_pads_shorter_streams(self):
+        renderer = _renderer()
+        from struct import pack
+        # Long stream: 2 stereo samples. Short stream: 1 stereo sample.
+        long_stream = pack("<hhhh", 100, 100, 200, 200)
+        short_stream = pack("<hh", 50, 50)
+
+        out = renderer._mix_pcm_streams([long_stream, short_stream])
+
+        # First sample = long[0] + short[0]; second sample = long[1] alone.
+        first_l, first_r, second_l, second_r = unpack_from("<hhhh", out, 0)
+        assert first_l == 150
+        assert first_r == 150
+        assert second_l == 200
+        assert second_r == 200
+
+
+class TestRenderLayered:
+
+    def test_empty_indices_returns_empty(self):
+        renderer = _renderer()
+        cseq = CseqFile(songs=[CseqSong(bpm=120, tpqn=480, tracks=[])])
+
+        assert renderer.render_layered(cseq, [], {}) == b""
+
+    def test_out_of_range_indices_skipped(self):
+        renderer = _renderer()
+        cseq = CseqFile(songs=[CseqSong(bpm=120, tpqn=480, tracks=[])])
+
+        # Both indices are out of range — should return empty without crashing.
+        assert renderer.render_layered(cseq, [5, 99], {}) == b""
+
+    def test_wav_format_correct(self):
+        renderer = _renderer()
+        track = CseqTrack(events=[CseqEvent(delta=0, event_type=CseqEventType.END_TRACK)])
+        cseq = CseqFile(songs=[
+            CseqSong(bpm=120, tpqn=480, tracks=[track]),
+            CseqSong(bpm=120, tpqn=480, tracks=[track]),
+        ])
+
+        wav = renderer.render_layered_to_wav(cseq, [0, 1], {}, output_rate=22050)
+        channels = unpack_from("<H", wav, 22)[0]
+        rate = unpack_from("<I", wav, 24)[0]
+
+        assert channels == 2
+        assert rate == 22050

@@ -2,7 +2,7 @@
 
 from struct import unpack_from
 
-from howl_editor.analysis.stock_names import StockNames
+from howl_editor.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.models import SpuAddrEntry, BankSample
 from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
 
@@ -14,11 +14,11 @@ _SPU_ADDR_BYTE_MULTIPLIER = 8
 
 class BankReader:
 
-    def __init__(self, stock_names: StockNames | None = None):
-        self._names = stock_names or StockNames()
+    def __init__(self, stock_names: StockNameResolver):
+        self._name_resolver = stock_names
 
     def get_name(self, index: int) -> str:
-        return self._names.bank_name(index)
+        return self._name_resolver.bank_name(index)
 
     def parse(self, bank_data: bytes, spu_addrs: list[SpuAddrEntry]) -> list[BankSample]:
         """Parse a bank blob into individual samples."""

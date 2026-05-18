@@ -14,6 +14,7 @@ class VagReader:
         """Parse VAG bytes. Handles both headered and headerless data."""
         if self._has_header(data):
             return self._read_with_header(data)
+
         return VagSample(data=data)
 
     def read_file(self, path: str | Path) -> VagSample:

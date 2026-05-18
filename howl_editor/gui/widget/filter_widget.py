@@ -25,7 +25,6 @@ class FilterWidget(QWidget):
         layout.addWidget(self._input)
 
         self._clear_btn = QPushButton("Clear")
-        self._clear_btn.setFixedWidth(50)
         self._clear_btn.clicked.connect(self._clear)
         layout.addWidget(self._clear_btn)
 

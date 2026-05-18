@@ -1,7 +1,5 @@
 # coding: utf-8
 
-from howl_editor.analysis.stock_names import StockNames
-
 
 class TestBankNames:
 
@@ -27,9 +25,11 @@ class TestBankNames:
         assert stock_names.bank_name(71) == "Custom"
         assert stock_names.bank_name(999) == "Custom"
 
-    def test_unknown_in_range_returns_empty(self, stock_names):
-        # 38-53 are not assigned a name in the stock table.
-        assert stock_names.bank_name(38) == ""
+    def test_podium_bank_named(self, stock_names):
+        # Banks 38-53 are character podium-animation banks, paired to the
+        # character at index + 17.
+        assert stock_names.bank_name(38) == "Crash Bandicoot (Podium)"
+        assert stock_names.bank_name(53) == "Oxide (Podium)"
 
 
 class TestSongNames:

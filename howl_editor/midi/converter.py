@@ -3,7 +3,11 @@
 from pathlib import Path
 
 from howl_editor.cseq.writer import CseqWriter
-from howl_editor.midi.models import MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping
+from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
+from howl_editor.midi.models import (
+    MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping,
+    DrumPitchMapping,
+)
 from howl_editor.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
     CseqInstrument, CseqPercussion,
@@ -17,15 +21,18 @@ except ImportError:
 
 _MIDI_CC_VOLUME = 7
 _MIDI_CC_PAN = 10
+_MIDI_CC_MAX = 127
 _MIDI_PITCH_BEND_CENTER = 8192
 _MIDI_PITCH_BEND_RANGE = 16384
+_CSEQ_CC_MAX = 255
 _CSEQ_MAX_PITCH_BEND = 255
 
 
 class MidiConverter:
 
-    def __init__(self, cseq_writer: CseqWriter):
+    def __init__(self, cseq_writer: CseqWriter, drum_pitch_remapper: DrumPitchRemapper):
         self._cseq_writer = cseq_writer
+        self._drum_remapper = drum_pitch_remapper
 
     def get_midi_info(self, midi_path: str | Path) -> MidiInfo:
         """Extract structured info about a MIDI file."""
@@ -36,11 +43,13 @@ class MidiConverter:
         for i, track in enumerate(mid.tracks):
             note_count = sum(1 for msg in track if msg.type == "note_on")
             channels = sorted({msg.channel for msg in track if hasattr(msg, "channel")})
+            drum_pitches = self._drum_remapper.collect_drum_pitches(track)
             tracks.append(MidiTrackInfo(
                 index=i,
                 name=track.name or f"Track {i}",
                 note_count=note_count,
                 channels=channels,
+                drum_pitches=drum_pitches,
             ))
 
         return MidiInfo(
@@ -71,10 +80,12 @@ class MidiConverter:
         self._extract_tempo(mid, song)
 
         midi_tracks = self._collect_note_tracks(mid)
-        inst_map, drum_set = self._create_instruments(cseq, midi_tracks, settings)
+        inst_map, drum_pitch_tables = self._create_instruments(cseq, midi_tracks, settings)
 
         for track_idx, (midi_idx, midi_track) in enumerate(midi_tracks):
-            cseq_track = self._convert_track(midi_track, track_idx, inst_map, drum_set)
+            cseq_track = self._convert_track(
+                midi_track, track_idx, inst_map, drum_pitch_tables,
+            )
             song.tracks.append(cseq_track)
 
         cseq.songs.append(song)
@@ -95,24 +106,38 @@ class MidiConverter:
 
     def _create_instruments(
         self, cseq: CseqFile, midi_tracks: list, settings: MidiConvertSettings,
-    ) -> tuple[dict[int, int], set[int]]:
-        instrument_map: dict[int, int] = {}
-        drum_set: set[int] = set()
+    ) -> tuple[dict[int, int], dict[int, list[int]]]:
+        """Populate the CSEQ instrument and percussion lists.
 
-        for track_idx, (midi_idx, _) in enumerate(midi_tracks):
+        Returns:
+          - instrument_map: cseq track index → instrument/percussion index.
+            For drum tracks this points at the FIRST percussion entry; the
+            actual per-note index is resolved via drum_pitch_tables.
+          - drum_pitch_tables: cseq track index → ordered MIDI pitch list,
+            used by `_convert_track` to rewrite NOTE_ON pitches into CSEQ
+            percussion indices.
+        """
+        instrument_map: dict[int, int] = {}
+        drum_pitch_tables: dict[int, list[int]] = {}
+
+        for track_idx, (midi_idx, midi_track) in enumerate(midi_tracks):
             mapping = settings.mappings[midi_idx] if midi_idx < len(settings.mappings) else InstrumentMapping()
 
             if mapping.is_drum:
-                drum_set.add(track_idx)
+                pitch_table = self._build_drum_pitch_table(midi_track, mapping)
+                first_perc_index = len(cseq.percussions)
 
-                cseq.percussions.append(CseqPercussion(
-                    flags=1,
-                    volume=mapping.volume,
-                    frequency=mapping.frequency,
-                    sample_id=mapping.sample_id,
-                ))
+                for pitch in pitch_table:
+                    slot = self._find_drum_slot(mapping, pitch)
+                    cseq.percussions.append(CseqPercussion(
+                        flags=1,
+                        volume=slot.volume,
+                        frequency=slot.frequency,
+                        sample_id=slot.sample_id,
+                    ))
 
-                instrument_map[track_idx] = len(cseq.percussions) - 1
+                instrument_map[track_idx] = first_perc_index
+                drum_pitch_tables[track_idx] = pitch_table
             else:
                 cseq.instruments.append(CseqInstrument(
                     flags=1,
@@ -124,12 +149,43 @@ class MidiConverter:
 
                 instrument_map[track_idx] = len(cseq.instruments) - 1
 
-        return instrument_map, drum_set
+        return instrument_map, drum_pitch_tables
+
+    def _build_drum_pitch_table(self, midi_track, mapping: InstrumentMapping) -> list[int]:
+        """Decide the order of percussion slots for a drum track. Priority:
+        1. Explicit per-pitch dialog mappings (preserves user-chosen ordering
+           so SPU sample IDs line up).
+        2. Unique pitches on the GM drum channel.
+        3. All unique note pitches in the track — when the user manually marks
+           a non-channel-9 track as drum we still need a pitch table.
+        """
+        if mapping.drum_pitches:
+            return [slot.midi_pitch for slot in mapping.drum_pitches]
+
+        drum_channel_pitches = self._drum_remapper.collect_drum_pitches(midi_track)
+        if drum_channel_pitches:
+            return drum_channel_pitches
+
+        return self._drum_remapper.collect_all_note_pitches(midi_track)
+
+    def _find_drum_slot(self, mapping: InstrumentMapping, midi_pitch: int):
+        for slot in mapping.drum_pitches:
+            if slot.midi_pitch == midi_pitch:
+                return slot
+
+        return DrumPitchMapping(
+            midi_pitch=midi_pitch,
+            sample_id=mapping.sample_id,
+            frequency=mapping.frequency,
+            volume=mapping.volume,
+        )
 
     def _convert_track(
-        self, midi_track, track_idx: int, instrument_map: dict, drum_set: set,
+        self, midi_track, track_idx: int,
+        instrument_map: dict, drum_pitch_tables: dict[int, list[int]],
     ) -> CseqTrack:
-        is_drum = track_idx in drum_set
+        pitch_table = drum_pitch_tables.get(track_idx)
+        is_drum = pitch_table is not None
         cseq_track = CseqTrack(flags=1 if is_drum else 0)
         patch_idx = instrument_map.get(track_idx, 0)
 
@@ -146,7 +202,7 @@ class MidiConverter:
 
         for msg in midi_track:
             current_tick += msg.time
-            event = self._convert_message(msg, current_tick, last_tick)
+            event = self._convert_message(msg, current_tick, last_tick, pitch_table)
 
             if event:
                 cseq_track.events.append(event)
@@ -155,24 +211,37 @@ class MidiConverter:
         cseq_track.events.append(CseqEvent(delta=0, event_type=CseqEventType.END_TRACK))
         return cseq_track
 
-    def _convert_message(self, msg, current_tick: int, last_tick: int) -> CseqEvent | None:
+    def _convert_message(
+        self, msg, current_tick: int, last_tick: int,
+        drum_pitch_table: list[int] | None,
+    ) -> CseqEvent | None:
         delta = current_tick - last_tick
 
         if msg.type == "note_on" and msg.velocity > 0:
             return CseqEvent(
                 delta=delta, event_type=CseqEventType.NOTE_ON,
-                pitch=msg.note, velocity=msg.velocity,
+                pitch=self._note_pitch(msg.note, drum_pitch_table),
+                velocity=msg.velocity,
             )
 
         if msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
-            return CseqEvent(delta=delta, event_type=CseqEventType.NOTE_OFF, pitch=msg.note)
+            return CseqEvent(
+                delta=delta, event_type=CseqEventType.NOTE_OFF,
+                pitch=self._note_pitch(msg.note, drum_pitch_table),
+            )
 
         if msg.type == "control_change":
             if msg.control == _MIDI_CC_VOLUME:
-                return CseqEvent(delta=delta, event_type=CseqEventType.VELOCITY, pitch=msg.value)
+                return CseqEvent(
+                    delta=delta, event_type=CseqEventType.VELOCITY,
+                    pitch=self._midi_cc_to_cseq_byte(msg.value),
+                )
 
             if msg.control == _MIDI_CC_PAN:
-                return CseqEvent(delta=delta, event_type=CseqEventType.PAN, pitch=msg.value)
+                return CseqEvent(
+                    delta=delta, event_type=CseqEventType.PAN,
+                    pitch=self._midi_cc_to_cseq_byte(msg.value),
+                )
 
         if msg.type == "pitchwheel":
             bend = self._midi_bend_to_cseq(msg.pitch)
@@ -181,5 +250,17 @@ class MidiConverter:
         return None
 
     def _midi_bend_to_cseq(self, midi_pitch: int) -> int:
-        return max(0, min(_CSEQ_MAX_PITCH_BEND,
-            int((midi_pitch + _MIDI_PITCH_BEND_CENTER) / _MIDI_PITCH_BEND_RANGE * _CSEQ_MAX_PITCH_BEND)))
+        return max(0, min(_CSEQ_MAX_PITCH_BEND, int((midi_pitch + _MIDI_PITCH_BEND_CENTER) / _MIDI_PITCH_BEND_RANGE * _CSEQ_MAX_PITCH_BEND)))
+
+    def _midi_cc_to_cseq_byte(self, midi_value: int) -> int:
+        clamped = max(0, min(_MIDI_CC_MAX, midi_value))
+        return int(clamped / _MIDI_CC_MAX * _CSEQ_CC_MAX)
+
+    def _note_pitch(self, midi_note: int, drum_pitch_table: list[int] | None) -> int:
+        if drum_pitch_table is None:
+            return midi_note
+
+        if midi_note in drum_pitch_table:
+            return self._drum_remapper.remap(midi_note, drum_pitch_table)
+
+        return midi_note

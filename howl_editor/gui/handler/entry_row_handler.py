@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
-from howl_editor.cseq.adventure_hub import ADVENTURE_HUB_NUM_SEQUENCES
+from howl_editor.cseq.adventure_hub import ADVENTURE_HUB_NUM_TRACKS
 from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.entry_drop_router import DropAction, EntryDropRouter
@@ -40,6 +40,10 @@ class EntryRowHandler:
 
         if row.bank_index is not None:
             self._w._bank_handler.export_bank(row.bank_index)
+
+        # FX rows have no export of their own — every SPU sample they
+        # reference already lives inside a bank, so the user exports it
+        # from the bank entry (or its sample leaves) instead.
 
     def replace(self, row: EntryRow) -> None:
         if not self._w.hwl or not row.accepts:
@@ -114,12 +118,17 @@ class EntryRowHandler:
                 leaf.bank_index, leaf.sample_index or 0,
             )
 
-    def play_hub_preview(self, song_index: int, seq_indices: list[int], label: str) -> None:
-        """Render the layered hub preview for the selected hub and play it."""
+    def play_hub(
+        self, song_index: int, sub_song_index: int,
+        active_tracks: list[int], label: str,
+    ) -> None:
+        """Render the selected hub's track-masked main music and play it."""
         if not self._w.hwl:
             return
 
-        self._w._playback.play_layered(song_index, list(seq_indices), label)
+        self._w._playback.play_hub(
+            song_index, sub_song_index, list(active_tracks), label,
+        )
 
     def drop_leaf(self, leaf: EntryLeaf, file_path: str) -> None:
         # Direct file → leaf replacement, skipping the file picker that
@@ -170,20 +179,33 @@ class EntryRowHandler:
         self._w._notify(f"Replaced {row.name} with {Path(file_path).name}")
 
     def _validate_hub_cseq(self, blob: bytes, file_path: str) -> bool:
+        """The Adventure Hub song's main-music sub-song (index 0) must have
+        exactly 20 tracks — the runtime per-hub mask (Cseq.hubTracksMask)
+        is sized to that count, so a different number breaks per-hub layering."""
         try:
             cseq = self._w._cseq_reader.read(blob)
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Cannot read CSEQ:\n{e}")
             return False
 
-        if len(cseq.songs) != ADVENTURE_HUB_NUM_SEQUENCES:
+        if not cseq.songs:
             QMessageBox.warning(
                 self._w, "Adventure Hub CSEQ rejected",
-                f"{Path(file_path).name} has {len(cseq.songs)} sequences. "
-                f"The Adventure Hub layered song requires exactly "
-                f"{ADVENTURE_HUB_NUM_SEQUENCES}; replacing with a different "
-                f"count breaks the per-hub mask layering at runtime.",
+                f"{Path(file_path).name} has no sub-songs — the Adventure Hub "
+                f"song needs Main music / Aku Aku mask / Uka Uka mask.",
             )
+            return False
+
+        main_track_count = len(cseq.songs[0].tracks)
+        if main_track_count != ADVENTURE_HUB_NUM_TRACKS:
+            QMessageBox.warning(
+                self._w, "Adventure Hub CSEQ rejected",
+                f"{Path(file_path).name}'s main-music sub-song has "
+                f"{main_track_count} tracks. The Adventure Hub layered song "
+                f"requires exactly {ADVENTURE_HUB_NUM_TRACKS}; replacing with "
+                f"a different count breaks the per-hub mask layering at runtime.",
+            )
+
             return False
 
         return True
@@ -211,7 +233,7 @@ class EntryRowHandler:
             return
 
         max_spu = len(self._w.hwl.spu_addrs) if self._w.hwl else 0
-        dialog = ConvertMidiDialog(self._w, info, max_spu)
+        dialog = ConvertMidiDialog(self._w, info, max_spu, self._w._drum_names)
 
         if dialog.exec() != QDialog.Accepted:
             return

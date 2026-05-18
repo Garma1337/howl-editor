@@ -176,7 +176,7 @@ class SampleHandler:
 
         over_by = bank_size - SAPHI_BANK_MAX_SIZE
         self._window.status.showMessage(
-            f"⚠ Bank {bank_index} is {bank_size} bytes — {over_by} over the "
+            f"⚠️ Bank {bank_index} is {bank_size} bytes — {over_by} over the "
             f"Saphi {SAPHI_BANK_MAX_SIZE}-byte limit. Saphi will reject the export.",
             10000,
         )
