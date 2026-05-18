@@ -6,18 +6,20 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.analysis.semantic_entry_builder import SemanticEntryBuilder
-from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
+from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
+from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
+from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.detail.leaf_info_formatter import LeafInfoFormatter
+from howl_editor.gui.entries.entry_leaf import EntryLeaf
+from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.gui.entries.semantic_entry import EntryGroup
+from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.category_detail_widget import CategoryDetailWidget
 from howl_editor.gui.widget.category_grid_widget import CategoryGridWidget
 from howl_editor.gui.widget.player_widget import PlayerWidget
 from howl_editor.gui.widget.waveform_widget import WaveformWidget
-from howl_editor.howl.blob_snapshot import BlobSnapshot
-from howl_editor.models import EntryGroup, EntryLeaf, HowlFile
 
 _PAGE_EMPTY = 0
 _PAGE_GRID = 1
@@ -52,7 +54,7 @@ class MainTabWidget(QWidget):
         leaves_builder: EntryLeavesBuilder,
         snapshot: BlobSnapshot,
         stylesheet_loader: StylesheetLoader,
-        hub_mask_table: AdventureHubMaskTable,
+        hub_mask_table: AdventureHubMaskTableQuery,
         icon_resolver: CategoryIconResolver,
         leaf_info_formatter: LeafInfoFormatter,
     ):

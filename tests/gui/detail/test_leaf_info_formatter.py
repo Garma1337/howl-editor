@@ -4,23 +4,25 @@ from pathlib import Path
 
 import pytest
 
-from howl_editor.audio.sample_lookup import SampleLookup
-from howl_editor.bank.reader import BankReader
+from howl_editor.ctr.sample_lookup import SampleLookup
+from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.core.vlq import VlqCodec
-from howl_editor.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.gui.detail.leaf_info_formatter import LeafInfoFormatter
 from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.models import EntryLeaf, HowlFile, LeafKind, SpuAddrEntry
-from howl_editor.models.semantic_entry import EntryKind, EntryRow
+from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
+from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
+from howl_editor.gui.entries.semantic_entry import EntryKind, EntryRow
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from tests.conftest import build_bank_blob
 
 
 @pytest.fixture
 def formatter():
     template_dir = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
-    bank_reader = BankReader()
-    cseq_reader = CseqReader(VlqCodec())
+    bank_reader = BankReader(StockNameResolver())
+    cseq_reader = CseqReader(VlqCodec(), StockNameResolver())
     sample_lookup = SampleLookup(bank_reader, cseq_reader)
 
     return LeafInfoFormatter(

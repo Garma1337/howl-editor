@@ -1,6 +1,9 @@
 # coding: utf-8
 
 
+from howl_editor.midi import format as midi_fmt
+
+
 class DrumPitchRemapper:
     """Maps MIDI drum pitches to CSEQ percussion indices.
 
@@ -9,8 +12,6 @@ class DrumPitchRemapper:
     raw MIDI pitch (e.g. 36 = kick) would point past the percussion table and
     play nothing.
     """
-
-    _GM_DRUM_CHANNEL_INDEX = 9
 
     def collect_drum_pitches(self, midi_track) -> list[int]:
         """Return sorted unique note pitches found on the GM drum channel in
@@ -52,4 +53,4 @@ class DrumPitchRemapper:
         if not hasattr(msg, "channel") or not hasattr(msg, "note"):
             return False
 
-        return msg.channel == self._GM_DRUM_CHANNEL_INDEX
+        return msg.channel == midi_fmt.DRUM_CHANNEL_INDEX

@@ -5,11 +5,12 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox, QDialog, QInputDialog
 
+from howl_editor.ctr.constants import MAX_CSEQ_BYTES
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.dialog.saphi_export_dialog import SaphiExportDialog
 from howl_editor.midi.converter import HAS_MIDO
-from howl_editor.models import ScaFile, ScaMetadata
-from howl_editor.sca.constants import SAPHI_BANK_MAX_SIZE
+from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
+from howl_editor.saphi.formats.sca.models import ScaFile, ScaMetadata
 
 
 class ToolsHandler:
@@ -219,7 +220,7 @@ class ToolsHandler:
 
         size = len(cseq_data)
         overflow = validator.calculate_overflow_bytes(cseq_data)
-        limit = validator.MAX_CSEQ_BYTES
+        limit = MAX_CSEQ_BYTES
 
         answer = QMessageBox.warning(
             self._window, "CSEQ exceeds engine limit",

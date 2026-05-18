@@ -2,10 +2,10 @@
 
 from struct import unpack_from
 
-from howl_editor.bank.reader import BankReader
 from howl_editor.core.template_engine import TemplateEngine
+from howl_editor.ctr.formats.bank.reader import BankReader
+from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.models import HowlFile
 
 
 class BankDetailFormatter:

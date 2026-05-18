@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog, QInputDialog
 
 from howl_editor.gui.command import RemoveItemCommand, SwapBlobCommand
 from howl_editor.gui.dialog.merge_bank_dialog import MergeBankDialog
-from howl_editor.models import VagSample
+from howl_editor.ps1.formats.vag.models import VagSample
 
 
 class BankHandler:

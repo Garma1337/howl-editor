@@ -10,10 +10,11 @@ from PySide6.QtWidgets import (
 )
 
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
+from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
+from howl_editor.gui.entries.semantic_entry import EntryKind
+from howl_editor.gui.entries.semantic_entry import EntryRow
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.leaf_row_widget import LeafRowWidget
-from howl_editor.models import EntryLeaf, EntryRow, LeafKind
-from howl_editor.models.semantic_entry import EntryKind
 
 _KIND_ICON_FALLBACK = "•"
 _ENTRY_ICON_PX = 32

@@ -4,10 +4,9 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QGridLayout, QScrollArea, QVBoxLayout, QWidget
 
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
+from howl_editor.gui.entries.semantic_entry import EntryGroup
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.category_card_widget import CategoryCardWidget
-from howl_editor.models import EntryGroup
-
 
 _CARDS_PER_ROW = 4
 

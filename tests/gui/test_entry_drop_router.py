@@ -3,8 +3,8 @@
 import pytest
 
 from howl_editor.gui.entry_drop_router import DropAction, EntryDropRouter
-from howl_editor.models import EntryRow
-from howl_editor.models.semantic_entry import EntryKind
+from howl_editor.gui.entries.semantic_entry import EntryRow
+from howl_editor.gui.entries.semantic_entry import EntryKind
 
 
 @pytest.fixture

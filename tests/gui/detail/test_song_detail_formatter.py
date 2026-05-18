@@ -4,18 +4,19 @@ from pathlib import Path
 
 from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.core.vlq import VlqCodec
-from howl_editor.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
 from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.models import CseqInstrument
-from howl_editor.models import HowlFile
+from howl_editor.ctr.formats.cseq.models import CseqInstrument
+from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from tests.conftest import build_cseq_bytes
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
 
 
 def _formatter():
-    return SongDetailFormatter(CseqReader(VlqCodec()), TemplateEngine(_TEMPLATE_DIR), SizeFormatter())
+    return SongDetailFormatter(CseqReader(VlqCodec(), StockNameResolver()), TemplateEngine(_TEMPLATE_DIR), SizeFormatter())
 
 
 class TestSongDetailFormatter:

@@ -16,42 +16,43 @@ try:
 except ImportError:
     HAS_MULTIMEDIA = False
 
-from howl_editor.analysis import SampleClassifier, BankCseqValidator
-from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.analysis.semantic_entry_builder import SemanticEntryBuilder
 from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
-from howl_editor.audio.cseq_renderer import CseqRenderer
-from howl_editor.audio.decoder.vag_decoder import VagDecoder
-from howl_editor.audio.sample_lookup import SampleLookup
-from howl_editor.bank import BankReader, BankBuilder
-from howl_editor.cseq import CseqReader, CseqWriter
-from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
-from howl_editor.cseq.editor import CseqEditor
+from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.ctr.analysis.validator import BankCseqValidator
+from howl_editor.ctr.cseq_renderer import CseqRenderer
+from howl_editor.ctr.formats.bank import BankReader, BankBuilder
+from howl_editor.ctr.formats.cseq import CseqReader, CseqWriter
+from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
+from howl_editor.ctr.formats.cseq.editor import CseqEditor
+from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
+from howl_editor.ctr.formats.howl import HowlReader, HowlWriter, HowlEditor
+from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
+from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.ctr.formats.howl.version import HowlVersionDetector
+from howl_editor.ctr.sample_lookup import SampleLookup
 from howl_editor.export import BatchExporter
-from howl_editor.cseq.size_validator import CseqSizeValidator
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
-from howl_editor.midi.drum_name_resolver import DrumNameResolver
+from howl_editor.gui.command import MoveItemCommand, MoveSequenceCommand
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
+from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
 from howl_editor.gui.entry_drop_router import EntryDropRouter
-from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.handler.bank_handler import BankHandler
 from howl_editor.gui.handler.entry_row_handler import EntryRowHandler
 from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
 from howl_editor.gui.handler.tools_handler import ToolsHandler
-from howl_editor.gui.command import MoveItemCommand, MoveSequenceCommand
+from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.gui.widget.main_tab_widget import MainTabWidget
-from howl_editor.howl import HowlReader, HowlWriter, HowlEditor
-from howl_editor.howl.blob_snapshot import BlobSnapshot
-from howl_editor.howl.version import HowlVersionDetector
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
+from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.exporter import CseqMidiExporter
-from howl_editor.models import HowlFile
-from howl_editor.sca import SampleSizesExtractor, ScaReader, ScaWriter
-from howl_editor.vag import VagReader, VagWriter
+from howl_editor.ps1.formats.vag import VagReader, VagWriter
+from howl_editor.ps1.formats.vag.decoder import VagDecoder
+from howl_editor.saphi import SampleSizesExtractor, ScaReader, ScaWriter
 
 NODE_ROOT = 0
 NODE_SPU_TABLE = 1
@@ -101,7 +102,7 @@ class MainWindow(QMainWindow):
         blob_snapshot: BlobSnapshot | None = None,
         entry_drop_router: EntryDropRouter | None = None,
         stylesheet_loader: StylesheetLoader | None = None,
-        adventure_hub_mask_table: AdventureHubMaskTable | None = None,
+        adventure_hub_mask_table: AdventureHubMaskTableQuery | None = None,
         category_icon_resolver: CategoryIconResolver | None = None,
         cseq_size_validator: CseqSizeValidator | None = None,
         drum_names: DrumNameResolver | None = None,

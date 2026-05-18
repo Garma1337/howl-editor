@@ -1,17 +1,14 @@
 # coding: utf-8
 
-from howl_editor.audio.sample_lookup import SampleLookup
-from howl_editor.bank.reader import BankReader
 from howl_editor.core.template_engine import TemplateEngine
-from howl_editor.cseq.reader import CseqReader
+from howl_editor.ctr.formats.bank.reader import BankReader
+from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.ctr.sample_lookup import SampleLookup
+from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
+from howl_editor.gui.entries.semantic_entry import EntryKind, EntryRow
 from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.models import EntryLeaf, HowlFile, LeafKind
-from howl_editor.models.semantic_entry import EntryKind, EntryRow
-
-
-# Sony ADPCM (VAG) format: 16-byte blocks decode to 28 mono int16 samples.
-_VAG_BLOCK_BYTES = 16
-_VAG_BLOCK_SAMPLES = 28
+from howl_editor.ps1.formats.vag import format as vag_format
 
 
 class LeafInfoFormatter:
@@ -262,7 +259,10 @@ class LeafInfoFormatter:
         if vag_bytes <= 0 or sample_rate <= 0:
             return 0.0
 
-        pcm_samples = (vag_bytes // _VAG_BLOCK_BYTES) * _VAG_BLOCK_SAMPLES
+        pcm_samples = (
+            (vag_bytes // vag_format.FRAME_SIZE)
+            * vag_format.PCM_SAMPLES_PER_FRAME
+        )
         return pcm_samples / sample_rate
 
     def _format_duration(self, seconds: float) -> str:

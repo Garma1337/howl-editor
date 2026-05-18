@@ -1,8 +1,6 @@
 # coding: utf-8
 
 import hashlib
-import tempfile
-from pathlib import Path
 
 try:
     from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -11,7 +9,7 @@ try:
 except ImportError:
     HAS_MULTIMEDIA = False
 
-_CACHE_DIR = Path(tempfile.gettempdir()) / "howl-editor"
+from howl_editor.paths import DECODED_WAV_CACHE_DIR
 
 
 class AudioPlayer:
@@ -26,7 +24,7 @@ class AudioPlayer:
             self._player = QMediaPlayer()
             self._player.setAudioOutput(self._audio_output)
 
-        _CACHE_DIR.mkdir(exist_ok=True)
+        DECODED_WAV_CACHE_DIR.mkdir(exist_ok=True)
 
     @property
     def available(self) -> bool:
@@ -44,7 +42,7 @@ class AudioPlayer:
         self.stop()
 
         checksum = hashlib.md5(wav_data).hexdigest()
-        cached_path = _CACHE_DIR / f"{checksum}.wav"
+        cached_path = DECODED_WAV_CACHE_DIR / f"{checksum}.wav"
 
         if not cached_path.exists():
             cached_path.write_bytes(wav_data)
@@ -67,7 +65,7 @@ class AudioPlayer:
         """Remove all cached WAV files. Returns number of files removed."""
         count = 0
 
-        for f in _CACHE_DIR.glob("*.wav"):
+        for f in DECODED_WAV_CACHE_DIR.glob("*.wav"):
             try:
                 f.unlink()
                 count += 1

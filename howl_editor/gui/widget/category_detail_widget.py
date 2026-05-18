@@ -7,15 +7,17 @@ from PySide6.QtWidgets import (
     QScrollArea, QVBoxLayout, QWidget,
 )
 
-from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
+from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
+from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
+from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
+from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
+from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.gui.entries.semantic_entry import EntryGroup
+from howl_editor.gui.entries.semantic_entry import EntryKind, EntryRow
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.entry_parent_widget import EntryParentWidget
 from howl_editor.gui.widget.leaf_row_widget import LeafRowWidget
-from howl_editor.howl.blob_snapshot import BlobSnapshot
-from howl_editor.models import EntryGroup, EntryLeaf, HowlFile, LeafKind
-from howl_editor.models.semantic_entry import EntryKind, EntryRow
 
 _TITLE_ICON_PX = 40
 
@@ -43,7 +45,6 @@ class CategoryDetailWidget(QWidget):
     sig_row_replace = Signal(object)
     sig_row_export = Signal(object)
     sig_row_drop = Signal(object, str)
-    # Adventure Hub preview: (song_index, sub_song_index, active_tracks, label)
     sig_play_hub = Signal(int, int, object, str)
 
     def __init__(
@@ -51,14 +52,14 @@ class CategoryDetailWidget(QWidget):
         leaves_builder: EntryLeavesBuilder,
         snapshot: BlobSnapshot,
         stylesheet_loader: StylesheetLoader,
-        hub_mask_table: AdventureHubMaskTable,
+        hub_mask_table_query: AdventureHubMaskTableQuery,
         icon_resolver: CategoryIconResolver,
     ):
         super().__init__()
         self._leaves_builder = leaves_builder
         self._snapshot = snapshot
         self._stylesheets = stylesheet_loader
-        self._hub_mask = hub_mask_table
+        self._hub_mask_table_query = hub_mask_table_query
         self._icon_resolver = icon_resolver
         self._current_group: EntryGroup | None = None
         self._current_hwl: HowlFile | None = None
@@ -142,8 +143,8 @@ class CategoryDetailWidget(QWidget):
         if row.song_index is None:
             return
 
-        active_tracks = self._hub_mask.tracks_for_hub(hub_index)
-        label = f"Adventure Hub · {self._hub_mask.hub_name(hub_index)}"
+        active_tracks = self._hub_mask_table_query.tracks_for_hub(hub_index)
+        label = f"Adventure Hub · {self._hub_mask_table_query.hub_name(hub_index)}"
         self.sig_play_hub.emit(row.song_index, 0, active_tracks, label)
 
     def _render_entries(self) -> None:
@@ -167,7 +168,7 @@ class CategoryDetailWidget(QWidget):
 
             hub_names: tuple[str, ...] = ()
             if row.kind == EntryKind.ADVENTURE_HUB:
-                hub_names = self._hub_mask.hub_names()
+                hub_names = self._hub_mask_table_query.hub_names()
 
             parent = EntryParentWidget(
                 row, leaves, self._current_group.icon, self._stylesheets,

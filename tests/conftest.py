@@ -4,39 +4,38 @@ from struct import pack, pack_into
 
 import pytest
 
-from howl_editor.analysis.blob_modification_detector import BlobModificationDetector
-from howl_editor.analysis.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.analysis.sample_classifier import SampleClassifier
-from howl_editor.analysis.semantic_entry_builder import SemanticEntryBuilder
-from howl_editor.analysis.stock_layout import StockLayout
-from howl_editor.analysis.stock_name_resolver import StockNameResolver
-from howl_editor.analysis.validator import BankCseqValidator
-from howl_editor.cseq.adventure_hub import AdventureHubMaskTable
-from howl_editor.cseq.track_mask_layout import TrackMaskLayout
+from howl_editor.gui.entries.blob_modification_detector import BlobModificationDetector
+from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
+from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
+from howl_editor.ctr.analysis.validator import BankCseqValidator
+from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
+from howl_editor.ctr.formats.cseq.track_mask_layout import TrackMaskLayout
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
-from howl_editor.audio.decoder.vag_decoder import VagDecoder
+from howl_editor.ps1.formats.vag.decoder import VagDecoder
 from howl_editor.audio.wav_writer import WavWriter
-from howl_editor.bank.builder import BankBuilder
-from howl_editor.bank.reader import BankReader
+from howl_editor.ctr.formats.bank.builder import BankBuilder
+from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.core.vlq import VlqCodec
-from howl_editor.cseq.reader import CseqReader
-from howl_editor.cseq.writer import CseqWriter
-from howl_editor.sca.chunk_reader import ScaChunkReader
-from howl_editor.sca.chunk_writer import ScaChunkWriter
-from howl_editor.sca.metadata_codec import ScaMetadataCodec
-from howl_editor.sca.reader import ScaReader
-from howl_editor.sca.writer import ScaWriter
-from howl_editor.howl.editor import HowlEditor
-from howl_editor.howl.reader import HowlReader
-from howl_editor.howl.version import HowlVersionDetector
-from howl_editor.howl.writer import HowlWriter
-from howl_editor.models import (
-    HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX, VagSample,
-    CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
-)
-from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
-from howl_editor.vag.reader import VagReader
-from howl_editor.vag.writer import VagWriter
+from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.writer import CseqWriter
+from howl_editor.saphi.formats.sca.chunk_reader import ScaChunkReader
+from howl_editor.saphi.formats.sca.chunk_writer import ScaChunkWriter
+from howl_editor.saphi.formats.sca.metadata_codec import ScaMetadataCodec
+from howl_editor.saphi.formats.sca.reader import ScaReader
+from howl_editor.saphi.formats.sca.writer import ScaWriter
+from howl_editor.ctr.formats.howl.editor import HowlEditor
+from howl_editor.ctr.formats.howl.reader import HowlReader
+from howl_editor.ctr.formats.howl.version import HowlVersionDetector
+from howl_editor.ctr.formats.howl.writer import HowlWriter
+from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType
+from howl_editor.ctr.formats.howl.models import HowlFile, HowlHeader, SpuAddrEntry, OtherFX, EngineFX
+from howl_editor.ps1.formats.vag.models import VagSample
+from howl_editor.ps1.constants import SECTOR_SIZE, bytes_to_sectors
+from howl_editor.ps1.formats.vag.reader import VagReader
+from howl_editor.ps1.formats.vag.writer import VagWriter
 
 
 @pytest.fixture
@@ -101,7 +100,7 @@ def validator(bank_reader, cseq_reader):
 
 @pytest.fixture
 def stock_layout():
-    return StockLayout()
+    return StockLayoutResolver()
 
 @pytest.fixture
 def blob_modification_detector():
@@ -109,7 +108,7 @@ def blob_modification_detector():
 
 @pytest.fixture
 def adventure_hub_mask_table():
-    return AdventureHubMaskTable()
+    return AdventureHubMaskTableQuery()
 
 @pytest.fixture
 def track_mask_layout():

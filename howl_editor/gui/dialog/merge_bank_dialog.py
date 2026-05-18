@@ -4,9 +4,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
     QListWidgetItem, QPushButton, QDialogButtonBox, QGroupBox,
-    QAbstractItemView, QMessageBox, )
+    QAbstractItemView, QMessageBox
+)
 
-from howl_editor.models import BankSample, SpuAddrEntry
+from howl_editor.ctr.formats.bank.models import BankSample
+from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 
 
 class MergeBankDialog(QDialog):

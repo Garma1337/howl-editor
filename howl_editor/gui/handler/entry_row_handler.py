@@ -4,13 +4,14 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
-from howl_editor.cseq.adventure_hub import ADVENTURE_HUB_NUM_TRACKS
+from howl_editor.ctr import adventure_hub as hub
 from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
+from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
+from howl_editor.gui.entries.semantic_entry import EntryKind
+from howl_editor.gui.entries.semantic_entry import EntryRow
 from howl_editor.gui.entry_drop_router import DropAction, EntryDropRouter
 from howl_editor.midi.converter import HAS_MIDO
-from howl_editor.models import EntryLeaf, EntryRow, LeafKind
-from howl_editor.models.semantic_entry import EntryKind
 
 
 class EntryRowHandler:
@@ -197,12 +198,12 @@ class EntryRowHandler:
             return False
 
         main_track_count = len(cseq.songs[0].tracks)
-        if main_track_count != ADVENTURE_HUB_NUM_TRACKS:
+        if main_track_count != hub.NUM_TRACKS:
             QMessageBox.warning(
                 self._w, "Adventure Hub CSEQ rejected",
                 f"{Path(file_path).name}'s main-music sub-song has "
                 f"{main_track_count} tracks. The Adventure Hub layered song "
-                f"requires exactly {ADVENTURE_HUB_NUM_TRACKS}; replacing with "
+                f"requires exactly {hub.NUM_TRACKS}; replacing with "
                 f"a different count breaks the per-hub mask layering at runtime.",
             )
 

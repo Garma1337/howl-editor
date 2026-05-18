@@ -2,18 +2,19 @@
 
 from pathlib import Path
 
-from howl_editor.bank.reader import BankReader
+from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
 from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.models import HowlFile, SpuAddrEntry
+from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from tests.conftest import build_bank_blob
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
 
 
 def _formatter():
-    return BankDetailFormatter(BankReader(), TemplateEngine(_TEMPLATE_DIR), SizeFormatter())
+    return BankDetailFormatter(BankReader(StockNameResolver()), TemplateEngine(_TEMPLATE_DIR), SizeFormatter())
 
 
 def _hwl_with_bank():

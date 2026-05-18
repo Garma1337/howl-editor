@@ -5,8 +5,8 @@ from pathlib import Path
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from howl_editor.gui.command import SwapBlobCommand
-from howl_editor.models import VagSample
-from howl_editor.sca.constants import SAPHI_BANK_MAX_SIZE
+from howl_editor.ps1.formats.vag.models import VagSample
+from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
 
 
 class SampleHandler:

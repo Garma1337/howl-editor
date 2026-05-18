@@ -1,12 +1,10 @@
 # coding: utf-8
 
 from howl_editor.core.template_engine import TemplateEngine
+from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.ctr.formats.howl.version import HowlVersionDetector
 from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.howl.version import HowlVersionDetector
-from howl_editor.models import HowlFile
-
-# CTR's SPU RAM is 512 KB; subtract a small reserved area used by the SPU itself.
-_PS1_SPU_TOTAL_BYTES = 512 * 1024
+from howl_editor.ps1 import spu
 
 
 class HowlDetailFormatter:
@@ -42,8 +40,8 @@ class HowlDetailFormatter:
         total_spu_bytes = sum(e.byte_size for e in hwl.spu_addrs)
         rows.append({
             "key": "SPU usage",
-            "value": f"{self._sizes.format_spu_usage(total_spu_bytes, _PS1_SPU_TOTAL_BYTES)} "
-                     f"({self._sizes.percentage(total_spu_bytes, _PS1_SPU_TOTAL_BYTES):.0f}%)",
+            "value": f"{self._sizes.format_spu_usage(total_spu_bytes, spu.RAM_BYTES)} "
+                     f"({self._sizes.percentage(total_spu_bytes, spu.RAM_BYTES):.0f}%)",
         })
 
         if file_path:

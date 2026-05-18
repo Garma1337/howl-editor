@@ -5,8 +5,8 @@ from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
+from howl_editor.gui.entries.semantic_entry import EntryGroup
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
-from howl_editor.models import EntryGroup
 
 _ICON_PX = 64
 

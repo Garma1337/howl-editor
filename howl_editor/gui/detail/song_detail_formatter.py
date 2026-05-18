@@ -1,9 +1,9 @@
 # coding: utf-8
 
 from howl_editor.core.template_engine import TemplateEngine
-from howl_editor.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.models import HowlFile
 
 
 class SongDetailFormatter:

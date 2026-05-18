@@ -6,8 +6,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 
+from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
-from howl_editor.models import EntryLeaf, LeafKind
 
 _LEAF_ACCEPTS = {
     LeafKind.SEQUENCE: (".cseq", ".mid"),

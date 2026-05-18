@@ -3,21 +3,15 @@
 import io
 from pathlib import Path
 
-from howl_editor.models import CseqFile, CseqSong, CseqTrack, CseqEventType
+from howl_editor.ctr.formats.cseq import format as cseq_fmt
+from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEventType
+from howl_editor.midi import format as midi_fmt
 
 try:
     import mido
     HAS_MIDO = True
 except ImportError:
     HAS_MIDO = False
-
-_DRUM_CHANNEL = 9
-_MAX_MIDI_CHANNEL = 15
-_MIDI_CC_VOLUME = 7
-_MIDI_CC_PAN = 10
-_CSEQ_MAX_PITCH_BEND = 255
-_MIDI_PITCH_BEND_RANGE = 16384
-_MIDI_PITCH_BEND_CENTER = 8192
 
 
 class CseqMidiExporter:
@@ -55,16 +49,16 @@ class CseqMidiExporter:
 
     def _assign_channel(self, is_drum: bool, next_channel: int) -> tuple[int, int]:
         if is_drum:
-            return _DRUM_CHANNEL, next_channel
+            return midi_fmt.DRUM_CHANNEL_INDEX, next_channel
 
         channel = next_channel
 
-        if next_channel == _DRUM_CHANNEL:
+        if next_channel == midi_fmt.DRUM_CHANNEL_INDEX:
             next_channel += 1
 
         next_channel += 1
 
-        if next_channel > _MAX_MIDI_CHANNEL:
+        if next_channel > midi_fmt.MAX_CHANNEL_INDEX:
             next_channel = 0
 
         return channel, next_channel
@@ -94,13 +88,13 @@ class CseqMidiExporter:
 
             elif event.event_type == CseqEventType.VELOCITY:
                 midi_track.append(mido.Message(
-                    "control_change", control=_MIDI_CC_VOLUME, value=event.pitch,
+                    "control_change", control=midi_fmt.CC_VOLUME, value=event.pitch,
                     channel=channel, time=delta,
                 ))
 
             elif event.event_type == CseqEventType.PAN:
                 midi_track.append(mido.Message(
-                    "control_change", control=_MIDI_CC_PAN, value=event.pitch,
+                    "control_change", control=midi_fmt.CC_PAN, value=event.pitch,
                     channel=channel, time=delta,
                 ))
 
@@ -125,4 +119,4 @@ class CseqMidiExporter:
         return midi_track
 
     def _cseq_bend_to_midi(self, cseq_value: int) -> int:
-        return int(cseq_value / _CSEQ_MAX_PITCH_BEND * _MIDI_PITCH_BEND_RANGE) - _MIDI_PITCH_BEND_CENTER
+        return int(cseq_value / cseq_fmt.MAX_PITCH_BEND * midi_fmt.PITCH_BEND_RANGE) - midi_fmt.PITCH_BEND_CENTER

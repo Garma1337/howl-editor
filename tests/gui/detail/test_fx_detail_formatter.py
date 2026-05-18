@@ -4,7 +4,7 @@ from pathlib import Path
 
 from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
-from howl_editor.models import HowlFile, OtherFX, EngineFX
+from howl_editor.ctr.formats.howl.models import HowlFile, OtherFX, EngineFX
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "howl_editor" / "gui" / "templates"
 

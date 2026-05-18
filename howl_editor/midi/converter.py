@@ -2,30 +2,22 @@
 
 from pathlib import Path
 
-from howl_editor.cseq.writer import CseqWriter
-from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
-from howl_editor.midi.models import (
-    MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping,
-    DrumPitchMapping,
-)
-from howl_editor.models import (
-    CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
-    CseqInstrument, CseqPercussion,
-)
-
 try:
     import mido
     HAS_MIDO = True
 except ImportError:
     HAS_MIDO = False
 
-_MIDI_CC_VOLUME = 7
-_MIDI_CC_PAN = 10
-_MIDI_CC_MAX = 127
-_MIDI_PITCH_BEND_CENTER = 8192
-_MIDI_PITCH_BEND_RANGE = 16384
-_CSEQ_CC_MAX = 255
-_CSEQ_MAX_PITCH_BEND = 255
+from howl_editor.ctr.formats.cseq import format as cseq_fmt
+from howl_editor.ctr.formats.cseq.models import (
+    CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, CseqPercussion
+)
+from howl_editor.ctr.formats.cseq.writer import CseqWriter
+from howl_editor.midi import format as midi_fmt
+from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
+from howl_editor.midi.models import (
+    MidiInfo, MidiTrackInfo, MidiConvertSettings, InstrumentMapping, DrumPitchMapping,
+)
 
 
 class MidiConverter:
@@ -231,13 +223,13 @@ class MidiConverter:
             )
 
         if msg.type == "control_change":
-            if msg.control == _MIDI_CC_VOLUME:
+            if msg.control == midi_fmt.CC_VOLUME:
                 return CseqEvent(
                     delta=delta, event_type=CseqEventType.VELOCITY,
                     pitch=self._midi_cc_to_cseq_byte(msg.value),
                 )
 
-            if msg.control == _MIDI_CC_PAN:
+            if msg.control == midi_fmt.CC_PAN:
                 return CseqEvent(
                     delta=delta, event_type=CseqEventType.PAN,
                     pitch=self._midi_cc_to_cseq_byte(msg.value),
@@ -250,11 +242,11 @@ class MidiConverter:
         return None
 
     def _midi_bend_to_cseq(self, midi_pitch: int) -> int:
-        return max(0, min(_CSEQ_MAX_PITCH_BEND, int((midi_pitch + _MIDI_PITCH_BEND_CENTER) / _MIDI_PITCH_BEND_RANGE * _CSEQ_MAX_PITCH_BEND)))
+        return max(0, min(cseq_fmt.MAX_PITCH_BEND, int((midi_pitch + midi_fmt.PITCH_BEND_CENTER) / midi_fmt.PITCH_BEND_RANGE * cseq_fmt.MAX_PITCH_BEND)))
 
     def _midi_cc_to_cseq_byte(self, midi_value: int) -> int:
-        clamped = max(0, min(_MIDI_CC_MAX, midi_value))
-        return int(clamped / _MIDI_CC_MAX * _CSEQ_CC_MAX)
+        clamped = max(0, min(midi_fmt.CC_MAX, midi_value))
+        return int(clamped / midi_fmt.CC_MAX * cseq_fmt.CC_MAX)
 
     def _note_pitch(self, midi_note: int, drum_pitch_table: list[int] | None) -> int:
         if drum_pitch_table is None:

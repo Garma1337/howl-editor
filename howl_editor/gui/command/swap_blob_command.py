@@ -2,7 +2,7 @@
 
 from PySide6.QtGui import QUndoCommand
 
-from howl_editor.models import SpuAddrEntry
+from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 
 
 class SwapBlobCommand(QUndoCommand):

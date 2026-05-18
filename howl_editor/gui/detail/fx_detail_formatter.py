@@ -1,8 +1,8 @@
 # coding: utf-8
 
-from howl_editor.audio.settings.ps1 import PS1_SAMPLE_RATE, PS1_FREQUENCY_UNIT
 from howl_editor.core.template_engine import TemplateEngine
-from howl_editor.models import HowlFile
+from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.ps1 import spu
 
 
 class FxDetailFormatter:
@@ -73,4 +73,4 @@ class FxDetailFormatter:
         if pitch <= 0:
             return 0
 
-        return int(pitch / PS1_FREQUENCY_UNIT * PS1_SAMPLE_RATE)
+        return int(pitch / spu.FREQUENCY_UNIT * spu.SAMPLE_RATE)

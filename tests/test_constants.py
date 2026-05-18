@@ -1,7 +1,7 @@
 # coding: utf-8
 
-from howl_editor.models import HowlHeader, SpuAddrEntry, OtherFX, EngineFX
-from howl_editor.models.howl import SECTOR_SIZE, bytes_to_sectors
+from howl_editor.ctr.formats.howl.models import HowlHeader, SpuAddrEntry, OtherFX, EngineFX
+from howl_editor.ps1.constants import SECTOR_SIZE, bytes_to_sectors
 
 
 class TestBytesToSectors:

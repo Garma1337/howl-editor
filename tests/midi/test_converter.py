@@ -5,14 +5,15 @@ from pathlib import Path
 import pytest
 
 from howl_editor.core.vlq import VlqCodec
-from howl_editor.cseq.reader import CseqReader
-from howl_editor.cseq.writer import CseqWriter
+from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.writer import CseqWriter
 from howl_editor.midi.converter import MidiConverter
 from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
 from howl_editor.midi.models import (
     MidiConvertSettings, InstrumentMapping, DrumPitchMapping,
 )
-from howl_editor.models import CseqEventType
+from howl_editor.ctr.formats.cseq.models import CseqEventType
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 
 try:
     import mido
@@ -29,7 +30,7 @@ def _converter():
 
 
 def _reader():
-    return CseqReader(VlqCodec())
+    return CseqReader(VlqCodec(), StockNameResolver())
 
 
 def _create_midi(tmp_path: Path, bpm: int = 120, notes: list[tuple[int, int, int]] | None = None) -> Path:

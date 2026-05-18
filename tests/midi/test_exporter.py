@@ -4,9 +4,7 @@ import io
 
 import pytest
 
-from howl_editor.models import (
-    CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType,
-)
+from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType
 
 try:
     import mido
