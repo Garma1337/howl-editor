@@ -49,6 +49,8 @@ if __name__ == "__main__":
         cseq_size_validator=container.resolve("cseq_size_validator"),
         drum_names=container.resolve("gm_drum_names"),
         leaf_info_formatter=container.resolve("leaf_info_formatter"),
+        howl_stats_calculator=container.resolve("howl_stats_calculator"),
+        size_formatter=container.resolve("size_formatter"),
     )
 
     window.show()

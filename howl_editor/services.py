@@ -2,33 +2,34 @@
 
 from pathlib import Path
 
-from howl_editor.gui.entries.blob_modification_detector import BlobModificationDetector
-from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
-from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
-from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
-from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
-from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
-from howl_editor.ctr.cseq_renderer import CseqRenderer
-from howl_editor.ps1.adsr_decoder import AdsrDecoder
-from howl_editor.ps1.formats.vag.decoder import VagDecoder
-from howl_editor.ctr.sample_lookup import SampleLookup
-from howl_editor.ctr.voice.gain_calculator import GainCalculator
-from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
 from howl_editor.audio.wav_writer import WavWriter
-from howl_editor.ctr.formats.bank.builder import BankBuilder
-from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.core import Container
 from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.core.vlq import VlqCodec
+from howl_editor.ctr.analysis.howl_stats import HowlStatsCalculator
+from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
+from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
+from howl_editor.ctr.analysis.validator import BankCseqValidator
+from howl_editor.ctr.cseq_renderer import CseqRenderer
+from howl_editor.ctr.formats.bank.builder import BankBuilder
+from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.editor import CseqEditor
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.cseq.track_mask_layout import TrackMaskLayout
 from howl_editor.ctr.formats.cseq.writer import CseqWriter
+from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
+from howl_editor.ctr.formats.howl.editor import HowlEditor
+from howl_editor.ctr.formats.howl.reader import HowlReader
+from howl_editor.ctr.formats.howl.version import HowlVersionDetector
+from howl_editor.ctr.formats.howl.writer import HowlWriter
+from howl_editor.ctr.sample_lookup import SampleLookup
+from howl_editor.ctr.voice.gain_calculator import GainCalculator
+from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
 from howl_editor.export.batch_exporter import BatchExporter
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
@@ -37,27 +38,27 @@ from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
 from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
 from howl_editor.gui.detail.leaf_info_formatter import LeafInfoFormatter
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
+from howl_editor.gui.entries.blob_modification_detector import BlobModificationDetector
+from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
 from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
-from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
-from howl_editor.ctr.formats.howl.editor import HowlEditor
-from howl_editor.ctr.formats.howl.reader import HowlReader
-from howl_editor.ctr.formats.howl.version import HowlVersionDetector
-from howl_editor.ctr.formats.howl.writer import HowlWriter
 from howl_editor.midi.converter import MidiConverter
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
 from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.paths import RENDERED_SONG_CACHE_DIR
+from howl_editor.ps1.adsr_decoder import AdsrDecoder
+from howl_editor.ps1.formats.vag.decoder import VagDecoder
+from howl_editor.ps1.formats.vag.reader import VagReader
+from howl_editor.ps1.formats.vag.writer import VagWriter
 from howl_editor.saphi.formats.sca.chunk_reader import ScaChunkReader
 from howl_editor.saphi.formats.sca.chunk_writer import ScaChunkWriter
 from howl_editor.saphi.formats.sca.metadata_codec import ScaMetadataCodec
 from howl_editor.saphi.formats.sca.reader import ScaReader
 from howl_editor.saphi.formats.sca.sample_sizes_extractor import SampleSizesExtractor
 from howl_editor.saphi.formats.sca.writer import ScaWriter
-from howl_editor.ps1.formats.vag.reader import VagReader
-from howl_editor.ps1.formats.vag.writer import VagWriter
 
 _TEMPLATE_DIR = Path(__file__).parent / "gui" / "templates"
 _QSS_DIR = _TEMPLATE_DIR / "qss"
@@ -108,6 +109,7 @@ container.register("sample_lookup", lambda c: SampleLookup(
 ))
 container.register("version_detector", lambda c: HowlVersionDetector())
 container.register("sample_classifier", lambda c: SampleClassifier(c.resolve("cseq_reader")))
+container.register("howl_stats_calculator", lambda c: HowlStatsCalculator())
 container.register("validator", lambda c: BankCseqValidator(
     c.resolve("bank_reader"), 
     c.resolve("cseq_reader")))

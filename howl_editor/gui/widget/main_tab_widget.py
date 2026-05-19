@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from howl_editor.ctr.analysis.howl_stats import HowlStatsCalculator
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
 from howl_editor.ctr.formats.howl.models import HowlFile
@@ -15,6 +16,7 @@ from howl_editor.gui.entries.entry_leaf import EntryLeaf
 from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
 from howl_editor.gui.entries.semantic_entry import EntryGroup
 from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
+from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.category_detail_widget import CategoryDetailWidget
 from howl_editor.gui.widget.category_grid_widget import CategoryGridWidget
@@ -35,14 +37,17 @@ class MainTabWidget(QWidget):
     """
 
     sig_row_replace = Signal(object)         # EntryRow
-    sig_row_export = Signal(object)
+    sig_row_export_song = Signal(object)
+    sig_row_export_bank = Signal(object)
     sig_row_reset = Signal(object)
+    sig_row_remove = Signal(object)
     sig_row_play = Signal(object)            # only used by FX entries
     sig_row_drop = Signal(object, str)
 
     sig_leaf_play = Signal(object)           # EntryLeaf
     sig_leaf_replace = Signal(object)
     sig_leaf_export = Signal(object)
+    sig_leaf_remove = Signal(object)
     sig_leaf_drop = Signal(object, str)
 
     # (song_index, sub_song_index, active_tracks, label)
@@ -57,6 +62,8 @@ class MainTabWidget(QWidget):
         hub_mask_table: AdventureHubMaskTableQuery,
         icon_resolver: CategoryIconResolver,
         leaf_info_formatter: LeafInfoFormatter,
+        howl_stats_calculator: HowlStatsCalculator,
+        size_formatter: SizeFormatter,
     ):
         super().__init__()
         self._builder = entry_builder
@@ -66,6 +73,8 @@ class MainTabWidget(QWidget):
         self._hub_mask = hub_mask_table
         self._icon_resolver = icon_resolver
         self._leaf_info = leaf_info_formatter
+        self._stats_calculator = howl_stats_calculator
+        self._size_formatter = size_formatter
         self._hwl: HowlFile | None = None
         self._groups: list[EntryGroup] = []
         self._build_ui()
@@ -108,7 +117,9 @@ class MainTabWidget(QWidget):
         self._empty_label.setObjectName("mainTabEmpty")
         self._stack.addWidget(self._empty_label)
 
-        self._grid = CategoryGridWidget(self._stylesheets, self._icon_resolver)
+        self._grid = CategoryGridWidget(
+            self._stylesheets, self._icon_resolver, self._size_formatter,
+        )
         self._grid.sig_category_clicked.connect(self._on_category_clicked)
         self._stack.addWidget(self._grid)
 
@@ -118,17 +129,19 @@ class MainTabWidget(QWidget):
         )
         self._detail.sig_back.connect(self._on_back)
         self._detail.sig_replace_parent.connect(self.sig_row_replace)
-        self._detail.sig_export_parent.connect(self.sig_row_export)
+        self._detail.sig_export_song_parent.connect(self.sig_row_export_song)
+        self._detail.sig_export_bank_parent.connect(self.sig_row_export_bank)
         self._detail.sig_reset_parent.connect(self.sig_row_reset)
+        self._detail.sig_remove_parent.connect(self.sig_row_remove)
         self._detail.sig_leaf_play.connect(self.sig_leaf_play)
         self._detail.sig_leaf_replace.connect(self.sig_leaf_replace)
         self._detail.sig_leaf_export.connect(self.sig_leaf_export)
+        self._detail.sig_leaf_remove.connect(self.sig_leaf_remove)
         self._detail.sig_leaf_drop.connect(self.sig_leaf_drop)
         self._detail.sig_leaf_selected.connect(self._on_leaf_selected)
         self._detail.sig_entry_selected.connect(self._on_entry_selected)
         self._detail.sig_row_play.connect(self.sig_row_play)
         self._detail.sig_row_replace.connect(self.sig_row_replace)
-        self._detail.sig_row_export.connect(self.sig_row_export)
         self._detail.sig_row_drop.connect(self.sig_row_drop)
         self._detail.sig_play_hub.connect(self.sig_play_hub)
         self._stack.addWidget(self._detail)
@@ -240,6 +253,7 @@ class MainTabWidget(QWidget):
             for g in self._groups
         }
         self._grid.populate(self._groups, modified)
+        self._grid.show_stats(self._stats_calculator.compute(hwl, self._snapshot))
 
         if self._stack.currentIndex() == _PAGE_DETAIL:
             current_title = self._detail._title.text()

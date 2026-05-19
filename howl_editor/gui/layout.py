@@ -13,17 +13,14 @@ class IconSize:
 class ButtonWidth:
     """Fixed pixel widths for buttons that need a stable footprint."""
 
-    # Leaf-row action buttons.
-    LEAF_PLAY = 64
-    LEAF_REPLACE = 82
-    LEAF_EXPORT = 78
+    # Leaf-row action buttons (icon-only).
+    LEAF_PLAY = 32
+    LEAF_ACTIONS = 52    # extra width covers Qt's menu indicator arrow
 
-    # Entry-row action buttons.
+    # Entry-row action buttons (icon-only).
     ENTRY_TOGGLE = 26
-    ENTRY_RESET = 74
-    ENTRY_EXPORT = 118
+    ENTRY_ACTIONS = 56   # extra width covers Qt's menu indicator arrow
     HUB_PLAY = 122
-    HUB_REPLACE = 126
 
     # Category navigation.
     BACK = 130
@@ -42,6 +39,9 @@ class WindowSize:
 
     SAPHI_EXPORT_WIDTH = 420
     SAPHI_EXPORT_HEIGHT = 220
+
+    EXPORT_WIDTH = 250
+    EXPORT_HEIGHT = 125
 
     MERGE_BANK_WIDTH = 750
     MERGE_BANK_HEIGHT = 550

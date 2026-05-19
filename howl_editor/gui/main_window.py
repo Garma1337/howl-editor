@@ -33,6 +33,7 @@ from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr.formats.howl.version import HowlVersionDetector
 from howl_editor.ctr.sample_lookup import SampleLookup
 from howl_editor.export import BatchExporter
+from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.command import MoveItemCommand, MoveSequenceCommand
@@ -42,6 +43,7 @@ from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
 from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.handler.bank_handler import BankHandler
 from howl_editor.gui.handler.entry_row_handler import EntryRowHandler
+from howl_editor.gui.handler.export_handler import ExportHandler
 from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
@@ -110,6 +112,8 @@ class MainWindow(QMainWindow):
         cseq_size_validator: CseqSizeValidator | None = None,
         drum_names: DrumNameResolver | None = None,
         leaf_info_formatter=None,
+        howl_stats_calculator=None,
+        size_formatter=None,
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
@@ -150,6 +154,8 @@ class MainWindow(QMainWindow):
         self._cseq_size_validator = cseq_size_validator
         self._drum_names = drum_names
         self._leaf_info_formatter = leaf_info_formatter
+        self._howl_stats_calculator = howl_stats_calculator
+        self._size_formatter = size_formatter
         self._sample_types: dict[int, set] = {}
 
         self.hwl: HowlFile | None = None
@@ -166,6 +172,7 @@ class MainWindow(QMainWindow):
         self._bank_handler = BankHandler(self)
         self._sample_handler = SampleHandler(self)
         self._song_handler = SongHandler(self)
+        self._export_handler = ExportHandler(self)
         self._playback = PlaybackHandler(self)
         self._tools = ToolsHandler(self)
         self._entry_row_handler = EntryRowHandler(self, self._drop_router) if self._drop_router else None
@@ -191,16 +198,17 @@ class MainWindow(QMainWindow):
                 self._entry_builder, self._leaves_builder, self._snapshot,
                 self._stylesheets, self._hub_mask_table_query, self._icon_resolver,
                 self._leaf_info_formatter,
+                self._howl_stats_calculator, self._size_formatter,
             )
 
-            self.tabs.addTab(self.main_tab, "Categories")
+            self.tabs.addTab(self.main_tab, "Category Browser")
             self._wire_main_tab_signals()
             self._register_player_widget(self.main_tab.player_widget)
             self.waveforms.append(self.main_tab.waveform)
         else:
             self.main_tab = None
 
-        self.tabs.addTab(self._build_file_content_tab(), "File Content")
+        self.tabs.addTab(self._build_file_content_tab(), "File Browser")
 
         self.setCentralWidget(self.tabs)
 
@@ -235,12 +243,15 @@ class MainWindow(QMainWindow):
         h = self._entry_row_handler
         self.main_tab.sig_row_play.connect(h.play)
         self.main_tab.sig_row_replace.connect(h.replace)
-        self.main_tab.sig_row_export.connect(h.export)
+        self.main_tab.sig_row_export_song.connect(h.export_song)
+        self.main_tab.sig_row_export_bank.connect(h.export_bank)
         self.main_tab.sig_row_reset.connect(h.reset)
+        self.main_tab.sig_row_remove.connect(h.remove)
         self.main_tab.sig_row_drop.connect(h.on_drop)
         self.main_tab.sig_leaf_play.connect(h.play_leaf)
         self.main_tab.sig_leaf_replace.connect(h.replace_leaf)
         self.main_tab.sig_leaf_export.connect(h.export_leaf)
+        self.main_tab.sig_leaf_remove.connect(h.remove_leaf)
         self.main_tab.sig_leaf_drop.connect(h.drop_leaf)
         self.main_tab.sig_play_hub.connect(h.play_hub)
 
@@ -763,13 +774,18 @@ class MainWindow(QMainWindow):
 
         menu = QMenu(self)
         if node_type == NODE_SAMPLE and index is not None and sub_index is not None:
-            menu.addAction("Export as VAG...", lambda: self._sample_handler.export_sample(index, sub_index))
-            menu.addAction("Export as WAV...", lambda: self._sample_handler.export_sample_as_wav(index, sub_index))
+            menu.addAction("Export...", lambda: self._export_handler.show_format_dialog(
+                ExportableKind.SAMPLE, f"Sample #{sub_index}",
+                ExportableContext(bank_index=index, sample_index=sub_index),
+            ))
             menu.addSeparator()
             menu.addAction("Replace Sample (.vag)...", lambda: self._sample_handler.replace_sample(index, sub_index))
             menu.addAction("Remove Sample", lambda: self._sample_handler.remove_sample(index, sub_index))
         elif node_type == NODE_BANK and index is not None:
-            menu.addAction("Export Bank (.bnk)...", lambda: self._bank_handler.export_bank(index))
+            menu.addAction("Export Bank...", lambda: self._export_handler.show_format_dialog(
+                ExportableKind.BANK, f"Bank {index}",
+                ExportableContext(bank_index=index),
+            ))
             menu.addAction("Export Samples as VAGs...", lambda: self._bank_handler.export_bank_samples(index))
             menu.addAction("Export Samples as WAVs...", lambda: self._bank_handler.export_bank_samples_as_wav(index))
             menu.addSeparator()
@@ -785,7 +801,10 @@ class MainWindow(QMainWindow):
             menu.addAction("Replace Bank...", lambda: self._bank_handler.replace_bank(index))
             menu.addAction("Remove Bank", lambda: self._bank_handler.remove_bank(index))
         elif node_type == NODE_SEQUENCE and index is not None and sub_index is not None:
-            menu.addAction("Export as MIDI...", lambda: self._song_handler.export_sequence_as_midi(index, sub_index))
+            menu.addAction("Export...", lambda: self._export_handler.show_format_dialog(
+                ExportableKind.SEQUENCE, f"Sequence #{sub_index}",
+                ExportableContext(song_index=index, seq_index=sub_index),
+            ))
             menu.addSeparator()
 
             try:
@@ -803,8 +822,10 @@ class MainWindow(QMainWindow):
             menu.addAction("Replace Sequence...", lambda: self._song_handler.replace_sequence(index, sub_index))
             menu.addAction("Remove Sequence", lambda: self._song_handler.remove_sequence(index, sub_index))
         elif node_type == NODE_SONG and index is not None:
-            menu.addAction("Export Song (.cseq)...", lambda: self._song_handler.export_song(index))
-            menu.addAction("Export as MIDI...", lambda: self._song_handler.export_song_as_midi(index))
+            menu.addAction("Export Song...", lambda: self._export_handler.show_format_dialog(
+                ExportableKind.SONG, f"Song {index}",
+                ExportableContext(song_index=index),
+            ))
             menu.addSeparator()
 
             if index > 0:

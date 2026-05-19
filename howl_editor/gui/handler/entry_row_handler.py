@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 from howl_editor.ctr import adventure_hub as hub
 from howl_editor.ctr.formats.howl.collections import HowlCollection
+from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
@@ -32,16 +33,23 @@ class EntryRowHandler:
         elif row.kind == EntryKind.ENGINE_FX and row.fx_index is not None:
             playback.play_engine_fx(row.fx_index)
 
-    def export(self, row: EntryRow) -> None:
-        if not self._w.hwl:
+    def export_song(self, row: EntryRow) -> None:
+        if not self._w.hwl or row.song_index is None:
             return
 
-        if row.song_index is not None:
-            self._w._song_handler.export_song(row.song_index)
+        self._w._export_handler.show_format_dialog(
+            ExportableKind.SONG, row.name,
+            ExportableContext(song_index=row.song_index),
+        )
+
+    def export_bank(self, row: EntryRow) -> None:
+        if not self._w.hwl or row.bank_index is None:
             return
 
-        if row.bank_index is not None:
-            self._w._bank_handler.export_bank(row.bank_index)
+        self._w._export_handler.show_format_dialog(
+            ExportableKind.BANK, row.name,
+            ExportableContext(bank_index=row.bank_index),
+        )
 
         # FX rows have no export of their own — every SPU sample they
         # reference already lives inside a bank, so the user exports it
@@ -64,6 +72,25 @@ class EntryRowHandler:
 
     def on_drop(self, row: EntryRow, file_path: str) -> None:
         self._dispatch_drop(row, file_path)
+
+    def remove(self, row: EntryRow) -> None:
+        # Only pure-song entries can be removed from the category view; the
+        # file-content view owns the destructive bank / track operations.
+        if not self._w.hwl or row.song_index is None:
+            return
+
+        self._w._song_handler.remove_song(row.song_index)
+
+    def remove_leaf(self, leaf: EntryLeaf) -> None:
+        if not self._w.hwl:
+            return
+
+        if leaf.kind == LeafKind.SEQUENCE and leaf.song_index is not None:
+            self._w._song_handler.remove_sequence(leaf.song_index, leaf.seq_index or 0)
+            return
+
+        if leaf.kind == LeafKind.SAMPLE and leaf.bank_index is not None:
+            self._w._sample_handler.remove_sample(leaf.bank_index, leaf.sample_index or 0)
 
     def reset(self, row: EntryRow) -> None:
         snapshot = self._w._snapshot
@@ -109,15 +136,16 @@ class EntryRowHandler:
 
     def export_leaf(self, leaf: EntryLeaf) -> None:
         if leaf.kind == LeafKind.SEQUENCE and leaf.song_index is not None:
-            self._w._song_handler.export_sequence_as_midi(
-                leaf.song_index, leaf.seq_index or 0,
+            self._w._export_handler.show_format_dialog(
+                ExportableKind.SEQUENCE, leaf.name,
+                ExportableContext(song_index=leaf.song_index, seq_index=leaf.seq_index or 0),
             )
             return
 
         if leaf.kind == LeafKind.SAMPLE and leaf.bank_index is not None:
-            # Default to WAV — friendlier for music makers; VAG is in File Content.
-            self._w._sample_handler.export_sample_as_wav(
-                leaf.bank_index, leaf.sample_index or 0,
+            self._w._export_handler.show_format_dialog(
+                ExportableKind.SAMPLE, leaf.name,
+                ExportableContext(bank_index=leaf.bank_index, sample_index=leaf.sample_index or 0),
             )
 
     def play_hub(

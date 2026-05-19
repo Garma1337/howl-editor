@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QPixmap
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QPushButton
 
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
@@ -18,11 +18,14 @@ _LEAF_ACCEPTS = {
 
 
 class LeafRowWidget(QFrame):
-    """One playable leaf (sequence or sample) — the only place Play exists."""
+    """One playable leaf (sequence or sample). Play is a dedicated button;
+    Replace / Export / Remove are grouped under a single Actions menu so the
+    row stays scannable as more actions get added."""
 
     sig_play = Signal(object)        # EntryLeaf
     sig_replace = Signal(object)
     sig_export = Signal(object)
+    sig_remove = Signal(object)
     sig_drop = Signal(object, str)   # EntryLeaf, file_path
     sig_selected = Signal(object)    # EntryLeaf — emitted on row click (not button click)
 
@@ -34,6 +37,7 @@ class LeafRowWidget(QFrame):
         show_play: bool = True,
         show_replace: bool = True,
         show_export: bool = True,
+        show_remove: bool = True,
     ):
         super().__init__()
         self._leaf = leaf
@@ -41,6 +45,7 @@ class LeafRowWidget(QFrame):
         self._show_play = show_play
         self._show_replace = show_replace
         self._show_export = show_export
+        self._show_remove = show_remove
         self.setObjectName("leafRow")
         # Stylesheet is set by the parent panel (category_detail.qss covers all leaves)
         # so we don't double-apply it here.
@@ -71,23 +76,44 @@ class LeafRowWidget(QFrame):
         layout.addWidget(detail)
 
         if self._show_play:
-            play_btn = QPushButton("▶️  Play")
+            play_btn = QPushButton("▶️")
             play_btn.setObjectName("leafPlay")
+            play_btn.setToolTip("Play")
             play_btn.setFixedWidth(ButtonWidth.LEAF_PLAY)
             play_btn.clicked.connect(lambda: self.sig_play.emit(self._leaf))
             layout.addWidget(play_btn)
 
+        actions_btn = self._build_actions_button()
+        if actions_btn is not None:
+            layout.addWidget(actions_btn)
+
+    def _build_actions_button(self) -> QPushButton | None:
+        """Build the single Actions ▾ menu button. Returns None when the leaf
+        has nothing to offer — so the row collapses to just Play (or even
+        nothing)."""
+        menu = QMenu(self)
+
         if self._show_replace:
-            replace_btn = QPushButton("🔄  Replace")
-            replace_btn.setFixedWidth(ButtonWidth.LEAF_REPLACE)
-            replace_btn.clicked.connect(lambda: self.sig_replace.emit(self._leaf))
-            layout.addWidget(replace_btn)
+            menu.addAction("🔄  Replace", lambda: self.sig_replace.emit(self._leaf))
 
         if self._show_export:
-            export_btn = QPushButton("💾  Export")
-            export_btn.setFixedWidth(ButtonWidth.LEAF_EXPORT)
-            export_btn.clicked.connect(lambda: self.sig_export.emit(self._leaf))
-            layout.addWidget(export_btn)
+            menu.addAction("💾  Export", lambda: self.sig_export.emit(self._leaf))
+
+        if self._show_remove:
+            if not menu.isEmpty():
+                menu.addSeparator()
+            
+            menu.addAction("🗑️  Remove", lambda: self.sig_remove.emit(self._leaf))
+
+        if menu.isEmpty():
+            return None
+
+        button = QPushButton("⚙️")
+        button.setObjectName("leafActions")
+        button.setToolTip("Actions")
+        button.setFixedWidth(ButtonWidth.LEAF_ACTIONS)
+        button.setMenu(menu)
+        return button
 
     def _build_icon_label(self) -> QLabel:
         label = QLabel()

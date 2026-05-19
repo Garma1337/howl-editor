@@ -173,12 +173,3 @@ QFrame#leafRow QPushButton:hover {
     background: palette(midlight);
 }
 
-QFrame#leafRow QPushButton#leafPlay {
-    background: #007aff;
-    color: white;
-    border: none;
-}
-
-QFrame#leafRow QPushButton#leafPlay:hover {
-    background: #2a8aff;
-}

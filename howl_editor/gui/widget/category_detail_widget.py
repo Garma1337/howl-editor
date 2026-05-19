@@ -32,17 +32,19 @@ class CategoryDetailWidget(QWidget):
 
     sig_back = Signal()
     sig_replace_parent = Signal(object)
-    sig_export_parent = Signal(object)
+    sig_export_song_parent = Signal(object)
+    sig_export_bank_parent = Signal(object)
     sig_reset_parent = Signal(object)
+    sig_remove_parent = Signal(object)
     sig_leaf_play = Signal(object)
     sig_leaf_replace = Signal(object)
     sig_leaf_export = Signal(object)
+    sig_leaf_remove = Signal(object)
     sig_leaf_drop = Signal(object, str)
     sig_leaf_selected = Signal(object)        # user clicked a leaf row
     sig_entry_selected = Signal(object, object)   # row + its leaves
     sig_row_play = Signal(object)             # for FX entries that ARE leaves
     sig_row_replace = Signal(object)
-    sig_row_export = Signal(object)
     sig_row_drop = Signal(object, str)
     sig_play_hub = Signal(int, int, object, str)
 
@@ -178,11 +180,14 @@ class CategoryDetailWidget(QWidget):
                 hub_names=hub_names,
             )
             parent.sig_replace_parent.connect(self.sig_replace_parent)
-            parent.sig_export_parent.connect(self.sig_export_parent)
+            parent.sig_export_song_parent.connect(self.sig_export_song_parent)
+            parent.sig_export_bank_parent.connect(self.sig_export_bank_parent)
             parent.sig_reset_parent.connect(self.sig_reset_parent)
+            parent.sig_remove_parent.connect(self.sig_remove_parent)
             parent.sig_leaf_play.connect(self.sig_leaf_play)
             parent.sig_leaf_replace.connect(self.sig_leaf_replace)
             parent.sig_leaf_export.connect(self.sig_leaf_export)
+            parent.sig_leaf_remove.connect(self.sig_leaf_remove)
             parent.sig_leaf_drop.connect(self.sig_leaf_drop)
             parent.sig_leaf_selected.connect(self.sig_leaf_selected)
             parent.sig_entry_selected.connect(self.sig_entry_selected)
@@ -203,6 +208,7 @@ class CategoryDetailWidget(QWidget):
             icon_image_path=leaf_icon,
             show_replace=False,
             show_export=False,
+            show_remove=False,
         )
 
         widget.sig_play.connect(lambda _leaf: self.sig_row_play.emit(row))

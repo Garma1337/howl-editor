@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy,
     QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -24,9 +24,10 @@ _TAB_SEQUENCES = 1
 
 
 class EntryParentWidget(QFrame):
-    """An entry shown in the category detail view: name + status badges + the
-    parent-level Replace/Export/Reset actions + a collapsible body containing
-    a Samples / Sequences tab split of the entry's leaves.
+    """An entry shown in the category detail view: name + status badges + a
+    single Actions menu (Replace / Export / Reset / Remove, as applicable) +
+    a collapsible body containing a Samples / Sequences tab split of the
+    entry's leaves.
 
     Default-expanded when there's more than one leaf, otherwise collapsed to
     keep dense categories scannable. No Play button at this level — playback
@@ -34,14 +35,17 @@ class EntryParentWidget(QFrame):
     """
 
     sig_replace_parent = Signal(object)         # EntryRow
-    sig_export_parent = Signal(object)
+    sig_export_song_parent = Signal(object)
+    sig_export_bank_parent = Signal(object)
     sig_reset_parent = Signal(object)
+    sig_remove_parent = Signal(object)
     # Adventure Hub: emits (row, hub_index) when the user clicks Play hub
     # after picking a hub world from the inline dropdown.
     sig_play_hub = Signal(object, int)
     sig_leaf_play = Signal(object)              # EntryLeaf
     sig_leaf_replace = Signal(object)
     sig_leaf_export = Signal(object)
+    sig_leaf_remove = Signal(object)
     sig_leaf_drop = Signal(object, str)         # EntryLeaf, file_path
     sig_leaf_selected = Signal(object)          # EntryLeaf — user clicked the row
     # EntryRow + the entry's leaves — sidebar uses the leaf count + breakdown
@@ -127,6 +131,7 @@ class EntryParentWidget(QFrame):
             row.sig_play.connect(self.sig_leaf_play)
             row.sig_replace.connect(self.sig_leaf_replace)
             row.sig_export.connect(self.sig_leaf_export)
+            row.sig_remove.connect(self.sig_leaf_remove)
             row.sig_drop.connect(self.sig_leaf_drop)
             row.sig_selected.connect(self.sig_leaf_selected)
             layout.addWidget(row)
@@ -214,6 +219,7 @@ class EntryParentWidget(QFrame):
             row.sig_play.connect(self.sig_leaf_play)
             row.sig_replace.connect(self.sig_leaf_replace)
             row.sig_export.connect(self.sig_leaf_export)
+            row.sig_remove.connect(self.sig_leaf_remove)
             row.sig_drop.connect(self.sig_leaf_drop)
             row.sig_selected.connect(self.sig_leaf_selected)
             layout.addWidget(row)
@@ -279,28 +285,55 @@ class EntryParentWidget(QFrame):
             play_hub_btn.clicked.connect(self._on_play_hub_clicked)
             header.addWidget(play_hub_btn)
 
-        if self._row.accepts:
-            replace_btn = QPushButton("🔄  Replace")
-            replace_btn.setFixedWidth(ButtonWidth.HUB_REPLACE)
-            replace_btn.setToolTip("Replace the entire song or bank with a file")
-            replace_btn.clicked.connect(lambda: self.sig_replace_parent.emit(self._row))
-            header.addWidget(replace_btn)
-
-        export_btn = QPushButton("💾  Export")
-        export_btn.setFixedWidth(ButtonWidth.ENTRY_EXPORT)
-        export_btn.setToolTip("Export the entire song or bank")
-        export_btn.clicked.connect(lambda: self.sig_export_parent.emit(self._row))
-        header.addWidget(export_btn)
-
-        if can_reset and self._row.is_modified:
-            reset_btn = QPushButton("↩️  Reset")
-            reset_btn.setObjectName("parentReset")
-            reset_btn.setFixedWidth(ButtonWidth.ENTRY_RESET)
-            reset_btn.setToolTip("Restore the originally-loaded content for this slot")
-            reset_btn.clicked.connect(lambda: self.sig_reset_parent.emit(self._row))
-            header.addWidget(reset_btn)
+        actions_btn = self._build_actions_button(can_reset)
+        if actions_btn is not None:
+            header.addWidget(actions_btn)
 
         return header
+
+    def _build_actions_button(self, can_reset: bool) -> QPushButton | None:
+        """Single Actions ▾ menu collecting Replace / Export / Reset / Remove
+        for this entry. Returns None when the entry has nothing actionable —
+        FX entries fall into that bucket since they're effectively leaves and
+        their own LeafRowWidget owns their actions."""
+        menu = QMenu(self)
+
+        if self._row.accepts:
+            menu.addAction("🔄  Replace", lambda: self.sig_replace_parent.emit(self._row))
+
+        if self._row.song_index is not None and self._can_export():
+            menu.addAction("💾  Export song", lambda: self.sig_export_song_parent.emit(self._row))
+
+        if self._row.bank_index is not None and self._can_export():
+            menu.addAction("💾  Export bank", lambda: self.sig_export_bank_parent.emit(self._row))
+
+        if can_reset and self._row.is_modified:
+            menu.addAction("↩️  Reset", lambda: self.sig_reset_parent.emit(self._row))
+
+        if self._can_remove():
+            if not menu.isEmpty():
+                menu.addSeparator()
+            menu.addAction("🗑️  Remove", lambda: self.sig_remove_parent.emit(self._row))
+
+        if menu.isEmpty():
+            return None
+
+        button = QPushButton("⚙️")
+        button.setObjectName("parentActions")
+        button.setToolTip("Actions")
+        button.setFixedWidth(ButtonWidth.ENTRY_ACTIONS)
+        button.setMenu(menu)
+        return button
+
+    def _can_export(self) -> bool:
+        # FX entries ARE leaves; they have no separate file to export. Every
+        # other entry kind can export at least one of its halves.
+        return self._row.kind not in (EntryKind.OTHER_FX, EntryKind.ENGINE_FX)
+
+    def _can_remove(self) -> bool:
+        """Pure-song entries are removable from the category view; the
+        file-content view still owns destructive bank / track operations."""
+        return self._row.kind in (EntryKind.SHARED_SONG, EntryKind.CUSTOM_SONG)
 
     def _build_icon_label(self) -> QLabel:
         """Prefer a custom per-entry image if registered; otherwise fall back

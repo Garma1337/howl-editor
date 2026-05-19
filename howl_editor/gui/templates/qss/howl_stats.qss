@@ -1,0 +1,47 @@
+QFrame#howlStats {
+    background: palette(window);
+    border-bottom: 1px solid palette(mid);
+}
+
+QFrame#howlStatsCell {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+QLabel#howlStatsIcon {
+    font-size: 20px;
+    background: transparent;
+}
+
+QLabel#howlStatsLabel {
+    font-size: 10px;
+    font-weight: 700;
+    color: palette(text);
+    letter-spacing: 1px;
+    background: transparent;
+}
+
+QLabel#howlStatsValue {
+    font-size: 18px;
+    font-weight: 700;
+    color: palette(text);
+    background: transparent;
+}
+
+QLabel#howlStatsHint {
+    font-size: 10px;
+    color: palette(text);
+    background: transparent;
+}
+
+QLabel#howlStatsHintModified {
+    color: #ff9500;
+    font-weight: 700;
+}
+
+QLabel#howlStatsHintGrowth {
+    color: #ff3b30;
+    font-weight: 700;
+}
