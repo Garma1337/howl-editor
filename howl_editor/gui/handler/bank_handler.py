@@ -63,9 +63,10 @@ class BankHandler:
 
         try:
             samples = self._window._bank_reader.parse(self._window.hwl.banks[index], self._window.hwl.spu_addrs)
+            rate = self._window._vag_rate.rate
 
             for sample in samples:
-                wav = self._window._vag_decoder.decode_to_wav(sample.data)
+                wav = self._window._vag_decoder.decode_to_wav(sample.data, rate)
                 (Path(folder) / f"sample_{sample.spu_index}.wav").write_bytes(wav)
 
             self._window.status.showMessage(f"Exported {len(samples)} WAVs from bank {index}")

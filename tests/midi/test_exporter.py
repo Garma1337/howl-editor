@@ -4,8 +4,10 @@ import io
 
 import pytest
 
-from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType
-from howl_editor.midi.exporter import CseqMidiExporter
+from howl_editor.ctr.formats.cseq.models import (
+    CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument,
+)
+from howl_editor.midi.exporter import CseqMidiExporter, MidiExportOptions
 
 try:
     import mido
@@ -161,3 +163,118 @@ class TestControlEvents:
 
         assert len(cc) == 1
         assert cc[0].value == 64
+
+
+def _make_velocity_cseq() -> CseqFile:
+    track = CseqTrack(events=[
+        CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=60, velocity=100),
+        CseqEvent(delta=10, event_type=CseqEventType.VELOCITY, pitch=64),
+        CseqEvent(delta=20, event_type=CseqEventType.NOTE_OFF, pitch=60),
+        CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+    ])
+
+    return _make_cseq(tracks=[track])
+
+
+class TestIncludeVolumeEvents:
+
+    def test_default_emits_cc_volume(self, exporter):
+        data = exporter.export(_make_velocity_cseq(), 0)
+        mid = mido.MidiFile(file=io.BytesIO(data))
+        volume_msgs = [
+            m for m in mid.tracks[1]
+            if m.type == "control_change" and m.control == 7
+        ]
+
+        assert len(volume_msgs) == 1
+        # The exporter passes the CSEQ pitch byte through as-is (matching
+        # the existing test_velocity_as_cc7 behaviour) — no 0-255 → 0-127 rescale.
+        assert volume_msgs[0].value == 64
+
+    def test_disabled_drops_cc_volume(self, exporter):
+        options = MidiExportOptions(include_volume_events=False)
+        data = exporter.export(_make_velocity_cseq(), 0, options)
+        mid = mido.MidiFile(file=io.BytesIO(data))
+        volume_msgs = [
+            m for m in mid.tracks[1]
+            if m.type == "control_change" and m.control == 7
+        ]
+
+        assert len(volume_msgs) == 0
+
+    def test_disabled_preserves_following_note_offset(self, exporter):
+        """When the VELOCITY event is dropped, its delta-time must roll into
+        the next emitted message — otherwise the NOTE_OFF would arrive 10
+        ticks early. (CSEQ events stack 0, +10, +20; expected next-message
+        time after dropping the +10 event is 10+20 = 30.)"""
+        options = MidiExportOptions(include_volume_events=False)
+        data = exporter.export(_make_velocity_cseq(), 0, options)
+        mid = mido.MidiFile(file=io.BytesIO(data))
+
+        track = mid.tracks[1]
+        note_offs = [m for m in track if m.type == "note_off"]
+
+        assert len(note_offs) == 1
+        assert note_offs[0].time == 30
+
+
+class TestApplyInstrumentVolume:
+
+    def _cseq_with_inst(self, inst_volume: int) -> CseqFile:
+        track = CseqTrack(
+            flags=0, instrument=0,
+            events=[
+                CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=60, velocity=100),
+                CseqEvent(delta=0, event_type=CseqEventType.NOTE_OFF, pitch=60),
+                CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+            ],
+        )
+
+        return CseqFile(
+            instruments=[CseqInstrument(volume=inst_volume)],
+            songs=[CseqSong(bpm=120, tpqn=480, tracks=[track])],
+        )
+
+    def test_default_doesnt_emit_initial_volume(self, exporter):
+        data = exporter.export(self._cseq_with_inst(200), 0)
+        mid = mido.MidiFile(file=io.BytesIO(data))
+        # First event should be the NOTE_ON, not a CC#7.
+        track = mid.tracks[1]
+        first_real = next(m for m in track if not m.is_meta)
+
+        assert first_real.type == "note_on"
+
+    def test_enabled_emits_initial_volume(self, exporter):
+        options = MidiExportOptions(apply_instrument_volume=True)
+        data = exporter.export(self._cseq_with_inst(255), 0, options)
+        mid = mido.MidiFile(file=io.BytesIO(data))
+        track = mid.tracks[1]
+        first_cc = next(
+            (m for m in track if m.type == "control_change" and m.control == 7),
+            None,
+        )
+
+        assert first_cc is not None
+        assert first_cc.time == 0
+        # inst.volume=255 → MIDI CC #7 = 127 (full).
+        assert first_cc.value == 127
+
+    def test_skips_drum_tracks(self, exporter):
+        track = CseqTrack(
+            flags=1, instrument=0,  # flags=1 == drum
+            events=[
+                CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=36, velocity=100),
+                CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+            ],
+        )
+        cseq = CseqFile(
+            instruments=[CseqInstrument(volume=255)],
+            songs=[CseqSong(bpm=120, tpqn=480, tracks=[track])],
+        )
+
+        options = MidiExportOptions(apply_instrument_volume=True)
+        data = exporter.export(cseq, 0, options)
+        mid = mido.MidiFile(file=io.BytesIO(data))
+        cc = [m for m in mid.tracks[1] if m.type == "control_change" and m.control == 7]
+
+        assert cc == []

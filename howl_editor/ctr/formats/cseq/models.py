@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from struct import Struct
 
+from howl_editor.ps1 import spu
+
 
 class CseqEventType(IntEnum):
     TERMINATOR = 0x00
@@ -55,11 +57,11 @@ class CseqInstrument:
 
     @property
     def freq_hz(self) -> int:
-        return int(self.frequency / 4096 * 44100)
+        return int(self.frequency / spu.FREQUENCY_UNIT * spu.SAMPLE_RATE)
 
     @freq_hz.setter
     def freq_hz(self, hz: int):
-        self.frequency = int(hz * 4096 / 44100)
+        self.frequency = int(hz * spu.FREQUENCY_UNIT / spu.SAMPLE_RATE)
 
 
 @dataclass
@@ -76,7 +78,11 @@ class CseqPercussion:
 
     @property
     def freq_hz(self) -> int:
-        return int(self.frequency / 4096 * 44100)
+        return int(self.frequency / spu.FREQUENCY_UNIT * spu.SAMPLE_RATE)
+
+    @freq_hz.setter
+    def freq_hz(self, hz: int):
+        self.frequency = int(hz * spu.FREQUENCY_UNIT / spu.SAMPLE_RATE)
 
 
 @dataclass

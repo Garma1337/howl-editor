@@ -97,7 +97,7 @@ class CategoryDetailWidget(QWidget):
         layout.setContentsMargins(20, 14, 20, 6)
         layout.setSpacing(12)
 
-        back = QPushButton("←  Categories")
+        back = QPushButton("⬅️  Categories")
         back.setObjectName("backButton")
         back.setFixedWidth(ButtonWidth.BACK)
         back.clicked.connect(self.sig_back)

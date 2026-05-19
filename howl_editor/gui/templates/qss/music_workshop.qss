@@ -1,0 +1,150 @@
+QWidget#musicWorkshopRoot {
+    background: palette(window);
+}
+
+QWidget#workshopSongPanel {
+    background: palette(window);
+    border-right: 1px solid palette(mid);
+}
+
+QLabel#workshopSectionLabel {
+    color: palette(text);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+QListWidget#workshopSongList {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+    outline: none;
+    padding: 4px;
+}
+
+QListWidget#workshopSongList::item {
+    color: palette(text);
+    padding: 6px 8px;
+    border-radius: 4px;
+}
+
+QListWidget#workshopSongList::item:hover {
+    background: palette(midlight);
+}
+
+QListWidget#workshopSongList::item:selected {
+    background: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+QScrollArea#workshopDetailScroll {
+    background: palette(window);
+    border: none;
+}
+
+QWidget#workshopDetailInner {
+    background: palette(window);
+}
+
+QLabel#workshopTitle {
+    color: palette(text);
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QFrame#workshopStats {
+    background: transparent;
+}
+
+QFrame#workshopStatCell {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 10px;
+}
+
+QLabel#workshopStatIcon {
+    font-size: 18px;
+    background: transparent;
+}
+
+QLabel#workshopStatLabel {
+    font-size: 10px;
+    font-weight: 700;
+    color: palette(text);
+    letter-spacing: 1px;
+    background: transparent;
+}
+
+QLabel#workshopStatValue {
+    font-size: 18px;
+    font-weight: 700;
+    color: palette(text);
+    background: transparent;
+}
+
+QLabel#workshopStatHint {
+    font-size: 10px;
+    color: palette(text);
+    background: transparent;
+}
+
+QLabel#workshopEmpty {
+    color: palette(text);
+    font-size: 12px;
+    padding: 32px;
+}
+
+QTableWidget#workshopTable {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 8px;
+    gridline-color: palette(mid);
+    color: palette(text);
+}
+
+QTableWidget#workshopTable QHeaderView::section {
+    background: palette(window);
+    color: palette(text);
+    border: none;
+    border-bottom: 1px solid palette(mid);
+    padding: 6px 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QTableWidget#workshopTable::item {
+    padding: 4px 8px;
+}
+
+QPushButton#workshopActionButton {
+    background: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+QPushButton#workshopActionButton:hover {
+    background: palette(midlight);
+}
+
+QFrame#workshopPlayerDock {
+    background: palette(window);
+    border-top: 1px solid palette(mid);
+}
+
+QPushButton#workshopRowButton {
+    background: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    min-width: 24px;
+}
+
+QPushButton#workshopRowButton:hover {
+    background: palette(midlight);
+}

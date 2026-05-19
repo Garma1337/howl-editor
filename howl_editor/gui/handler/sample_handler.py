@@ -10,6 +10,7 @@ from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.gui.dialog.copy_target_dialog import (
     CopyTargetContainer, CopyTargetDialog,
 )
+from howl_editor.ps1 import spu
 from howl_editor.ps1.formats.vag.models import VagSample
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
 
@@ -56,7 +57,9 @@ class SampleHandler:
             )
 
             if path:
-                wav = self._window._vag_decoder.decode_to_wav(sample.data)
+                wav = self._window._vag_decoder.decode_to_wav(
+                    sample.data, self._window._vag_rate.rate,
+                )
                 Path(path).write_bytes(wav)
                 self._window.status.showMessage(f"Exported SPU {sample.spu_index} as WAV")
         except Exception as e:
@@ -139,7 +142,7 @@ class SampleHandler:
         if sample_rate <= 0:
             return
 
-        pitch = int(round(sample_rate / 44100.0 * 4096.0))
+        pitch = int(round(sample_rate / spu.SAMPLE_RATE * spu.FREQUENCY_UNIT))
         for fx in self._window.hwl.other_fx:
             if fx.spu_index == spu_index:
                 fx.pitch = pitch

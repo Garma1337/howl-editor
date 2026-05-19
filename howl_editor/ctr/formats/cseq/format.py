@@ -40,3 +40,12 @@ CC_MAX = 255
 # CSEQ PITCH_BEND stores a single byte; the center (no bend) is 0x80 / 2 ≈ 128
 # but the wire format simply allows 0..255 so importers clamp here.
 MAX_PITCH_BEND = 255
+
+# CseqInstrument.volume and CseqPercussion.volume are u8 in the on-wire
+# struct, so the maximum legal value is 0xFF.
+MAX_VOLUME = 0xFF
+
+# CseqInstrument.frequency and CseqPercussion.frequency are u16 in the on-wire
+# struct (the SPU pitch register the runtime writes), so the maximum legal
+# value is 0xFFFF. spu.FREQUENCY_UNIT (4096) maps to 1.0× playback rate.
+MAX_PITCH_REGISTER = 0xFFFF

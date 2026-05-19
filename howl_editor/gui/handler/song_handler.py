@@ -10,6 +10,12 @@ from howl_editor.gui.command import RemoveItemCommand, SwapBlobCommand
 from howl_editor.gui.dialog.copy_target_dialog import (
     CopyTargetContainer, CopyTargetDialog,
 )
+from howl_editor.gui.dialog.edit_instrument_dialog import EditInstrumentDialog
+from howl_editor.gui.dialog.midi_export_options_dialog import MidiExportOptionsDialog
+from howl_editor.gui.dialog.select_sample_dialog import (
+    SampleChoice, SelectSampleDialog,
+)
+from howl_editor.midi.exporter import MidiExportOptions
 
 
 class SongHandler:
@@ -37,6 +43,19 @@ class SongHandler:
             Path(path).write_bytes(self._w.hwl.songs[index])
             self._w.status.showMessage(f"Exported song {index}")
 
+    def _prompt_midi_options(self) -> MidiExportOptions | None:
+        """Cache the last-used options on the handler so a user who exports
+        many sequences in a row doesn't have to re-check the boxes each time."""
+        defaults = getattr(self, "_last_midi_options", MidiExportOptions())
+        dialog = MidiExportOptionsDialog(self._w, defaults)
+
+        if dialog.exec() != QDialog.Accepted:
+            return None
+
+        options = dialog.chosen()
+        self._last_midi_options = options
+        return options
+
     def export_song_as_midi(self, index: int):
         if not self._w.hwl or not self._w._midi_exporter:
             return
@@ -45,6 +64,10 @@ class SongHandler:
             self._w, f"Export Song {index} as MIDI", f"song_{index}{FileFormatRegistry.MIDI.extension}", FileFormatRegistry.MIDI.file_filter,
         )
         if not path:
+            return
+
+        options = self._prompt_midi_options()
+        if options is None:
             return
 
         try:
@@ -57,7 +80,7 @@ class SongHandler:
                 else:
                     out = Path(path)
 
-                self._w._midi_exporter.export_to_file(cseq, out, i)
+                self._w._midi_exporter.export_to_file(cseq, out, i, options)
 
             self._w.status.showMessage(f"Exported song {index} as MIDI")
         except Exception as e:
@@ -74,12 +97,45 @@ class SongHandler:
         if not path:
             return
 
+        options = self._prompt_midi_options()
+        if options is None:
+            return
+
         try:
             cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
-            self._w._midi_exporter.export_to_file(cseq, path, seq_index)
+            self._w._midi_exporter.export_to_file(cseq, path, seq_index, options)
             self._w.status.showMessage(f"Exported sequence {seq_index} as MIDI")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"MIDI export failed:\n{e}")
+
+    def export_song_as_sfz(self, index: int):
+        """Write a song as an SFZ patch (text manifest + samples folder).
+        Lets a music maker load the song's sound palette into any
+        SFZ-compatible DAW / sampler instead of treating the data as opaque
+        CSEQ bytes."""
+        if not self._w.hwl or self._w._sfz_exporter is None:
+            return
+
+        song_name = self._w._cseq_reader.get_name(index) or f"song_{index}"
+        default_name = f"{self._w._sfz_exporter.safe_filename_stem(song_name)}{FileFormatRegistry.SFZ.extension}"
+
+        path, _ = QFileDialog.getSaveFileName(
+            self._w, f"Export Song {index} as SFZ",
+            default_name, FileFormatRegistry.SFZ.file_filter,
+        )
+
+        if not path:
+            return
+
+        try:
+            written = self._w._sfz_exporter.export(
+                self._w.hwl, index, Path(path), self._w._vag_rate.rate,
+            )
+            self._w.status.showMessage(
+                f"Exported song {index} as SFZ ({written} samples)",
+            )
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"SFZ export failed:\n{e}")
 
     def replace_song(self, index: int):
         path, _ = QFileDialog.getOpenFileName(self._w, f"Replace Song {index}", "", f"{FileFormatRegistry.CSEQ.file_filter};;All Files (*)")
@@ -133,6 +189,223 @@ class SongHandler:
             self._w._notify(f"Replaced sequence {seq_index} in song {song_index}")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Replace failed:\n{e}")
+
+    def edit_instrument(self, song_index: int, inst_index: int):
+        """Open a small dialog to tweak volume / pitch on one CSEQ
+        instrument, then commit through an undoable SwapBlobCommand."""
+        if not self._w.hwl:
+            return
+
+        try:
+            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            if inst_index >= len(cseq.instruments):
+                return
+
+            inst = cseq.instruments[inst_index]
+            dialog = EditInstrumentDialog(
+                self._w,
+                title="Edit Instrument",
+                subject_label=f"Editing instrument {inst_index} (SPU #{inst.sample_id})",
+                initial_volume=inst.volume,
+                initial_frequency=inst.frequency,
+            )
+
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            result = dialog.chosen()
+            new_blob = self._w._cseq_editor.update_instrument(
+                self._w.hwl.songs[song_index], inst_index,
+                result.volume, result.frequency,
+            )
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, f"Edit instrument {inst_index} in Song {song_index}",
+                HowlCollection.SONGS, song_index, new_blob,
+            ))
+            self._w._notify(f"Updated instrument {inst_index} in song {song_index}")
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Edit failed:\n{e}")
+
+    def edit_percussion(self, song_index: int, perc_index: int):
+        if not self._w.hwl:
+            return
+
+        try:
+            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            if perc_index >= len(cseq.percussions):
+                return
+
+            perc = cseq.percussions[perc_index]
+            dialog = EditInstrumentDialog(
+                self._w,
+                title="Edit Percussion",
+                subject_label=f"Editing percussion {perc_index} (SPU #{perc.sample_id})",
+                initial_volume=perc.volume,
+                initial_frequency=perc.frequency,
+            )
+
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            result = dialog.chosen()
+            new_blob = self._w._cseq_editor.update_percussion(
+                self._w.hwl.songs[song_index], perc_index,
+                result.volume, result.frequency,
+            )
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, f"Edit percussion {perc_index} in Song {song_index}",
+                HowlCollection.SONGS, song_index, new_blob,
+            ))
+            self._w._notify(f"Updated percussion {perc_index} in song {song_index}")
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Edit failed:\n{e}")
+
+    def replace_track_from_midi(self, song_index: int, seq_index: int, track_index: int):
+        """Pick a MIDI file (and a track inside it if there are multiple),
+        convert just that track's messages, and swap them into the named
+        CSEQ track. Track flags / instrument binding stay put."""
+        if not self._w.hwl or not self._w._midi_converter:
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self._w, "Select MIDI file", "",
+            f"{FileFormatRegistry.MIDI.file_filter};;All Files (*)",
+        )
+
+        if not path:
+            return
+
+        try:
+            info = self._w._midi_converter.get_midi_info(path)
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Cannot read MIDI:\n{e}")
+            return
+
+        # Filter to tracks that actually contain notes — empty meta-only
+        # tracks (tempo track, lyrics, etc.) aren't useful targets.
+        note_tracks = [t for t in info.tracks if t.note_count > 0]
+
+        if not note_tracks:
+            QMessageBox.warning(self._w, "No note tracks", "The MIDI file has no tracks with notes.")
+            return
+
+        midi_track_index = note_tracks[0].index
+
+        if len(note_tracks) > 1:
+            labels = [f"Track {t.index} — {t.name} ({t.note_count} notes)" for t in note_tracks]
+            label, ok = QInputDialog.getItem(
+                self._w, "Pick MIDI track",
+                "Which MIDI track should replace the CSEQ track's events?",
+                labels, 0, False,
+            )
+
+            if not ok:
+                return
+
+            midi_track_index = note_tracks[labels.index(label)].index
+
+        try:
+            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            if seq_index >= len(cseq.songs) or track_index >= len(cseq.songs[seq_index].tracks):
+                return
+
+            instrument_index = cseq.songs[seq_index].tracks[track_index].instrument
+            new_events = self._w._midi_converter.extract_track_events(
+                path, midi_track_index, instrument_index,
+            )
+
+            new_blob = self._w._cseq_editor.replace_track_events(
+                self._w.hwl.songs[song_index], seq_index, track_index, new_events,
+            )
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, f"Replace events on track {track_index}",
+                HowlCollection.SONGS, song_index, new_blob,
+            ))
+            self._w._notify(
+                f"Replaced track {track_index} (song {song_index} seq {seq_index}) "
+                f"from {Path(path).name}",
+            )
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Track import failed:\n{e}")
+
+    def retarget_instrument(self, song_index: int, inst_index: int):
+        """Point an instrument at a different SPU index in the same file."""
+        self._retarget(song_index, inst_index, percussion=False)
+
+    def retarget_percussion(self, song_index: int, perc_index: int):
+        """Same as retarget_instrument but for the percussion table."""
+        self._retarget(song_index, perc_index, percussion=True)
+
+    def _retarget(self, song_index: int, entry_index: int, percussion: bool):
+        if not self._w.hwl:
+            return
+
+        try:
+            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            table = cseq.percussions if percussion else cseq.instruments
+
+            if entry_index >= len(table):
+                return
+
+            current_id = table[entry_index].sample_id
+            choices = self._build_sample_choices()
+            kind = "percussion" if percussion else "instrument"
+            dialog = SelectSampleDialog(
+                self._w,
+                title=f"Pick sample for {kind}",
+                prompt=f"Select which SPU sample {kind} {entry_index} should point at:",
+                choices=choices,
+                current_spu_index=current_id,
+            )
+
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            new_id = dialog.chosen_spu_index()
+            if new_id is None or new_id == current_id:
+                return
+
+            song_blob = self._w.hwl.songs[song_index]
+
+            if percussion:
+                new_blob = self._w._cseq_editor.retarget_percussion(song_blob, entry_index, new_id)
+                description = f"Retarget percussion {entry_index} → SPU #{new_id}"
+            else:
+                new_blob = self._w._cseq_editor.retarget_instrument(song_blob, entry_index, new_id)
+                description = f"Retarget instrument {entry_index} → SPU #{new_id}"
+
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, description, HowlCollection.SONGS, song_index, new_blob,
+            ))
+            self._w._notify(f"{kind.capitalize()} {entry_index} now points at SPU #{new_id}")
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Retarget failed:\n{e}")
+
+    def _build_sample_choices(self) -> list[SampleChoice]:
+        """One option per entry in the SPU address table. Each choice is
+        annotated with the source bank (if locatable) and byte size, so the
+        user can tell what sample they're picking even without per-sample
+        names."""
+        out: list[SampleChoice] = []
+        lookup = self._w._sample_lookup
+
+        for spu_index in range(len(self._w.hwl.spu_addrs)):
+            location = lookup.find_bank_and_sample_index(self._w.hwl, spu_index)
+            size = self._w.hwl.spu_addrs[spu_index].byte_size
+
+            if location is None:
+                bank_label = "—"
+            else:
+                bank_index, _ = location
+                name = self._w._bank_reader.get_name(bank_index)
+                bank_label = (
+                    f"Bank {bank_index} — {name}" if name else f"Bank {bank_index}"
+                )
+
+            display = f"SPU #{spu_index:>4} · {size:>6} B · {bank_label}"
+            out.append(SampleChoice(spu_index=spu_index, display=display))
+
+        return out
 
     def add_sequence(self, song_index: int):
         """Append a sequence (from an external .cseq) onto an existing song."""

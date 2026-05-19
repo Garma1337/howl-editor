@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSettings
-from PySide6.QtGui import QAction, QKeySequence, QShortcut, QUndoStack
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut, QUndoStack
 from PySide6.QtWidgets import (
     QMainWindow, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
     QSplitter, QTabWidget, QTextEdit, QWidget, QVBoxLayout, QMenu, QToolBar,
@@ -19,6 +19,7 @@ except ImportError:
 from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.linear_interpolation_resampler import LinearInterpolationResampler
+from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.validator import BankCseqValidator
@@ -34,7 +35,7 @@ from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr.formats.howl.version import HowlVersionDetector
 from howl_editor.ctr.sample_lookup import SampleLookup
-from howl_editor.export import BatchExporter
+from howl_editor.export import BatchExporter, SfzExporter
 from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
@@ -46,6 +47,7 @@ from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.handler.bank_handler import BankHandler
 from howl_editor.gui.handler.entry_row_handler import EntryRowHandler
 from howl_editor.gui.handler.export_handler import ExportHandler
+from howl_editor.gui.handler.music_workshop_handler import MusicWorkshopHandler
 from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
@@ -54,6 +56,7 @@ from howl_editor.gui.layout import WindowSize
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.gui.widget.main_tab_widget import MainTabWidget
+from howl_editor.gui.widget.music_workshop_widget import MusicWorkshopWidget
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.exporter import CseqMidiExporter
@@ -96,12 +99,14 @@ class MainWindow(QMainWindow):
         audio_player: AudioPlayer | None = None,
         resampler: LinearInterpolationResampler | None = None,
         wav_writer: WavWriter | None = None,
+        vag_rate_provider: VagSampleRateProvider | None = None,
         audio_cache: AudioCache | None = None,
         sample_lookup: SampleLookup | None = None,
         version_detector: HowlVersionDetector | None = None,
         sample_classifier: SampleClassifier | None = None,
         validator: BankCseqValidator | None = None,
         batch_exporter: BatchExporter | None = None,
+        sfz_exporter: SfzExporter | None = None,
         detail_formatter: DetailFormatter | None = None,
         sca_reader: ScaReader | None = None,
         sca_writer: ScaWriter | None = None,
@@ -140,12 +145,14 @@ class MainWindow(QMainWindow):
         self._audio_player = audio_player
         self._resampler = resampler
         self._wav_writer = wav_writer
+        self._vag_rate = vag_rate_provider
         self._audio_cache = audio_cache
         self._sample_lookup = sample_lookup
         self._version_detector = version_detector
         self._sample_classifier = sample_classifier
         self._validator = validator
         self._batch_exporter = batch_exporter
+        self._sfz_exporter = sfz_exporter
         self._detail_fmt = detail_formatter
         self._sca_reader = sca_reader
         self._sca_writer = sca_writer
@@ -170,6 +177,7 @@ class MainWindow(QMainWindow):
         self._file_actions: list[QAction] = []
 
         self._settings = QSettings("HowlEditor", "HowlEditor")
+        self._load_vag_rate_setting()
         self._max_recent = 10
 
         self._undo_stack = QUndoStack(self)
@@ -213,6 +221,16 @@ class MainWindow(QMainWindow):
             self.waveforms.append(self.main_tab.waveform)
         else:
             self.main_tab = None
+
+        self.music_workshop = MusicWorkshopWidget(
+            self._cseq_reader, self._sample_lookup, self._drum_names,
+            self._size_formatter, self._stylesheets,
+        )
+        self._music_workshop_handler = MusicWorkshopHandler(self)
+        self.tabs.addTab(self.music_workshop, "Music Workshop")
+        self._wire_music_workshop_signals()
+        self._register_player_widget(self.music_workshop.player_widget)
+        self.waveforms.append(self.music_workshop.waveform)
 
         self.tabs.addTab(self._build_file_content_tab(), "File Browser")
 
@@ -261,6 +279,25 @@ class MainWindow(QMainWindow):
         self.main_tab.sig_leaf_remove.connect(h.remove_leaf)
         self.main_tab.sig_leaf_drop.connect(h.drop_leaf)
         self.main_tab.sig_play_hub.connect(h.play_hub)
+
+    def _wire_music_workshop_signals(self) -> None:
+        h = self._music_workshop_handler
+        self.music_workshop.sig_play_instrument.connect(h.audition)
+        self.music_workshop.sig_play_sequence.connect(h.play_sequence)
+        self.music_workshop.sig_replace_sequence.connect(h.replace_sequence)
+        self.music_workshop.sig_copy_sequence.connect(h.copy_sequence)
+        self.music_workshop.sig_export_sequence.connect(h.export_sequence)
+        self.music_workshop.sig_remove_sequence.connect(h.remove_sequence)
+        self.music_workshop.sig_view_sequence_events.connect(h.view_sequence_events)
+        self.music_workshop.sig_edit_instrument.connect(h.edit_instrument)
+        self.music_workshop.sig_edit_percussion.connect(h.edit_percussion)
+        self.music_workshop.sig_retarget_instrument.connect(h.retarget_instrument)
+        self.music_workshop.sig_retarget_percussion.connect(h.retarget_percussion)
+        self.music_workshop.sig_replace_sample.connect(h.replace_sample)
+        self.music_workshop.sig_copy_sample.connect(h.copy_sample)
+        self.music_workshop.sig_export_sample.connect(h.export_sample)
+        self.music_workshop.sig_replace_song.connect(h.replace_song)
+        self.music_workshop.sig_export_song_midi.connect(h.export_song_midi)
 
     def _build_file_content_tab(self) -> QWidget:
         splitter = QSplitter(Qt.Horizontal)
@@ -342,10 +379,6 @@ class MainWindow(QMainWindow):
         redo_action = self._undo_stack.createRedoAction(self, "&Redo")
         redo_action.setShortcut(QKeySequence.Redo)
         edit_menu.addAction(redo_action)
-        edit_menu.addSeparator()
-        self._add_action(edit_menu, "Add &Bank...", self._bank_handler.add_bank, requires_file=True)
-        self._add_action(edit_menu, "Add &Song...", self._song_handler.add_song, requires_file=True)
-
         tools_menu = menubar.addMenu("&Tools")
         self._add_action(tools_menu, "Build Bank from &VAGs...", self._tools.build_bank_from_vags)
         midi_text = "&Convert MIDI to CSEQ..." if HAS_MIDO else "Convert MIDI to CSEQ (mido not installed)"
@@ -355,7 +388,38 @@ class MainWindow(QMainWindow):
         self._add_action(tools_menu, "&Export Saphi Audio Container...", self._tools.export_for_saphi, requires_file=True)
         self._add_action(tools_menu, "&Import Saphi Audio Container...", self._tools.import_saphi, requires_file=True)
         tools_menu.addSeparator()
+        self._build_vag_rate_submenu(tools_menu)
         self._add_action(tools_menu, "Clear Audio &Cache", self._clear_audio_cache)
+
+    def _load_vag_rate_setting(self) -> None:
+        if self._vag_rate is None:
+            return
+
+        saved = self._settings.value("vag_default_rate", VagSampleRateProvider.DEFAULT_RATE, type=int)
+        self._vag_rate.set(saved)
+
+    def _build_vag_rate_submenu(self, parent_menu) -> None:
+        if self._vag_rate is None:
+            return
+
+        submenu = parent_menu.addMenu("VAG export sample rate")
+        group = QActionGroup(self)
+        group.setExclusive(True)
+
+        for preset in VagSampleRateProvider.PRESETS:
+            action = QAction(f"{preset} Hz", self, checkable=True)
+            action.setChecked(preset == self._vag_rate.rate)
+            action.triggered.connect(lambda _checked=False, r=preset: self._set_vag_rate(r))
+            group.addAction(action)
+            submenu.addAction(action)
+
+    def _set_vag_rate(self, rate: int) -> None:
+        if self._vag_rate is None:
+            return
+
+        self._vag_rate.set(rate)
+        self._settings.setValue("vag_default_rate", rate)
+        self.status.showMessage(f"VAG export sample rate set to {rate} Hz")
 
     def _add_action(self, menu, text, slot, shortcut=None, enabled=True, requires_file=False):
         action = QAction(text, self)
@@ -382,9 +446,6 @@ class MainWindow(QMainWindow):
         toolbar.addAction("Open", self._open_file)
         self._file_actions.append(toolbar.addAction("Close", self._close_file))
         self._file_actions.append(toolbar.addAction("Save", self._save_file))
-        toolbar.addSeparator()
-        self._file_actions.append(toolbar.addAction("Add Bank", self._bank_handler.add_bank))
-        self._file_actions.append(toolbar.addAction("Add Song", self._song_handler.add_song))
         toolbar.addSeparator()
         self._file_actions.append(toolbar.addAction("Stop Playback", self._playback.stop))
 
@@ -636,6 +697,8 @@ class MainWindow(QMainWindow):
 
         if self.main_tab:
             self.main_tab.refresh(self.hwl)
+
+        self.music_workshop.refresh(self.hwl)
 
     def _get_item_label(self, prefix: str, index: int, name: str) -> str:
         if name:

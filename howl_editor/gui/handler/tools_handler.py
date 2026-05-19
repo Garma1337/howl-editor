@@ -194,7 +194,9 @@ class ToolsHandler:
         try:
             self._window.status.showMessage("Batch exporting...")
             QApplication.processEvents()
-            result = self._window._batch_exporter.export(self._window.hwl, Path(folder))
+            result = self._window._batch_exporter.export(
+                self._window.hwl, Path(folder), self._window._vag_rate.rate,
+            )
             QMessageBox.information(
                 self._window, "Batch Export Complete",
                 f"Exported:\n"

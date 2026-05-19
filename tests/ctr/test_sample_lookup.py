@@ -53,6 +53,40 @@ class TestFindSampleData:
         assert _lookup().find_sample_data(hwl, 1) == b"\x22" * 16
 
 
+class TestFindBankAndSampleIndex:
+
+    def test_resolves_to_first_matching_bank_and_slot(self):
+        blob = build_bank_blob([0, 1, 2], [b"\xAA" * 16, b"\xBB" * 16, b"\xCC" * 16])
+        hwl = HowlFile(
+            spu_addrs=[SpuAddrEntry(0, 2)] * 3,
+            banks=[blob],
+        )
+
+        assert _lookup().find_bank_and_sample_index(hwl, 1) == (0, 1)
+
+    def test_returns_none_when_spu_not_in_any_bank(self):
+        hwl = _hwl_with_sample(spu_index=0)
+        assert _lookup().find_bank_and_sample_index(hwl, 99) is None
+
+    def test_returns_first_bank_when_spu_duplicated(self):
+        # When two banks both contain the same spu_index, we return the
+        # earlier bank — this matches find_sample_data's first-match policy.
+        blob_a = build_bank_blob([5], [b"\x11" * 16])
+        blob_b = build_bank_blob([5], [b"\x22" * 16])
+        hwl = HowlFile(
+            spu_addrs=[SpuAddrEntry(0, 2)] * 6,
+            banks=[blob_a, blob_b],
+        )
+
+        bank_index, slot = _lookup().find_bank_and_sample_index(hwl, 5)
+        assert bank_index == 0
+        assert slot == 0
+
+    def test_returns_none_for_empty_hwl(self):
+        hwl = HowlFile()
+        assert _lookup().find_bank_and_sample_index(hwl, 0) is None
+
+
 class TestCollectSongSamples:
 
     def test_collects_instrument_samples(self):

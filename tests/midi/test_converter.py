@@ -339,3 +339,44 @@ class TestConvert:
 
         assert len(bend_events) == 1
         assert 0 <= bend_events[0].pitch <= 255
+
+
+class TestExtractTrackEvents:
+
+    def test_brackets_with_change_patch_and_end_track(self, tmp_path):
+        path = _create_midi(tmp_path, notes=[(60, 100, 240)])
+        events = _converter().extract_track_events(path, 1, instrument_index=7)
+
+        assert events[0].event_type == CseqEventType.CHANGE_PATCH
+        assert events[0].pitch == 7
+        assert events[-1].event_type == CseqEventType.END_TRACK
+
+    def test_translates_note_on_and_note_off(self, tmp_path):
+        path = _create_midi(tmp_path, notes=[(60, 100, 240)])
+        events = _converter().extract_track_events(path, 1, instrument_index=0)
+
+        types = [e.event_type for e in events]
+        assert CseqEventType.NOTE_ON in types
+        assert CseqEventType.NOTE_OFF in types
+
+    def test_preserves_velocity_on_note_on(self, tmp_path):
+        path = _create_midi(tmp_path, notes=[(60, 99, 240)])
+        events = _converter().extract_track_events(path, 1, instrument_index=0)
+        note_ons = [e for e in events if e.event_type == CseqEventType.NOTE_ON]
+
+        assert note_ons[0].velocity == 99
+
+    def test_out_of_range_track_raises(self, tmp_path):
+        path = _create_midi(tmp_path, notes=[(60, 100, 240)])
+
+        with pytest.raises(IndexError):
+            _converter().extract_track_events(path, 9, instrument_index=0)
+
+    def test_includes_meta_only_tracks_without_notes(self, tmp_path):
+        # The tempo track (index 0) has no notes — extraction shouldn't crash,
+        # it just produces a minimal CHANGE_PATCH + END_TRACK.
+        path = _create_midi(tmp_path)
+        events = _converter().extract_track_events(path, 0, instrument_index=0)
+
+        assert events[0].event_type == CseqEventType.CHANGE_PATCH
+        assert events[-1].event_type == CseqEventType.END_TRACK

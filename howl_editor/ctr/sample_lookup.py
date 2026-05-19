@@ -28,6 +28,21 @@ class SampleLookup:
 
         return None
 
+    def find_bank_and_sample_index(
+        self, hwl: HowlFile, spu_index: int,
+    ) -> tuple[int, int] | None:
+        """Return (bank_index, sample_slot) for the first bank that contains
+        a sample with the requested SPU index."""
+        for bank_index, bank_blob in enumerate(hwl.banks):
+            try:
+                for slot, s in enumerate(self._bank_reader.parse(bank_blob, hwl.spu_addrs)):
+                    if s.spu_index == spu_index:
+                        return bank_index, slot
+            except Exception:
+                continue
+
+        return None
+
     def collect_song_samples(self, hwl: HowlFile, cseq: CseqFile) -> dict[int, bytes]:
         """Collect all sample data needed by a CSEQ file from the HWL's banks."""
         needed_ids = set()

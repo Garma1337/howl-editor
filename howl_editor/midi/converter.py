@@ -27,6 +27,46 @@ class MidiConverter:
         self._cseq_writer = cseq_writer
         self._drum_remapper = drum_pitch_remapper
 
+    def extract_track_events(
+        self, midi_path: str | Path, midi_track_index: int,
+        instrument_index: int,
+    ) -> list[CseqEvent]:
+        """Convert one MIDI track's messages into a CSEQ event list ready to
+        slot into an existing CseqTrack. Output is bracketed by a leading
+        CHANGE_PATCH pointing at instrument_index and a trailing END_TRACK,
+        matching what `CseqEditor.replace_track_events` expects.
+
+        No drum-pitch remapping is applied — for per-track import the user
+        is responsible for picking a track whose pitch usage matches the
+        target's percussion table (or for melodic targets, where pitches
+        pass through 1:1)."""
+        self._check_mido()
+        mid = mido.MidiFile(str(midi_path))
+
+        if midi_track_index < 0 or midi_track_index >= len(mid.tracks):
+            raise IndexError(
+                f"MIDI track {midi_track_index} out of range (0..{len(mid.tracks) - 1})",
+            )
+
+        midi_track = mid.tracks[midi_track_index]
+        events: list[CseqEvent] = [CseqEvent(
+            delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=instrument_index,
+        )]
+
+        last_tick = 0
+        current_tick = 0
+
+        for msg in midi_track:
+            current_tick += msg.time
+            event = self._convert_message(msg, current_tick, last_tick, None)
+
+            if event is not None:
+                events.append(event)
+                last_tick = current_tick
+
+        events.append(CseqEvent(delta=0, event_type=CseqEventType.END_TRACK))
+        return events
+
     def get_midi_info(self, midi_path: str | Path) -> MidiInfo:
         """Extract structured info about a MIDI file."""
         self._check_mido()

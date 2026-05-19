@@ -5,6 +5,7 @@ from pathlib import Path
 from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
 from howl_editor.audio.linear_interpolation_resampler import LinearInterpolationResampler
+from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.core import Container
 from howl_editor.core.template_engine import TemplateEngine
@@ -32,6 +33,7 @@ from howl_editor.ctr.sample_lookup import SampleLookup
 from howl_editor.ctr.voice.gain_calculator import GainCalculator
 from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
 from howl_editor.export.batch_exporter import BatchExporter
+from howl_editor.export.sfz_exporter import SfzExporter
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
@@ -104,6 +106,7 @@ container.register("cseq_renderer", lambda c: CseqRenderer(
     c.resolve("gain_calculator")))
 container.register("audio_player", lambda c: AudioPlayer())
 container.register("resampler", lambda c: LinearInterpolationResampler())
+container.register("vag_rate_provider", lambda c: VagSampleRateProvider())
 container.register("audio_cache", lambda c: AudioCache(RENDERED_SONG_CACHE_DIR))
 container.register("sample_lookup", lambda c: SampleLookup(
     c.resolve("bank_reader"),
@@ -115,6 +118,12 @@ container.register("howl_stats_calculator", lambda c: HowlStatsCalculator())
 container.register("validator", lambda c: BankCseqValidator(
     c.resolve("bank_reader"), 
     c.resolve("cseq_reader")))
+container.register("sfz_exporter", lambda c: SfzExporter(
+    c.resolve("cseq_reader"),
+    c.resolve("bank_reader"),
+    c.resolve("sample_lookup"),
+    c.resolve("vag_decoder"),
+))
 container.register("batch_exporter", lambda c: BatchExporter(
     c.resolve("bank_reader"),
     c.resolve("cseq_reader"),

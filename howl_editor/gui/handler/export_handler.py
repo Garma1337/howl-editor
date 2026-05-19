@@ -10,7 +10,7 @@ from howl_editor.midi.converter import HAS_MIDO
 _OPTIONS: dict[ExportableKind, list[FileFormat]] = {
     ExportableKind.BANK: [FileFormatRegistry.BANK],
     ExportableKind.SAMPLE: [FileFormatRegistry.WAV, FileFormatRegistry.VAG],
-    ExportableKind.SONG: [FileFormatRegistry.CSEQ, FileFormatRegistry.MIDI],
+    ExportableKind.SONG: [FileFormatRegistry.CSEQ, FileFormatRegistry.MIDI, FileFormatRegistry.SFZ],
     ExportableKind.SEQUENCE: [FileFormatRegistry.MIDI],
 }
 
@@ -73,6 +73,10 @@ class ExportHandler:
 
         if kind == ExportableKind.SONG and fmt is FileFormatRegistry.MIDI:
             self._w._song_handler.export_song_as_midi(ctx.song_index)
+            return
+
+        if kind == ExportableKind.SONG and fmt is FileFormatRegistry.SFZ:
+            self._w._song_handler.export_song_as_sfz(ctx.song_index)
             return
 
         if kind == ExportableKind.SEQUENCE and fmt is FileFormatRegistry.MIDI:

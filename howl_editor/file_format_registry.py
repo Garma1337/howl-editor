@@ -28,5 +28,6 @@ class FileFormatRegistry:
     HOWL = FileFormat((".hwl",),          "HOWL",                  "HOWL Files (*.hwl)")
     VAG  = FileFormat((".vag",),          "VAG",                   "VAG Files (*.vag)")
     SCA  = FileFormat((".sca",),          "Saphi Audio Container", "Saphi Audio Container (*.sca)")
-    MIDI = FileFormat((".mid", ".midi"),  "MIDI",                  "MIDI Files (*.mid, *.midi)")
+    MIDI = FileFormat((".mid", ".midi"),  "MIDI",                  "MIDI Files (*.mid *.midi)")
     WAV  = FileFormat((".wav",),          "WAV",                   "WAV Files (*.wav)")
+    SFZ  = FileFormat((".sfz",),          "SFZ Sampler Patch",     "SFZ Files (*.sfz)")

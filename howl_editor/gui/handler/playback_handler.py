@@ -146,6 +146,10 @@ class PlaybackHandler:
         fx = self._window.hwl.engine_fx[index]
         self._play_fx_sample(fx.spu_index, fx.pitch, f"Engine {index}")
 
+    def play_spu_sample(self, spu_index: int, pitch: int, label: str) -> None:
+        """Public entry point for auditioning a sample by SPU index."""
+        self._play_fx_sample(spu_index, pitch, label)
+
     def _play_fx_sample(self, spu_index: int, pitch: int, label: str) -> None:
         if not self._window.hwl or not self.can_play():
             self._show_no_audio()

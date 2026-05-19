@@ -40,13 +40,15 @@ class BatchExporter:
         self._classifier = sample_classifier
         self._midi_exporter = midi_exporter
 
-    def export(self, hwl: HowlFile, output_dir: Path) -> BatchExportResult:
+    def export(
+        self, hwl: HowlFile, output_dir: Path, wav_sample_rate: int = 11025,
+    ) -> BatchExportResult:
         result = BatchExportResult()
         output_dir = Path(output_dir)
 
         self._export_banks(hwl, output_dir / HowlCollection.BANKS, result)
         self._export_songs(hwl, output_dir / HowlCollection.SONGS, result)
-        self._export_samples(hwl, output_dir / "samples", result)
+        self._export_samples(hwl, output_dir / "samples", result, wav_sample_rate)
 
         return result
 
@@ -80,7 +82,10 @@ class BatchExporter:
                 except Exception:
                     continue
 
-    def _export_samples(self, hwl: HowlFile, path: Path, result: BatchExportResult) -> None:
+    def _export_samples(
+        self, hwl: HowlFile, path: Path, result: BatchExportResult,
+        wav_sample_rate: int = 11025,
+    ) -> None:
         classification = self._classifier.classify(hwl)
         exported: set[int] = set()
 
@@ -106,7 +111,7 @@ class BatchExporter:
                     sample_dir / f"{name}.vag",
                 )
 
-                wav = self._vag_decoder.decode_to_wav(sample.data)
+                wav = self._vag_decoder.decode_to_wav(sample.data, wav_sample_rate)
                 (sample_dir / f"{name}.wav").write_bytes(wav)
 
                 result.samples += 1

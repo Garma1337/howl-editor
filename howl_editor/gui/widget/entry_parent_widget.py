@@ -235,7 +235,7 @@ class EntryParentWidget(QFrame):
         header = QHBoxLayout()
         header.setSpacing(8)
 
-        self._toggle_btn = QPushButton("▾" if default_expanded else "▸")
+        self._toggle_btn = QPushButton("➖" if default_expanded else "➕")
         self._toggle_btn.setObjectName("parentToggle")
         self._toggle_btn.setFixedWidth(ButtonWidth.ENTRY_TOGGLE)
         self._toggle_btn.setCheckable(True)
@@ -295,10 +295,6 @@ class EntryParentWidget(QFrame):
         return header
 
     def _build_actions_button(self, can_reset: bool) -> QPushButton | None:
-        """Single Actions ▾ menu collecting Replace / Export / Reset / Remove
-        for this entry. Returns None when the entry has nothing actionable —
-        FX entries fall into that bucket since they're effectively leaves and
-        their own LeafRowWidget owns their actions."""
         menu = QMenu(self)
 
         if self._row.accepts:
@@ -312,11 +308,6 @@ class EntryParentWidget(QFrame):
 
         if can_reset and self._row.is_modified:
             menu.addAction("↩️  Reset", lambda: self.sig_reset_parent.emit(self._row))
-
-        if self._can_remove():
-            if not menu.isEmpty():
-                menu.addSeparator()
-            menu.addAction("🗑️  Remove", lambda: self.sig_remove_parent.emit(self._row))
 
         if menu.isEmpty():
             return None
@@ -362,7 +353,7 @@ class EntryParentWidget(QFrame):
 
     def _on_toggle(self, checked: bool) -> None:
         self._body.setVisible(checked and bool(self._leaves))
-        self._toggle_btn.setText("▾" if checked else "▸")
+        self._toggle_btn.setText("➖" if checked else "➕")
 
     def _build_badges(self) -> list[QLabel]:
         badges: list[QLabel] = []
