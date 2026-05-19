@@ -4,6 +4,7 @@ from pathlib import Path
 
 from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
+from howl_editor.audio.linear_interpolation_resampler import LinearInterpolationResampler
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.core import Container
 from howl_editor.core.template_engine import TemplateEngine
@@ -102,6 +103,7 @@ container.register("cseq_renderer", lambda c: CseqRenderer(
     c.resolve("pitch_calculator"),
     c.resolve("gain_calculator")))
 container.register("audio_player", lambda c: AudioPlayer())
+container.register("resampler", lambda c: LinearInterpolationResampler())
 container.register("audio_cache", lambda c: AudioCache(RENDERED_SONG_CACHE_DIR))
 container.register("sample_lookup", lambda c: SampleLookup(
     c.resolve("bank_reader"),

@@ -2,6 +2,12 @@
 
 from PySide6.QtWidgets import QApplication
 
+from howl_editor.ps1 import spu
+
+_MIN_PLAYBACK_RATE = 8000
+_MAX_PLAYBACK_RATE = 48000
+_DEFAULT_SAMPLE_RATE = 11025
+
 
 class PlaybackHandler:
 
@@ -33,9 +39,9 @@ class PlaybackHandler:
                 return
 
             sample = samples[sample_index]
-            sample_rate = lookup.lookup_sample_rate(self._window.hwl, sample.spu_index)
-            wav = self._window._vag_decoder.decode_to_wav(sample.data, sample_rate)
-            label = f"SPU {sample.spu_index}"
+            raw_rate = lookup.lookup_sample_rate(self._window.hwl, sample.spu_index)
+            wav, resample_note = self._render_wav(sample.data, raw_rate)
+            label = f"SPU {sample.spu_index}{resample_note}"
 
             self._play_wav(
                 wav, label, lambda: self.play_sample(bank_index, sample_index),
@@ -152,15 +158,32 @@ class PlaybackHandler:
                 self._window.status.showMessage(f"SPU {spu_index} not found in any bank")
                 return
 
-            sample_rate = int(pitch / 4096 * 44100) if pitch > 0 else 11025
-            wav = self._window._vag_decoder.decode_to_wav(data, sample_rate)
+            raw_rate = (
+                int(pitch / spu.FREQUENCY_UNIT * spu.SAMPLE_RATE)
+                if pitch > 0 else _DEFAULT_SAMPLE_RATE
+            )
+            wav, resample_note = self._render_wav(data, raw_rate)
 
             self._play_wav(
-                wav, f"{label} (SPU {spu_index}, {sample_rate} Hz)",
+                wav, f"{label} (SPU {spu_index}, {raw_rate} Hz{resample_note})",
                 update_waveform=False,
             )
         except Exception as e:
             self._window.status.showMessage(f"Playback failed: {e}")
+
+    def _render_wav(self, vag_data: bytes, raw_rate: int) -> tuple[bytes, str]:
+        """Decode VAG → PCM at its intended rate, then resample into a
+        backend-playable rate when the original falls outside the window
+        QMediaPlayer accepts. Audible pitch is preserved across the bump."""
+        if _MIN_PLAYBACK_RATE <= raw_rate <= _MAX_PLAYBACK_RATE:
+            return self._window._vag_decoder.decode_to_wav(vag_data, raw_rate), ""
+
+        target_rate = _DEFAULT_SAMPLE_RATE
+        pcm = self._window._vag_decoder.decode(vag_data)
+        resampled = self._window._resampler.resample(pcm, raw_rate, target_rate)
+        wav = self._window._wav_writer.write(resampled, target_rate, channels=1)
+
+        return wav, f" — resampled {raw_rate}→{target_rate} Hz"
 
     def _play_wav(
         self, wav: bytes, label: str, replay_callback=None, update_waveform: bool = True,

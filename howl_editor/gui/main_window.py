@@ -18,6 +18,8 @@ except ImportError:
 
 from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
+from howl_editor.audio.linear_interpolation_resampler import LinearInterpolationResampler
+from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.cseq_renderer import CseqRenderer
@@ -92,6 +94,8 @@ class MainWindow(QMainWindow):
         vag_decoder: VagDecoder | None = None,
         cseq_renderer: CseqRenderer | None = None,
         audio_player: AudioPlayer | None = None,
+        resampler: LinearInterpolationResampler | None = None,
+        wav_writer: WavWriter | None = None,
         audio_cache: AudioCache | None = None,
         sample_lookup: SampleLookup | None = None,
         version_detector: HowlVersionDetector | None = None,
@@ -134,6 +138,8 @@ class MainWindow(QMainWindow):
         self._vag_decoder = vag_decoder
         self._cseq_renderer = cseq_renderer
         self._audio_player = audio_player
+        self._resampler = resampler
+        self._wav_writer = wav_writer
         self._audio_cache = audio_cache
         self._sample_lookup = sample_lookup
         self._version_detector = version_detector
