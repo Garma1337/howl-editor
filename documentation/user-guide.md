@@ -19,6 +19,7 @@ This guide covers internal behaviors and details that are not immediately obviou
 - [MIDI to CSEQ Conversion](#midi-to-cseq-conversion)
   - [Standalone vs HWL](#standalone-vs-hwl)
 - [CSEQ to MIDI Export](#cseq-to-midi-export)
+- [Copying Samples and Sequences](#copying-samples-and-sequences)
 - [Audio Playback](#audio-playback)
   - [Sample Playback](#sample-playback)
   - [FX Playback](#fx-playback)
@@ -217,6 +218,27 @@ The playback is suitable for previewing songs, verifying note arrangements, and 
 Decoded audio is cached in `%TEMP%/howl-editor/` (or the platform equivalent) using an MD5 checksum of the WAV data as the filename. Clicking the same sample or sequence again plays the cached file instantly without re-decoding.
 
 To clear the cache, use **Tools > Clear Audio Cache**.
+
+## Copying Samples and Sequences
+
+The Actions menu on a sample leaf (category view) and the right-click menu on a sample row (file browser) both expose **Copy to Bank…**. A matching **Copy to Song…** is available on sequence leaves. Both flows open the same picker:
+
+- **Target container** — pick the destination bank (for samples) or song (for sequences). Stock entries are labeled `Bank N — Name` / `Song N — Name`.
+- **Target child** — either `(Append as new …)` to add a new slot, or one of the existing samples/sequences in the chosen container to replace it.
+
+Append semantics:
+
+- **Sample append** — the sample bytes are duplicated and a new SPU index is appended for the target bank. The source bank is untouched; the two copies are independent afterward.
+- **Sequence append** — the source sequence is appended to the target song's CSEQ. Tempo, tracks, and events are preserved verbatim.
+
+Replace semantics:
+
+- **Sample replace** — the target slot's existing SPU index is kept, but its data is overwritten with the source sample's bytes. Anything else that references that SPU index will also play the new data. A size-change confirmation appears when the new bytes differ in size from the original, identical to the regular Replace flow.
+- **Sequence replace** — the target song's sequence at the chosen slot is overwritten with the source sequence.
+
+Both flows are undoable.
+
+The file browser also has **Add Sequence (.cseq)…** on song right-click — picks an external `.cseq` file (prompting for a sub-song if the source has more than one) and appends it to the selected song.
 
 ## Bank Merging
 

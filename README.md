@@ -14,13 +14,15 @@ A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspe
 - **Add, replace, remove** banks
 - **Merge banks** - combine samples from two banks with drag-and-drop reordering
 - **Build banks** from multiple `.vag` files (standalone or add to HWL)
+- **Copy samples between banks** - append to another bank or replace an existing sample slot
 - **Export** banks as `.bnk`, samples as `.vag` or `.wav`
 - **Browse samples** in the tree view with SPU index, size, and type classification
 
 ### Songs & Sequences
 
 - **Add, replace, remove** songs
-- **Replace or remove** individual sequences within a song
+- **Add, replace, remove** individual sequences within a song
+- **Copy sequences between songs** - append to another song or replace an existing sequence slot
 - **Export** songs as `.cseq` or MIDI files (per-song or per-sequence)
 - **Convert MIDI to CSEQ** with per-track instrument mapping (standalone or add to HWL)
 - **Export Saphi Audio Container** (`.sca`) — bundle one bank + one song + per-sample SPU sizes + name/author metadata into a single file the Saphi runtime can stream into PS1 memory
