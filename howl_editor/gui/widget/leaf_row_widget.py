@@ -24,6 +24,7 @@ class LeafRowWidget(QFrame):
 
     sig_play = Signal(object)        # EntryLeaf
     sig_replace = Signal(object)
+    sig_copy = Signal(object)
     sig_export = Signal(object)
     sig_remove = Signal(object)
     sig_drop = Signal(object, str)   # EntryLeaf, file_path
@@ -36,6 +37,7 @@ class LeafRowWidget(QFrame):
         icon_image_path: Path | None = None,
         show_play: bool = True,
         show_replace: bool = True,
+        show_copy: bool | None = None,
         show_export: bool = True,
         show_remove: bool = True,
     ):
@@ -44,6 +46,9 @@ class LeafRowWidget(QFrame):
         self._icon_image_path = icon_image_path
         self._show_play = show_play
         self._show_replace = show_replace
+        # Copy is supported for both samples (→ another bank) and sequences
+        # (→ another song). Caller can still force it off via show_copy=False.
+        self._show_copy = True if show_copy is None else show_copy
         self._show_export = show_export
         self._show_remove = show_remove
         self.setObjectName("leafRow")
@@ -95,6 +100,13 @@ class LeafRowWidget(QFrame):
 
         if self._show_replace:
             menu.addAction("🔄  Replace", lambda: self.sig_replace.emit(self._leaf))
+
+        if self._show_copy:
+            copy_label = (
+                "📋  Copy to song…" if self._leaf.kind == LeafKind.SEQUENCE
+                else "📋  Copy to bank…"
+            )
+            menu.addAction(copy_label, lambda: self.sig_copy.emit(self._leaf))
 
         if self._show_export:
             menu.addAction("💾  Export", lambda: self.sig_export.emit(self._leaf))

@@ -256,6 +256,7 @@ class MainWindow(QMainWindow):
         self.main_tab.sig_row_drop.connect(h.on_drop)
         self.main_tab.sig_leaf_play.connect(h.play_leaf)
         self.main_tab.sig_leaf_replace.connect(h.replace_leaf)
+        self.main_tab.sig_leaf_copy.connect(h.copy_leaf)
         self.main_tab.sig_leaf_export.connect(h.export_leaf)
         self.main_tab.sig_leaf_remove.connect(h.remove_leaf)
         self.main_tab.sig_leaf_drop.connect(h.drop_leaf)
@@ -786,6 +787,7 @@ class MainWindow(QMainWindow):
             ))
             menu.addSeparator()
             menu.addAction("Replace Sample (.vag)...", lambda: self._sample_handler.replace_sample(index, sub_index))
+            menu.addAction("Copy to Bank...", lambda: self._sample_handler.copy_sample(index, sub_index))
             menu.addAction("Remove Sample", lambda: self._sample_handler.remove_sample(index, sub_index))
         elif node_type == NODE_BANK and index is not None:
             menu.addAction("Export Bank...", lambda: self._export_handler.show_format_dialog(
@@ -826,6 +828,7 @@ class MainWindow(QMainWindow):
 
             menu.addSeparator()
             menu.addAction("Replace Sequence...", lambda: self._song_handler.replace_sequence(index, sub_index))
+            menu.addAction("Copy to Song...", lambda: self._song_handler.copy_sequence(index, sub_index))
             menu.addAction("Remove Sequence", lambda: self._song_handler.remove_sequence(index, sub_index))
         elif node_type == NODE_SONG and index is not None:
             menu.addAction("Export Song...", lambda: self._export_handler.show_format_dialog(
@@ -840,6 +843,7 @@ class MainWindow(QMainWindow):
                 menu.addAction("Move Down", lambda: self._move_song(index, index + 1))
 
             menu.addSeparator()
+            menu.addAction("Add Sequence (.cseq)...", lambda: self._song_handler.add_sequence(index))
             menu.addAction("Replace Song...", lambda: self._song_handler.replace_song(index))
             menu.addAction("Remove Song", lambda: self._song_handler.remove_song(index))
         elif node_type == NODE_BANKS:

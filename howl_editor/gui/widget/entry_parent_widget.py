@@ -44,6 +44,7 @@ class EntryParentWidget(QFrame):
     sig_play_hub = Signal(object, int)
     sig_leaf_play = Signal(object)              # EntryLeaf
     sig_leaf_replace = Signal(object)
+    sig_leaf_copy = Signal(object)
     sig_leaf_export = Signal(object)
     sig_leaf_remove = Signal(object)
     sig_leaf_drop = Signal(object, str)         # EntryLeaf, file_path
@@ -130,6 +131,7 @@ class EntryParentWidget(QFrame):
             )
             row.sig_play.connect(self.sig_leaf_play)
             row.sig_replace.connect(self.sig_leaf_replace)
+            row.sig_copy.connect(self.sig_leaf_copy)
             row.sig_export.connect(self.sig_leaf_export)
             row.sig_remove.connect(self.sig_leaf_remove)
             row.sig_drop.connect(self.sig_leaf_drop)
@@ -218,6 +220,7 @@ class EntryParentWidget(QFrame):
             )
             row.sig_play.connect(self.sig_leaf_play)
             row.sig_replace.connect(self.sig_leaf_replace)
+            row.sig_copy.connect(self.sig_leaf_copy)
             row.sig_export.connect(self.sig_leaf_export)
             row.sig_remove.connect(self.sig_leaf_remove)
             row.sig_drop.connect(self.sig_leaf_drop)

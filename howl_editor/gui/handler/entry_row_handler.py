@@ -134,6 +134,14 @@ class EntryRowHandler:
         if leaf.kind == LeafKind.SAMPLE and leaf.bank_index is not None:
             self._w._sample_handler.replace_sample(leaf.bank_index, leaf.sample_index or 0)
 
+    def copy_leaf(self, leaf: EntryLeaf) -> None:
+        if leaf.kind == LeafKind.SAMPLE and leaf.bank_index is not None:
+            self._w._sample_handler.copy_sample(leaf.bank_index, leaf.sample_index or 0)
+            return
+
+        if leaf.kind == LeafKind.SEQUENCE and leaf.song_index is not None:
+            self._w._song_handler.copy_sequence(leaf.song_index, leaf.seq_index or 0)
+
     def export_leaf(self, leaf: EntryLeaf) -> None:
         if leaf.kind == LeafKind.SEQUENCE and leaf.song_index is not None:
             self._w._export_handler.show_format_dialog(

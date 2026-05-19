@@ -2,11 +2,14 @@
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.command import SwapBlobCommand
+from howl_editor.gui.dialog.copy_target_dialog import (
+    CopyTargetContainer, CopyTargetDialog,
+)
 from howl_editor.ps1.formats.vag.models import VagSample
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
 
@@ -182,6 +185,101 @@ class SampleHandler:
             f"Saphi {SAPHI_BANK_MAX_SIZE}-byte limit. Saphi will reject the export.",
             10000,
         )
+
+    def copy_sample(self, src_bank: int, src_sample: int) -> None:
+        """Copy a sample's data into another bank — either appended as a new
+        sample or replacing an existing slot in the target bank."""
+        if not self._window.hwl:
+            return
+
+        try:
+            src_samples = self._window._bank_reader.parse(
+                self._window.hwl.banks[src_bank], self._window.hwl.spu_addrs,
+            )
+
+            if src_sample >= len(src_samples):
+                return
+
+            src = src_samples[src_sample]
+            banks = self._build_copy_bank_summaries()
+            size_text = self._window._size_formatter.format_bytes(len(src.data))
+            source_display = self._bank_display(src_bank)
+            summary = (
+                f"Copy sample {src_sample} from {source_display} "
+                f"(SPU #{src.spu_index}, {size_text}) to:"
+            )
+            dialog = CopyTargetDialog(
+                self._window,
+                title="Copy Sample",
+                prompt=summary,
+                container_label="Target bank:",
+                child_label="Target sample:",
+                append_label="(Append as new sample)",
+                containers=banks,
+                source_container_index=src_bank,
+            )
+
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            target = dialog.chosen_target()
+            if target is None:
+                return
+
+            self._apply_copy(src.data, target.container_index, target.child_index)
+        except Exception as e:
+            QMessageBox.critical(self._window, "Error", f"Copy failed:\n{e}")
+
+    def _build_copy_bank_summaries(self) -> list[CopyTargetContainer]:
+        out: list[CopyTargetContainer] = []
+
+        for i, blob in enumerate(self._window.hwl.banks):
+            try:
+                samples = self._window._bank_reader.parse(blob, self._window.hwl.spu_addrs)
+                child_labels = tuple(
+                    f"Sample {slot} — SPU #{s.spu_index}"
+                    for slot, s in enumerate(samples)
+                )
+            except Exception:
+                child_labels = ()
+
+            out.append(CopyTargetContainer(
+                index=i, display=self._bank_display(i), child_labels=child_labels,
+            ))
+
+        return out
+
+    def _bank_display(self, index: int) -> str:
+        name = self._window._bank_reader.get_name(index)
+        return f"Bank {index} — {name}" if name else f"Bank {index}"
+
+    def _apply_copy(
+        self, src_data: bytes, target_bank: int, target_sample: int | None,
+    ) -> None:
+        if target_sample is None:
+            new_blob = self._window._bank_builder.add_sample(
+                self._window.hwl.banks[target_bank], self._window.hwl.spu_addrs,
+                src_data, self._window._bank_reader,
+            )
+            description = f"Copy sample into Bank {target_bank}"
+            message = f"Copied sample as new entry in bank {target_bank}"
+        else:
+            if not self._confirm_size_change(target_bank, target_sample, len(src_data)):
+                return
+
+            new_blob = self._window._bank_builder.replace_sample(
+                self._window.hwl.banks[target_bank], self._window.hwl.spu_addrs,
+                target_sample, src_data, self._window._bank_reader,
+            )
+            description = f"Copy sample over Bank {target_bank} sample {target_sample}"
+            message = f"Replaced sample {target_sample} in bank {target_bank}"
+
+        self._window._undo_stack.push(SwapBlobCommand(
+            self._window, description, HowlCollection.BANKS, target_bank, new_blob,
+            snapshot_spu=True,
+        ))
+        self._window._notify(message)
+        self._warn_if_bank_oversized(target_bank, len(new_blob))
 
     def remove_sample(self, bank_index: int, sample_index: int):
         if not self._window.hwl:

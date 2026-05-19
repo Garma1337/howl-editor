@@ -46,6 +46,7 @@ class MainTabWidget(QWidget):
 
     sig_leaf_play = Signal(object)           # EntryLeaf
     sig_leaf_replace = Signal(object)
+    sig_leaf_copy = Signal(object)
     sig_leaf_export = Signal(object)
     sig_leaf_remove = Signal(object)
     sig_leaf_drop = Signal(object, str)
@@ -135,6 +136,7 @@ class MainTabWidget(QWidget):
         self._detail.sig_remove_parent.connect(self.sig_row_remove)
         self._detail.sig_leaf_play.connect(self.sig_leaf_play)
         self._detail.sig_leaf_replace.connect(self.sig_leaf_replace)
+        self._detail.sig_leaf_copy.connect(self.sig_leaf_copy)
         self._detail.sig_leaf_export.connect(self.sig_leaf_export)
         self._detail.sig_leaf_remove.connect(self.sig_leaf_remove)
         self._detail.sig_leaf_drop.connect(self.sig_leaf_drop)

@@ -11,6 +11,12 @@ class CseqEditor:
         self._reader = cseq_reader
         self._writer = cseq_writer
 
+    def append_sequence(self, song_data: bytes, new_seq: CseqSong) -> bytes:
+        """Append a sequence to a CSEQ blob and return the new blob."""
+        cseq = self._reader.read(song_data)
+        cseq.songs.append(new_seq)
+        return self._writer.serialize(cseq)
+
     def replace_sequence(self, song_data: bytes, seq_index: int, new_seq: CseqSong) -> bytes:
         """Replace a single sequence in a CSEQ blob and return the new blob."""
         cseq = self._reader.read(song_data)
