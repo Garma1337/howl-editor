@@ -23,6 +23,7 @@ This guide covers internal behaviors and details that are not immediately obviou
   - [Sample Playback](#sample-playback)
   - [FX Playback](#fx-playback)
   - [Sequence Playback](#sequence-playback)
+  - [Low-Rate Sample Resampling](#low-rate-sample-resampling)
   - [Playback Accuracy](#playback-accuracy)
   - [Playback Limitations](#playback-limitations)
   - [Audio Cache](#audio-cache)
@@ -161,6 +162,18 @@ Clicking a sample in the tree decodes the VAG ADPCM data to PCM and plays it. Th
 ### FX Playback
 
 Selecting an OtherFX or EngineFX entry shows the waveform of its referenced SPU sample (with loop marker). Clicking the entry plays it at the entry's native pitch. The pitch is converted from the internal encoding: `Hz = (pitch / 4096) * 44100`.
+
+### Low-Rate Sample Resampling
+
+Some media backends silently refuses to play WAVs whose sample rate falls below roughly 8 kHz (and above 48 kHz). Several stock CTR FX entries store pitch values that translate to sub-8 kHz rates — without intervention, clicking them would just produce silence even though the underlying VAG data is fine.
+
+When the editor detects that a sample's intended rate falls outside this playable window, it:
+
+1. Decodes the VAG to PCM at the original rate.
+2. Linearly resamples the PCM to a backend-friendly rate (11025 Hz).
+3. Writes a WAV at the new rate.
+
+The audible pitch is preserved — only the encoding rate changes. The status bar shows a `— resampled <orig>→11025 Hz` suffix on the "Playing …" message so it's visible when this fallback kicks in. Exported WAVs are unaffected; they continue to be written at the decoder's default rate.
 
 ### Sequence Playback
 
