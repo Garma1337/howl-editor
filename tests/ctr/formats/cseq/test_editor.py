@@ -184,6 +184,33 @@ class TestUpdateInstrument:
         with pytest.raises(IndexError):
             cseq_editor_svc.update_instrument(self._blob(), 7, 0, 0)
 
+    def test_leaves_adsr_untouched_when_none(self, cseq_editor_svc, cseq_reader):
+        original = cseq_reader.read(self._blob()).instruments[0].adsr
+        new_blob = cseq_editor_svc.update_instrument(self._blob(), 0, 100, 0x1000)
+        parsed = cseq_reader.read(new_blob)
+        assert parsed.instruments[0].adsr == original
+
+    def test_writes_adsr_when_provided(self, cseq_editor_svc, cseq_reader):
+        new_blob = cseq_editor_svc.update_instrument(
+            self._blob(), 0, 100, 0x1000, adsr=0xDEADBEEF,
+        )
+        parsed = cseq_reader.read(new_blob)
+        assert parsed.instruments[0].adsr == 0xDEADBEEF
+
+    def test_clamps_adsr_to_u32(self, cseq_editor_svc, cseq_reader):
+        new_blob = cseq_editor_svc.update_instrument(
+            self._blob(), 0, 100, 0x1000, adsr=0x1_0000_0000,
+        )
+        parsed = cseq_reader.read(new_blob)
+        assert parsed.instruments[0].adsr == 0xFFFFFFFF
+
+    def test_clamps_negative_adsr_to_zero(self, cseq_editor_svc, cseq_reader):
+        new_blob = cseq_editor_svc.update_instrument(
+            self._blob(), 0, 100, 0x1000, adsr=-1,
+        )
+        parsed = cseq_reader.read(new_blob)
+        assert parsed.instruments[0].adsr == 0
+
 
 class TestUpdatePercussion:
 

@@ -293,12 +293,13 @@ At the bottom of the tab a docked waveform + transport bar shows whatever's curr
 
 #### Editing Instruments and Percussion
 
-The ⚙️ menu on each instrument or percussion row has an **Edit volume / pitch…** entry. The dialog lets you change two fields:
+The ⚙️ menu on each instrument or percussion row has an **Edit volume / pitch…** entry. The dialog lets you change:
 
-- **Volume** (0–255) — the per-entry mix level baked into the instrument table.
+- **Volume** (0–255) — the per-entry mix level baked into the instrument / percussion table.
 - **Pitch register** (0–0xFFFF) — the raw frequency value the SPU uses; a live `≈ Hz` readout shows you what audible rate it maps to (0x1000 = 44100 Hz native rate).
+- **Attack/Decay (ADSR1)** and **Sustain/Release (ADSR2)** — *instruments only.* The two halves of the PS1 SPU's 32-bit ADSR register, shown as hex u16 values. ADSR1 packs attack mode/shift + decay shift + sustain level; ADSR2 packs sustain mode/direction/shift + release mode/shift. The fields are bit-packed and easy to break — when in doubt, copy the value from another instrument that envelopes the way you want, or keep the original. CTR percussion uses a fixed default envelope and has no per-entry ADSR slot, so those fields are not shown for percussion rows.
 
-ADSR is intentionally not editable here — the bit-packed envelope shifts are easier to break than to tune, and CTR percussion uses a fixed default envelope anyway. Edits are undoable.
+Edits are undoable.
 
 #### Retargeting a Sample
 

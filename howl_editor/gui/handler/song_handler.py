@@ -209,6 +209,7 @@ class SongHandler:
                 subject_label=f"Editing instrument {inst_index} (SPU #{inst.sample_id})",
                 initial_volume=inst.volume,
                 initial_frequency=inst.frequency,
+                initial_adsr=inst.adsr,
             )
 
             if dialog.exec() != QDialog.Accepted:
@@ -217,12 +218,14 @@ class SongHandler:
             result = dialog.chosen()
             new_blob = self._w._cseq_editor.update_instrument(
                 self._w.hwl.songs[song_index], inst_index,
-                result.volume, result.frequency,
+                result.volume, result.frequency, result.adsr,
             )
+
             self._w._undo_stack.push(SwapBlobCommand(
                 self._w, f"Edit instrument {inst_index} in Song {song_index}",
                 HowlCollection.SONGS, song_index, new_blob,
             ))
+
             self._w._notify(f"Updated instrument {inst_index} in song {song_index}")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Edit failed:\n{e}")

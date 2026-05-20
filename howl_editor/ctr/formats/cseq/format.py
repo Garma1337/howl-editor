@@ -49,3 +49,9 @@ MAX_VOLUME = 0xFF
 # struct (the SPU pitch register the runtime writes), so the maximum legal
 # value is 0xFFFF. spu.FREQUENCY_UNIT (4096) maps to 1.0× playback rate.
 MAX_PITCH_REGISTER = 0xFFFF
+
+# CseqInstrument.adsr is u32 in the on-wire struct — it's the raw SPU
+# ADSR register pair. Bits 0-15 are ADSR1 (attack/decay/sustain level),
+# bits 16-31 are ADSR2 (sustain rate/release). Each half is a u16.
+MAX_ADSR_REGISTER = 0xFFFFFFFF
+MAX_ADSR_HALF = 0xFFFF

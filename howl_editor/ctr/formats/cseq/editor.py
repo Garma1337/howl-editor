@@ -14,11 +14,13 @@ class CseqEditor:
 
     def update_instrument(
         self, song_data: bytes, inst_index: int, volume: int, frequency: int,
+        adsr: int | None = None,
     ) -> bytes:
-        """Mutate the named CseqInstrument's volume / frequency and rewrite
-        the CSEQ blob. Out-of-range numeric inputs are silently clamped to
-        the byte (volume) / uint16 (frequency) widths the on-wire format
-        supports."""
+        """Mutate the named CseqInstrument's volume / frequency (and optionally
+        ADSR register) and rewrite the CSEQ blob. Out-of-range numeric inputs
+        are silently clamped to the byte (volume) / uint16 (frequency) / uint32
+        (adsr) widths the on-wire format supports. Passing adsr=None leaves the
+        envelope untouched."""
         cseq = self._reader.read(song_data)
 
         if inst_index < 0 or inst_index >= len(cseq.instruments):
@@ -27,6 +29,10 @@ class CseqEditor:
         inst = cseq.instruments[inst_index]
         inst.volume = max(0, min(cseq_fmt.MAX_VOLUME, volume))
         inst.frequency = max(0, min(cseq_fmt.MAX_PITCH_REGISTER, frequency))
+        
+        if adsr is not None:
+            inst.adsr = max(0, min(cseq_fmt.MAX_ADSR_REGISTER, adsr))
+
         return self._writer.serialize(cseq)
 
     def update_percussion(

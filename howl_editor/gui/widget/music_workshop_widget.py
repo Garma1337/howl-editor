@@ -74,14 +74,21 @@ class MusicWorkshopWidget(QWidget):
         self._build_ui()
 
     def refresh(self, hwl: HowlFile | None) -> None:
+        # Hold onto the previous selection so an edit-triggered rebuild
+        # doesn't drag the user back to song 0 mid-task. -1 sentinel covers
+        # both "no prior selection" and "song list was empty."
+        previous_row = self._song_list.currentRow()
+
         self._hwl = hwl
         self._song_count = len(hwl.songs) if hwl else 0
         self._populate_song_list()
 
-        if self._song_count > 0:
-            self._song_list.setCurrentRow(0)
-        else:
+        if self._song_count == 0:
             self._show_empty_detail()
+            return
+
+        target_row = previous_row if 0 <= previous_row < self._song_count else 0
+        self._song_list.setCurrentRow(target_row)
 
     def _build_ui(self) -> None:
         self.setObjectName("musicWorkshopRoot")
