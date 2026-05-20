@@ -60,14 +60,15 @@ class SongHandler:
         if not self._w.hwl or not self._w._midi_exporter:
             return
 
+        options = self._prompt_midi_options()
+        if options is None:
+            return
+
         path, _ = QFileDialog.getSaveFileName(
             self._w, f"Export Song {index} as MIDI", f"song_{index}{FileFormatRegistry.MIDI.extension}", FileFormatRegistry.MIDI.file_filter,
         )
-        if not path:
-            return
 
-        options = self._prompt_midi_options()
-        if options is None:
+        if not path:
             return
 
         try:
@@ -90,15 +91,15 @@ class SongHandler:
         if not self._w.hwl or not self._w._midi_exporter:
             return
 
+        options = self._prompt_midi_options()
+        if options is None:
+            return
+
         path, _ = QFileDialog.getSaveFileName(
             self._w, f"Export Sequence {seq_index}",
             f"song_{song_index}_seq{seq_index}{FileFormatRegistry.MIDI.extension}", FileFormatRegistry.MIDI.file_filter,
         )
         if not path:
-            return
-
-        options = self._prompt_midi_options()
-        if options is None:
             return
 
         try:

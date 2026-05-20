@@ -2,6 +2,12 @@
 
 A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspect, and modify HOWL files containing sound banks (SPU sample collections) and songs (CSEQ sequences).
 
+The editor is organized into three tabs aimed at three personas:
+
+- **Category Browser** — targeted edits framed in in-game terms (tracks, characters, menus). Best for "replace this track's music" or "swap a character's voice."
+- **Music Workshop** — song-centric view with per-instrument editing, sample auditioning, MIDI / SFZ export, and MIDI track replacement. Best for composers and remixers.
+- **File Browser** — raw structural editing of banks, songs, sequences, and samples. Best for modders and developers working on file layout.
+
 ## Features
 
 ### File Operations
@@ -23,10 +29,20 @@ A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspe
 - **Add, replace, remove** songs
 - **Add, replace, remove** individual sequences within a song
 - **Copy sequences between songs** - append to another song or replace an existing sequence slot
-- **Export** songs as `.cseq` or MIDI files (per-song or per-sequence)
+- **Export** songs as `.cseq`, MIDI, or **SFZ sampler patch** (text manifest + WAV samples folder, loadable in any SFZ-compatible DAW)
+- **Replace one track's events** from a MIDI file without rewriting the whole sequence
+- **Inspect raw CSEQ events** per track (delta time, event type, params) for debugging
 - **Convert MIDI to CSEQ** with per-track instrument mapping (standalone or add to HWL)
 - **Export Saphi Audio Container** (`.sca`) — bundle one bank + one song + per-sample SPU sizes + name/author metadata into a single file the Saphi runtime can stream into PS1 memory
 - **Import Saphi Audio Container** — append a `.sca`'s bank and song to the loaded HWL
+
+### Instruments & Percussion (Music Workshop)
+
+- **Per-instrument editing** of volume and pitch (frequency register, with live ≈Hz readout)
+- **Per-percussion editing** of volume and pitch
+- **Retarget** an instrument or percussion entry at a different SPU sample without exporting / reimporting VAGs
+- **Audition** any instrument or percussion sample directly from its row
+- **GM drum names** shown for percussion entries
 
 ### Samples
 
@@ -40,6 +56,8 @@ A graphical editor for CTR (Crash Team Racing) `.HWL` sound files. Create, inspe
 - **Click to play** samples, sequences, OtherFX, and EngineFX entries
 - **Player bar** with play/stop, seek slider, and elapsed/total time display
 - **Automatic pitch detection** for bank samples - looks up the correct playback rate from FX and instrument tables
+- **Low-rate sample resampling** - samples whose intended rate falls outside the audio backend's playable range are resampled to a safe rate while preserving audible pitch, instead of playing silently
+- **Configurable VAG export sample rate** (11025 / 22050 / 33075 / 44100 Hz) used by all WAV-export paths
 - **Audio cache** - decoded audio is cached in `%TEMP%/howl-editor/` for instant replay (clearable via Tools menu)
 
 ### Effects Tables
@@ -107,46 +125,9 @@ The output is in `dist/HowlEditor/`. The spec trims unused PySide6 / Qt modules 
 python -m pytest tests/ -v
 ```
 
-## Project Structure
-
-```
-documentation/
-    formats/            Format specifications (HOWL, CSEQ, Bank, VAG)
-    audio-loading.md    Runtime audio loading system
-
-howl_editor/
-    core/               DI container, template engine, VLQ codec
-    models/             Data models (HowlFile, CseqFile, VagSample, BankSample, BankBuildResult, ScaFile, ScaMetadata, ScaFormat)
-    howl/               HWL reader, writer, editor, version detector
-    cseq/               CSEQ reader, writer, editor
-    vag/                VAG reader, writer
-    bank/               Bank reader, builder
-    midi/               MIDI to CSEQ converter and CSEQ to MIDI exporter
-    sca/                Saphi Audio Container reader, writer, chunk iterator, metadata codec, sample-sizes extractor, size caps
-    audio/
-        settings/       PS1 hardware constants, CTR lookup tables
-        decoder/        VAG ADPCM decoder, ADSR envelope decoder
-        voice/          Voice playback, pitch calculator, gain calculator
-        cseq_renderer   CSEQ sequence renderer
-        sample_lookup   Sample data and pitch lookup across banks/FX/songs
-        audio_player    Qt Multimedia playback with file caching
-        wav_writer      PCM to WAV conversion
-    analysis/           Sample classifier, bank/CSEQ validator
-    export/             Batch exporter
-    gui/
-        detail/         Detail formatters (HOWL, FX, bank, song)
-        templates/      HTML templates and CSS for detail panel
-        dialog/         Dialogs (merge bank, convert MIDI, Saphi audio container export)
-        handler/        Action handlers (bank, sample, song, playback, tools)
-        widget/         Widgets (filter bar, player bar, waveform)
-        command/        Undo commands (swap blob, remove item, move item/sequence)
-        main_window.py  Main window shell
-    services.py         Service registrations
-```
-
 ## Documentation
 
-- **[User Guide](documentation/user-guide.md)** - Non-obvious behaviors: undo/redo, keyboard shortcuts, drag-and-drop, sample pitch lookup, filter logic, waveform loop markers, reordering caveats, SPU index assignment, MIDI conversion, audio playback accuracy, bank merging, batch export, validation, Saphi container import/export
+- **[User Guide](documentation/user-guide.md)** - Non-obvious behaviors: tab roles, Music Workshop, instrument/percussion editing, SFZ export, MIDI export options, per-track MIDI replacement, configurable sample rate, undo/redo, keyboard shortcuts, drag-and-drop, sample pitch lookup, filter logic, waveform loop markers, reordering caveats, SPU index assignment, MIDI conversion, audio playback accuracy, bank merging, batch export, validation, Saphi container import/export
 - **[Audio Loading](documentation/audio-loading.md)** - How CTR loads audio at runtime: level/character/boss bank selection, song mapping, loading pipeline
 
 Format specifications:

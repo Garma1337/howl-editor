@@ -5,14 +5,15 @@ from dataclasses import dataclass
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QHeaderView, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QMenu, QPushButton, QScrollArea, QSplitter, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqInstrument, CseqPercussion
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr.sample_lookup import SampleLookup
+from howl_editor.gui.layout import ButtonWidth
 from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.player_widget import PlayerWidget
@@ -348,48 +349,32 @@ class MusicWorkshopWidget(QWidget):
         )
         layout.addWidget(play)
 
-        replace = QPushButton("🔄")
-        replace.setObjectName("workshopRowButton")
-        replace.setToolTip("Replace this sub-sequence with a CSEQ file")
-        replace.clicked.connect(
+        menu = QMenu(wrap)
+        menu.addAction(
+            "🔄  Replace…",
             lambda: self.sig_replace_sequence.emit(song_index, seq_index),
         )
-        layout.addWidget(replace)
-
-        copy = QPushButton("📋")
-        copy.setObjectName("workshopRowButton")
-        copy.setToolTip("Copy this sub-sequence into another song")
-        copy.clicked.connect(
+        menu.addAction(
+            "📋  Copy to song…",
             lambda: self.sig_copy_sequence.emit(song_index, seq_index),
         )
-        layout.addWidget(copy)
-
-        export = QPushButton("💾")
-        export.setObjectName("workshopRowButton")
-        export.setToolTip("Export this sub-sequence as MIDI")
-        export.clicked.connect(
+        menu.addAction(
+            "💾  Export as MIDI…",
             lambda: self.sig_export_sequence.emit(
                 song_index, seq_index, f"Song {song_index} Sequence {seq_index}",
             ),
         )
-        layout.addWidget(export)
-
-        events = QPushButton("🔍")
-        events.setObjectName("workshopRowButton")
-        events.setToolTip("Inspect raw track events in this sub-sequence")
-        events.clicked.connect(
+        menu.addAction(
+            "🔍  Inspect events",
             lambda: self.sig_view_sequence_events.emit(song_index, seq_index),
         )
-        layout.addWidget(events)
-
-        remove = QPushButton("🗑️")
-        remove.setObjectName("workshopRowButton")
-        remove.setToolTip("Remove this sub-sequence from the song")
-        remove.clicked.connect(
+        menu.addSeparator()
+        menu.addAction(
+            "🗑️  Remove",
             lambda: self.sig_remove_sequence.emit(song_index, seq_index),
         )
-        layout.addWidget(remove)
 
+        layout.addWidget(self._build_actions_menu_button(menu))
         layout.addStretch(1)
         return wrap
 
@@ -495,47 +480,47 @@ class MusicWorkshopWidget(QWidget):
         )
         layout.addWidget(play)
 
+        menu = QMenu(wrap)
+
         if edit_callback is not None:
-            edit = QPushButton("✏️")
-            edit.setObjectName("workshopRowButton")
-            edit.setToolTip("Edit volume / pitch (ADSR not editable here)")
-            edit.clicked.connect(edit_callback)
-            layout.addWidget(edit)
+            menu.addAction("✏️  Edit volume / pitch…", edit_callback)
 
         if retarget_callback is not None:
-            retarget = QPushButton("🎯")
-            retarget.setObjectName("workshopRowButton")
-            retarget.setToolTip("Point this entry at a different SPU sample")
-            retarget.clicked.connect(retarget_callback)
-            layout.addWidget(retarget)
+            menu.addAction("🎯  Point at another sample…", retarget_callback)
 
         if target.bank_index is not None and target.sample_index is not None:
-            replace = QPushButton("🔄")
-            replace.setObjectName("workshopRowButton")
-            replace.setToolTip("Replace this sample (.vag)")
-            replace.clicked.connect(
+            if not menu.isEmpty():
+                menu.addSeparator()
+
+            menu.addAction(
+                "🔄  Replace sample (.vag)…",
                 lambda: self.sig_replace_sample.emit(target.bank_index, target.sample_index),
             )
-            layout.addWidget(replace)
-
-            copy = QPushButton("📋")
-            copy.setObjectName("workshopRowButton")
-            copy.setToolTip("Copy this sample to another bank")
-            copy.clicked.connect(
+            menu.addAction(
+                "📋  Copy sample to bank…",
                 lambda: self.sig_copy_sample.emit(target.bank_index, target.sample_index),
             )
-            layout.addWidget(copy)
-
-            export = QPushButton("💾")
-            export.setObjectName("workshopRowButton")
-            export.setToolTip("Export this sample")
-            export.clicked.connect(
+            menu.addAction(
+                "💾  Export sample…",
                 lambda: self.sig_export_sample.emit(target.bank_index, target.sample_index),
             )
-            layout.addWidget(export)
+
+        if not menu.isEmpty():
+            layout.addWidget(self._build_actions_menu_button(menu))
 
         layout.addStretch(1)
         return wrap
+
+    def _build_actions_menu_button(self, menu: QMenu) -> QPushButton:
+        """Single ⚙️ button hosting all per-row non-play actions, matching
+        the Category Browser's LeafRowWidget pattern. Fixed-width because
+        Qt's menu indicator otherwise crops the emoji on narrow buttons."""
+        button = QPushButton("⚙️")
+        button.setObjectName("workshopRowButton")
+        button.setToolTip("Actions")
+        button.setFixedWidth(ButtonWidth.LEAF_ACTIONS)
+        button.setMenu(menu)
+        return button
 
     def _resolve_sample_target(self, spu_index: int, label: str) -> SampleActionTarget:
         if self._hwl is None:
