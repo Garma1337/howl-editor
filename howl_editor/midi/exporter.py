@@ -170,13 +170,13 @@ class CseqMidiExporter:
         if et == CseqEventType.VELOCITY:
             return mido.Message(
                 MidoMessageType.CONTROL_CHANGE, control=midi_fmt.CC_VOLUME,
-                value=event.pitch, channel=channel, time=delta,
+                value=self._cseq_cc_to_midi(event.pitch), channel=channel, time=delta,
             )
 
         if et == CseqEventType.PAN:
             return mido.Message(
                 MidoMessageType.CONTROL_CHANGE, control=midi_fmt.CC_PAN,
-                value=event.pitch, channel=channel, time=delta,
+                value=self._cseq_cc_to_midi(event.pitch), channel=channel, time=delta,
             )
 
         if et == CseqEventType.PITCH_BEND:
@@ -208,6 +208,12 @@ class CseqMidiExporter:
             return None
 
         return int(instruments[idx].volume * midi_fmt.CC_MAX / cseq_fmt.CC_MAX)
+
+    def _cseq_cc_to_midi(self, cseq_value: int) -> int:
+        """Scale a CSEQ control byte (0..255) down to a 7-bit MIDI CC value
+        (0..127) — the inverse of the importer's MIDI->CSEQ CC scaling."""
+        scaled = int(cseq_value * midi_fmt.CC_MAX / cseq_fmt.CC_MAX)
+        return max(0, min(midi_fmt.CC_MAX, scaled))
 
     def _cseq_bend_to_midi(self, cseq_value: int) -> int:
         return int(cseq_value / cseq_fmt.MAX_PITCH_BEND * midi_fmt.PITCH_BEND_RANGE) - midi_fmt.PITCH_BEND_CENTER

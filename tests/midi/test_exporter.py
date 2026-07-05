@@ -148,7 +148,9 @@ class TestControlEvents:
         cc = [m for m in mid.tracks[1] if m.type == "control_change" and m.control == 7]
 
         assert len(cc) == 1
-        assert cc[0].value == 100
+        # CSEQ CC bytes are 0..255; MIDI CC values are 0..127, so the exporter
+        # scales down (inverse of the importer): 100 * 127 / 255 = 49.
+        assert cc[0].value == 49
 
     def test_pan_as_cc10(self, exporter):
         track = CseqTrack(events=[
@@ -162,7 +164,26 @@ class TestControlEvents:
         cc = [m for m in mid.tracks[1] if m.type == "control_change" and m.control == 10]
 
         assert len(cc) == 1
-        assert cc[0].value == 64
+        # 64 * 127 / 255 = 31 (0..255 -> 0..127 rescale).
+        assert cc[0].value == 31
+
+    def test_pan_above_127_is_rescaled_not_overflowed(self, exporter):
+        """Regression: CSEQ stores CC bytes up to 255. A PAN of 160 must be
+        scaled into MIDI's 7-bit range rather than passed through, which
+        previously aborted export with 'data byte must be in range 0 ... 127'."""
+        track = CseqTrack(events=[
+            CseqEvent(delta=0, event_type=CseqEventType.PAN, pitch=160),
+            CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+        ])
+
+        cseq = _make_cseq(tracks=[track])
+        data = exporter.export(cseq, 0)
+        mid = mido.MidiFile(file=io.BytesIO(data))
+        cc = [m for m in mid.tracks[1] if m.type == "control_change" and m.control == 10]
+
+        assert len(cc) == 1
+        # 160 * 127 / 255 = 79, comfortably within the 0..127 data-byte range.
+        assert cc[0].value == 79
 
 
 def _make_velocity_cseq() -> CseqFile:
@@ -187,9 +208,8 @@ class TestIncludeVolumeEvents:
         ]
 
         assert len(volume_msgs) == 1
-        # The exporter passes the CSEQ pitch byte through as-is (matching
-        # the existing test_velocity_as_cc7 behaviour) — no 0-255 → 0-127 rescale.
-        assert volume_msgs[0].value == 64
+        # CSEQ VELOCITY byte 64 rescales to MIDI CC #7: 64 * 127 / 255 = 31.
+        assert volume_msgs[0].value == 31
 
     def test_disabled_drops_cc_volume(self, exporter):
         options = MidiExportOptions(include_volume_events=False)
