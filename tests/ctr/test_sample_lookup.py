@@ -111,6 +111,66 @@ class TestCollectSongSamples:
         assert result == {}
 
 
+class TestBankSpuOrder:
+
+    def test_returns_spu_indices_in_bank_order(self):
+        blob = build_bank_blob([7, 3, 9], [b"\xAA" * 16, b"\xBB" * 16, b"\xCC" * 16])
+        hwl = HowlFile(spu_addrs=[SpuAddrEntry(0, 2)] * 10, banks=[blob])
+
+        assert _lookup().bank_spu_order(hwl, 0) == [7, 3, 9]
+
+    def test_selects_the_requested_bank(self):
+        blob0 = build_bank_blob([0, 1], [b"\x11" * 16, b"\x22" * 16])
+        blob1 = build_bank_blob([4, 5], [b"\x33" * 16, b"\x44" * 16])
+        hwl = HowlFile(spu_addrs=[SpuAddrEntry(0, 2)] * 6, banks=[blob0, blob1])
+
+        assert _lookup().bank_spu_order(hwl, 1) == [4, 5]
+
+    def test_empty_for_out_of_range_bank(self):
+        hwl = _hwl_with_sample(spu_index=0)
+
+        assert _lookup().bank_spu_order(hwl, 5) == []
+        assert _lookup().bank_spu_order(hwl, -1) == []
+
+    def test_empty_for_hwl_without_banks(self):
+        assert _lookup().bank_spu_order(HowlFile(), 0) == []
+
+
+class TestSampleRateMap:
+
+    def test_maps_rates_from_fx_and_songs(self):
+        cseq_data = build_cseq_bytes(
+            instruments=[CseqInstrument(sample_id=7, frequency=4096)],
+            percussions=[CseqPercussion(sample_id=10, frequency=2048)],
+        )
+        hwl = HowlFile(
+            other_fx=[OtherFX(spu_index=5, pitch=4096)],
+            engine_fx=[EngineFX(spu_index=3, pitch=2048)],
+            songs=[cseq_data],
+        )
+
+        assert _lookup().sample_rate_map(hwl) == {5: 44100, 3: 22050, 7: 44100, 10: 22050}
+
+    def test_first_reference_wins(self):
+        # OtherFX outranks a song instrument for the same SPU, matching
+        # lookup_sample_rate's priority.
+        cseq_data = build_cseq_bytes(instruments=[CseqInstrument(sample_id=5, frequency=2048)])
+        hwl = HowlFile(
+            other_fx=[OtherFX(spu_index=5, pitch=4096)],
+            songs=[cseq_data],
+        )
+
+        assert _lookup().sample_rate_map(hwl)[5] == 44100
+
+    def test_omits_samples_with_no_rate_reference(self):
+        hwl = HowlFile(other_fx=[OtherFX(spu_index=5, pitch=0)])
+
+        assert _lookup().sample_rate_map(hwl) == {}
+
+    def test_empty_for_empty_hwl(self):
+        assert _lookup().sample_rate_map(HowlFile()) == {}
+
+
 class TestLookupSampleRate:
 
     def test_finds_rate_from_other_fx(self):

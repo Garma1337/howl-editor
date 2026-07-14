@@ -52,6 +52,7 @@ if __name__ == "__main__":
         category_icon_resolver=container.resolve("category_icon_resolver"),
         cseq_size_validator=container.resolve("cseq_size_validator"),
         drum_names=container.resolve("gm_drum_names"),
+        stock_layout=container.resolve("stock_layout"),
         leaf_info_formatter=container.resolve("leaf_info_formatter"),
         howl_stats_calculator=container.resolve("howl_stats_calculator"),
         size_formatter=container.resolve("size_formatter"),

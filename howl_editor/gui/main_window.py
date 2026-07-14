@@ -22,6 +22,7 @@ from howl_editor.audio.linear_interpolation_resampler import LinearInterpolation
 from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.cseq_renderer import CseqRenderer
 from howl_editor.ctr.formats.bank import BankReader, BankBuilder
@@ -120,6 +121,7 @@ class MainWindow(QMainWindow):
         category_icon_resolver: CategoryIconResolver | None = None,
         cseq_size_validator: CseqSizeValidator | None = None,
         drum_names: DrumNameResolver | None = None,
+        stock_layout: StockLayoutResolver | None = None,
         leaf_info_formatter=None,
         howl_stats_calculator=None,
         size_formatter=None,
@@ -166,6 +168,7 @@ class MainWindow(QMainWindow):
         self._icon_resolver = category_icon_resolver
         self._cseq_size_validator = cseq_size_validator
         self._drum_names = drum_names
+        self._stock_layout = stock_layout
         self._leaf_info_formatter = leaf_info_formatter
         self._howl_stats_calculator = howl_stats_calculator
         self._size_formatter = size_formatter

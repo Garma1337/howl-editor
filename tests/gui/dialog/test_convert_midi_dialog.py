@@ -125,3 +125,131 @@ class TestDrumPitchExpansion:
         assert mapping.is_drum is False
         assert mapping.drum_pitches == []
         assert mapping.sample_id == 0
+
+
+def _melodic_track_with_pitches(pitches: list[int]) -> MidiInfo:
+    track = MidiTrackInfo(
+        index=0, name="Perc off ch10", note_count=len(pitches),
+        channels=[3], drum_pitches=[], all_pitches=pitches,
+    )
+
+    return MidiInfo(num_tracks=1, tracks=[track])
+
+
+class TestManualDrumToggle:
+    """Percussion not on GM channel 10 is not auto-detected, so it would
+    collapse to one melodic instrument. The Drum toggle re-expands it into one
+    percussion slot per pitch using the track's full pitch set."""
+
+    def test_starts_as_single_melodic_row(self, qt_app):
+        dlg = ConvertMidiDialog(None, _melodic_track_with_pitches([40, 41, 42]), max_spu_index=10)
+
+        assert dlg.table.rowCount() == 1
+        assert dlg.get_settings().mappings[0].is_drum is False
+
+    def test_toggling_drum_expands_to_one_row_per_pitch(self, qt_app):
+        dlg = ConvertMidiDialog(None, _melodic_track_with_pitches([40, 41, 42]), max_spu_index=10)
+
+        dlg._on_drum_toggled(0, True)
+
+        assert dlg.table.rowCount() == 3
+        mapping = dlg.get_settings().mappings[0]
+        assert mapping.is_drum is True
+        assert [p.midi_pitch for p in mapping.drum_pitches] == [40, 41, 42]
+
+    def test_untoggling_collapses_back_to_melodic(self, qt_app):
+        dlg = ConvertMidiDialog(None, _melodic_track_with_pitches([40, 41]), max_spu_index=10)
+
+        dlg._on_drum_toggled(0, True)
+        dlg._on_drum_toggled(0, False)
+
+        assert dlg.table.rowCount() == 1
+        assert dlg.get_settings().mappings[0].is_drum is False
+
+
+class TestBankSpuPrefill:
+    """When the song's paired bank is known, SPU IDs prefill from the bank's
+    sample order so tracks laid out to mirror the bank map across untouched."""
+
+    def test_prefills_from_bank_order(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(3), max_spu_index=99, bank_spu_order=[12, 7, 30],
+        )
+
+        assert _spu_values(dlg) == [12, 7, 30]
+
+    def test_falls_back_to_sequential_beyond_bank_length(self, qt_app):
+        # More MIDI rows than bank samples → extra rows use the sequential
+        # clamp against max_spu_index.
+        dlg = ConvertMidiDialog(
+            None, _info(4), max_spu_index=10, bank_spu_order=[5, 6],
+        )
+
+        assert _spu_values(dlg) == [5, 6, 2, 3]
+
+    def test_settings_carry_bank_prefilled_ids(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(2), max_spu_index=99, bank_spu_order=[8, 4],
+        )
+
+        assert [m.sample_id for m in dlg.get_settings().mappings] == [8, 4]
+
+
+def _freq_values(dialog: ConvertMidiDialog) -> list[int]:
+    return [
+        dialog.table.cellWidget(row, 3).value()
+        for row in range(dialog.table.rowCount())
+    ]
+
+
+class TestFrequencyPrefill:
+    """The Frequency column prefills from each prefilled SPU's known sample
+    rate, so the music maker doesn't have to look up and re-enter the rate for
+    every channel. Changing the SPU carries its rate across too."""
+
+    def test_prefills_frequency_from_sample_rate(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(3), max_spu_index=99,
+            bank_spu_order=[12, 7, 30],
+            spu_sample_rates={12: 22050, 7: 44100, 30: 11025},
+        )
+
+        assert _freq_values(dlg) == [22050, 44100, 11025]
+
+    def test_defaults_when_rate_unknown(self, qt_app):
+        # No rate map → every row falls back to the default rate.
+        dlg = ConvertMidiDialog(None, _info(2), max_spu_index=10)
+
+        assert _freq_values(dlg) == [11025, 11025]
+
+    def test_changing_spu_updates_frequency(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(1), max_spu_index=99,
+            bank_spu_order=[12],
+            spu_sample_rates={12: 22050, 5: 44100},
+        )
+
+        dlg.table.cellWidget(0, 2).setValue(5)
+
+        assert _freq_values(dlg) == [44100]
+
+    def test_unknown_spu_leaves_frequency_untouched(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(1), max_spu_index=99,
+            bank_spu_order=[12],
+            spu_sample_rates={12: 22050},
+        )
+
+        dlg.table.cellWidget(0, 2).setValue(999)  # not in the rate map
+
+        assert _freq_values(dlg) == [22050]
+
+    def test_settings_carry_prefilled_frequency(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(1), max_spu_index=99,
+            bank_spu_order=[7],
+            spu_sample_rates={7: 44100},
+        )
+
+        # 44100 Hz → CSEQ frequency field 4096 (44100 * 4096 / 44100).
+        assert dlg.get_settings().mappings[0].frequency == 4096

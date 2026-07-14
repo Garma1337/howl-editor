@@ -107,3 +107,63 @@ class TestCseqRoundTrip:
         assert len(parsed.songs[0].tracks) == 2
         assert not parsed.songs[0].tracks[0].is_drum
         assert parsed.songs[0].tracks[1].is_drum
+
+
+def _notes_track(instrument: int, note_count: int) -> CseqTrack:
+    """A track with a CHANGE_PATCH, `note_count` note on/off pairs, and an
+    END_TRACK — enough events that a misaligned track block truncates it."""
+    events = [CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=instrument)]
+
+    for i in range(note_count):
+        events.append(CseqEvent(delta=48, event_type=CseqEventType.NOTE_ON, pitch=60 + i, velocity=100))
+        events.append(CseqEvent(delta=24, event_type=CseqEventType.NOTE_OFF, pitch=60 + i))
+
+    events.append(CseqEvent(delta=0, event_type=CseqEventType.END_TRACK))
+    return CseqTrack(flags=1, events=events, instrument=instrument)
+
+
+def _notes_song(bpm: int, num_tracks: int) -> CseqSong:
+    return CseqSong(bpm=bpm, tpqn=480, tracks=[_notes_track(t, 3 + t) for t in range(num_tracks)])
+
+
+class TestMultiSequenceRoundTrip:
+    """Regression guard for the writer track-block alignment. A mask song
+    (songs 0–27) holds three sub-songs — main music, Aku Aku mask, Uka Uka
+    mask. Every sub-song after the first begins at an unaligned absolute
+    position, so padding the track block song-relative (instead of to the
+    file's ALIGNMENT boundary the reader expects) truncated the later
+    sequences and silently destroyed the masks."""
+
+    def _event_counts(self, cseq: CseqFile) -> list[list[int]]:
+        return [[len(t.events) for t in s.tracks] for s in cseq.songs]
+
+    def test_three_sequences_preserve_all_events(self, cseq_reader, cseq_writer):
+        original = CseqFile(songs=[
+            _notes_song(120, 3), _notes_song(130, 3), _notes_song(140, 3),
+        ])
+
+        parsed = cseq_reader.read(cseq_writer.serialize(original))
+
+        assert self._event_counts(parsed) == self._event_counts(original)
+
+    def test_serialize_is_idempotent_across_two_cycles(self, cseq_reader, cseq_writer):
+        original = CseqFile(songs=[
+            _notes_song(120, 4), _notes_song(130, 4), _notes_song(140, 4),
+        ])
+
+        once = cseq_reader.read(cseq_writer.serialize(original))
+        twice = cseq_reader.read(cseq_writer.serialize(once))
+
+        assert self._event_counts(twice) == self._event_counts(original)
+
+    def test_mask_layout_track_counts_survive(self, cseq_reader, cseq_writer):
+        # Main music with 20 tracks (the Adventure-Hub / dense-track case),
+        # plus the two shorter mask sequences.
+        original = CseqFile(songs=[
+            _notes_song(120, 20), _notes_song(130, 4), _notes_song(140, 4),
+        ])
+
+        parsed = cseq_reader.read(cseq_writer.serialize(original))
+
+        assert [len(s.tracks) for s in parsed.songs] == [20, 4, 4]
+        assert self._event_counts(parsed) == self._event_counts(original)

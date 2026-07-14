@@ -77,12 +77,14 @@ class MidiConverter:
             note_count = sum(1 for msg in track if msg.type == MidoMessageType.NOTE_ON)
             channels = sorted({msg.channel for msg in track if hasattr(msg, "channel")})
             drum_pitches = self._drum_remapper.collect_drum_pitches(track)
+            all_pitches = self._drum_remapper.collect_all_note_pitches(track)
             tracks.append(MidiTrackInfo(
                 index=i,
                 name=track.name or f"Track {i}",
                 note_count=note_count,
                 channels=channels,
                 drum_pitches=drum_pitches,
+                all_pitches=all_pitches,
             ))
 
         return MidiInfo(
@@ -143,34 +145,38 @@ class MidiConverter:
         """Populate the CSEQ instrument and percussion lists.
 
         Returns:
-          - instrument_map: cseq track index → instrument/percussion index.
-            For drum tracks this points at the FIRST percussion entry; the
-            actual per-note index is resolved via drum_pitch_tables.
-          - drum_pitch_tables: cseq track index → ordered MIDI pitch list,
-            used by `_convert_track` to rewrite NOTE_ON pitches into CSEQ
-            percussion indices.
+          - instrument_map: cseq track index → instrument index. Only melodic
+            tracks appear here; drum tracks address Percussions[] per note.
+          - drum_pitch_tables: cseq track index → the single, shared global
+            MIDI pitch list, used by `_convert_track` to rewrite NOTE_ON
+            pitches into CSEQ percussion indices.
+
+        A drum track's NOTE pitch is a *direct* index into Percussions[] with
+        no per-track base (see CseqRenderer), so every drum track must resolve
+        against ONE shared percussion table. We collect the union of drum
+        pitches across all drum tracks (first-seen wins), append one slot per
+        unique pitch, and hand every drum track the same global pitch list.
+        This lets any drum layout work — all percussion on one track, or one
+        percussion instrument per track (all on channel 10) — without notes
+        from different tracks colliding on the same slot.
         """
         instrument_map: dict[int, int] = {}
         drum_pitch_tables: dict[int, list[int]] = {}
+
+        drum_track_indices: list[int] = []
+        global_pitch_order: list[int] = []
+        pitch_to_slot: dict[int, DrumPitchMapping] = {}
 
         for track_idx, (midi_idx, midi_track) in enumerate(midi_tracks):
             mapping = settings.mappings[midi_idx] if midi_idx < len(settings.mappings) else InstrumentMapping()
 
             if mapping.is_drum:
-                pitch_table = self._build_drum_pitch_table(midi_track, mapping)
-                first_perc_index = len(cseq.percussions)
+                drum_track_indices.append(track_idx)
 
-                for pitch in pitch_table:
-                    slot = self._find_drum_slot(mapping, pitch)
-                    cseq.percussions.append(CseqPercussion(
-                        flags=1,
-                        volume=slot.volume,
-                        frequency=slot.frequency,
-                        sample_id=slot.sample_id,
-                    ))
-
-                instrument_map[track_idx] = first_perc_index
-                drum_pitch_tables[track_idx] = pitch_table
+                for pitch in self._build_drum_pitch_table(midi_track, mapping):
+                    if pitch not in pitch_to_slot:
+                        pitch_to_slot[pitch] = self._find_drum_slot(mapping, pitch)
+                        global_pitch_order.append(pitch)
             else:
                 cseq.instruments.append(CseqInstrument(
                     flags=1,
@@ -181,6 +187,18 @@ class MidiConverter:
                 ))
 
                 instrument_map[track_idx] = len(cseq.instruments) - 1
+
+        for pitch in global_pitch_order:
+            slot = pitch_to_slot[pitch]
+            cseq.percussions.append(CseqPercussion(
+                flags=1,
+                volume=slot.volume,
+                frequency=slot.frequency,
+                sample_id=slot.sample_id,
+            ))
+
+        for track_idx in drum_track_indices:
+            drum_pitch_tables[track_idx] = global_pitch_order
 
         return instrument_map, drum_pitch_tables
 
@@ -222,13 +240,15 @@ class MidiConverter:
         cseq_track = CseqTrack(flags=1 if is_drum else 0)
         patch_idx = instrument_map.get(track_idx, 0)
 
-        cseq_track.events.append(CseqEvent(
-            delta=0,
-            event_type=CseqEventType.CHANGE_PATCH,
-            pitch=patch_idx,
-        ))
-
-        cseq_track.instrument = patch_idx
+        # Drum tracks address Percussions[] directly per note, so they carry
+        # no CHANGE_PATCH — matching stock CTR sequences and CTR-tools output.
+        if not is_drum:
+            cseq_track.events.append(CseqEvent(
+                delta=0,
+                event_type=CseqEventType.CHANGE_PATCH,
+                pitch=patch_idx,
+            ))
+            cseq_track.instrument = patch_idx
 
         last_tick = 0
         current_tick = 0

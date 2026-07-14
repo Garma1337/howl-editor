@@ -2,18 +2,16 @@
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from howl_editor.ctr import adventure_hub as hub
 from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.gui.command import SwapBlobCommand
-from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
 from howl_editor.gui.entries.semantic_entry import EntryKind
 from howl_editor.gui.entries.semantic_entry import EntryRow
 from howl_editor.gui.entry_drop_router import DropAction, EntryDropRouter
-from howl_editor.midi.converter import HAS_MIDO
 
 
 class EntryRowHandler:
@@ -172,7 +170,9 @@ class EntryRowHandler:
         # Direct file → leaf replacement, skipping the file picker that
         # replace_leaf normally opens.
         if leaf.kind == LeafKind.SEQUENCE and leaf.song_index is not None:
-            self._w._song_handler.replace_sequence(leaf.song_index, leaf.seq_index or 0)
+            self._w._song_handler.replace_sequence_from_file(
+                leaf.song_index, leaf.seq_index or 0, file_path,
+            )
             return
 
         if leaf.kind == LeafKind.SAMPLE and leaf.bank_index is not None:
@@ -260,28 +260,17 @@ class EntryRowHandler:
         self._w._notify(f"Replaced {row.name} with {Path(file_path).name}")
 
     def _replace_song_with_midi(self, row: EntryRow, file_path: str) -> None:
-        if row.song_index is None or not HAS_MIDO:
-            self._notify_unsupported("MIDI support requires the 'mido' package")
+        if row.song_index is None:
             return
 
-        try:
-            info = self._w._midi_converter.get_midi_info(file_path)
-        except Exception as e:
-            QMessageBox.critical(self._w, "Error", f"Cannot read MIDI:\n{e}")
+        # Prefill SPU IDs from the song's paired bank when it has one, so a MIDI
+        # whose tracks mirror the bank's instrument order maps across without
+        # hand-entering every sample ID.
+        cseq = self._w._song_handler.import_midi_as_cseq(file_path, row.bank_index)
+        if cseq is None:
             return
 
-        max_spu = len(self._w.hwl.spu_addrs) if self._w.hwl else 0
-        dialog = ConvertMidiDialog(self._w, info, max_spu, self._w._drum_names)
-
-        if dialog.exec() != QDialog.Accepted:
-            return
-
-        try:
-            cseq_blob = self._w._midi_converter.convert(file_path, dialog.get_settings())
-        except Exception as e:
-            QMessageBox.critical(self._w, "Error", f"Conversion failed:\n{e}")
-            return
-
+        cseq_blob = self._w._cseq_writer.serialize(cseq)
         self._w._undo_stack.push(SwapBlobCommand(
             self._w, f"Replace song {row.song_index} from MIDI", HowlCollection.SONGS,
             row.song_index, cseq_blob,

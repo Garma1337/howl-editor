@@ -70,11 +70,7 @@ class CseqWriter:
         track_ptr_pos = len(out)
         out += b"\x00" * (len(song.tracks) * fmt.OFFSET_SIZE)
 
-        header_total = fmt.SONG_HEADER_SIZE + len(song.tracks) * fmt.OFFSET_SIZE
-        remainder = header_total % fmt.ALIGNMENT
-
-        if remainder:
-            out += b"\x00" * (fmt.ALIGNMENT - remainder)
+        self._pad_to_alignment(out)
 
         tracks_start = len(out)
         track_offsets = []

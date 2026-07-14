@@ -12,9 +12,11 @@ from howl_editor.gui.dialog.copy_target_dialog import (
 )
 from howl_editor.gui.dialog.edit_instrument_dialog import EditInstrumentDialog
 from howl_editor.gui.dialog.midi_export_options_dialog import MidiExportOptionsDialog
+from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.dialog.select_sample_dialog import (
     SampleChoice, SelectSampleDialog,
 )
+from howl_editor.midi.converter import HAS_MIDO
 from howl_editor.midi.exporter import MidiExportOptions
 
 
@@ -156,33 +158,35 @@ class SongHandler:
             self._w._notify(f"Removed song {index}")
 
     def replace_sequence(self, song_index: int, seq_index: int):
+        """Replace a single sequence from a picked file. Accepts a CSEQ (pick
+        which sub-song to graft in) or a MIDI (opens the convert dialog). Only
+        the target sequence is swapped — the song's other sequences, e.g. the
+        Aku Aku / Uka Uka masks on songs 0-27, are left intact."""
         if not self._w.hwl:
             return
 
         path, _ = QFileDialog.getOpenFileName(
-            self._w, "Select Source CSEQ", "", f"{FileFormatRegistry.CSEQ.file_filter};;All Files (*)",
+            self._w, "Select Source Sequence", "",
+            f"{FileFormatRegistry.CSEQ.file_filter};;{FileFormatRegistry.MIDI.file_filter};;All Files (*)",
         )
         if not path:
             return
 
+        self.replace_sequence_from_file(song_index, seq_index, path)
+
+    def replace_sequence_from_file(self, song_index: int, seq_index: int, path: str):
+        """Apply a specific source file to one sequence, skipping the picker.
+        Used by both the menu (via replace_sequence) and drag-and-drop."""
+        if not self._w.hwl:
+            return
+
         try:
-            source_cseq = self._w._cseq_reader.read(Path(path).read_bytes())
-            source_seq_index = 0
-
-            if len(source_cseq.songs) > 1:
-                labels = [f"Sequence {i} (BPM={s.bpm}, {len(s.tracks)} tracks)"
-                          for i, s in enumerate(source_cseq.songs)]
-                label, ok = QInputDialog.getItem(
-                    self._w, "Select Sequence", "Pick sequence from source:", labels, 0, False,
-                )
-
-                if not ok:
-                    return
-
-                source_seq_index = labels.index(label)
+            source_seq = self._resolve_source_sequence(path, song_index)
+            if source_seq is None:
+                return
 
             new_blob = self._w._cseq_editor.replace_sequence(
-                self._w.hwl.songs[song_index], seq_index, source_cseq.songs[source_seq_index],
+                self._w.hwl.songs[song_index], seq_index, source_seq,
             )
             self._w._undo_stack.push(
                 SwapBlobCommand(self._w, f"Replace Sequence in Song {song_index}", HowlCollection.SONGS, song_index, new_blob),
@@ -190,6 +194,81 @@ class SongHandler:
             self._w._notify(f"Replaced sequence {seq_index} in song {song_index}")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Replace failed:\n{e}")
+
+    def _resolve_source_sequence(self, path: str, song_index: int):
+        """Turn a picked/dropped file into the single CseqSong to graft into
+        the target sequence. Returns None if the user cancels a sub-dialog."""
+        if Path(path).suffix.lower() in FileFormatRegistry.MIDI.extensions:
+            cseq = self._import_midi_as_cseq(path, self._paired_bank(song_index))
+            if cseq is None or not cseq.songs:
+                return None
+
+            return cseq.songs[0]
+
+        source_cseq = self._w._cseq_reader.read(Path(path).read_bytes())
+        if not source_cseq.songs:
+            raise ValueError("Source CSEQ has no sequences")
+
+        source_seq_index = 0
+        if len(source_cseq.songs) > 1:
+            labels = [f"Sequence {i} (BPM={s.bpm}, {len(s.tracks)} tracks)"
+                      for i, s in enumerate(source_cseq.songs)]
+            label, ok = QInputDialog.getItem(
+                self._w, "Select Sequence", "Pick sequence from source:", labels, 0, False,
+            )
+
+            if not ok:
+                return None
+
+            source_seq_index = labels.index(label)
+
+        return source_cseq.songs[source_seq_index]
+
+    def _paired_bank(self, song_index: int) -> int | None:
+        if self._w._stock_layout is None:
+            return None
+
+        return self._w._stock_layout.paired_bank(song_index)
+
+    def import_midi_as_cseq(self, path: str, bank_index: int | None):
+        """Public entry for MIDI → whole-CSEQ import. Returns the converted
+        CseqFile model, or None if MIDI support is missing or the user cancels
+        the mapping dialog."""
+        return self._import_midi_as_cseq(path, bank_index)
+
+    def _import_midi_as_cseq(self, path: str, bank_index: int | None):
+        if not HAS_MIDO or self._w._midi_converter is None:
+            self._w.status.showMessage("MIDI support requires the 'mido' package")
+            return None
+
+        try:
+            info = self._w._midi_converter.get_midi_info(path)
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Cannot read MIDI:\n{e}")
+            return None
+
+        max_spu = len(self._w.hwl.spu_addrs) if self._w.hwl else 0
+        bank_order = None
+        spu_rates = None
+        if self._w._sample_lookup is not None and self._w.hwl is not None:
+            # Rates for every referenced sample — so both the initial prefill and
+            # any later SPU change in the dialog resolve a frequency, not just
+            # the paired bank's samples.
+            spu_rates = self._w._sample_lookup.sample_rate_map(self._w.hwl) or None
+            if bank_index is not None:
+                bank_order = self._w._sample_lookup.bank_spu_order(self._w.hwl, bank_index) or None
+
+        dialog = ConvertMidiDialog(
+            self._w, info, max_spu, self._w._drum_names, bank_order, spu_rates,
+        )
+        if dialog.exec() != QDialog.Accepted:
+            return None
+
+        try:
+            return self._w._midi_converter.convert_to_model(path, dialog.get_settings())
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Conversion failed:\n{e}")
+            return None
 
     def edit_instrument(self, song_index: int, inst_index: int):
         """Open a small dialog to tweak volume / pitch on one CSEQ

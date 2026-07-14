@@ -11,6 +11,7 @@ class MidiTrackInfo:
     note_count: int = 0
     channels: list[int] = field(default_factory=list)
     drum_pitches: list[int] = field(default_factory=list)
+    all_pitches: list[int] = field(default_factory=list)
 
 
 @dataclass

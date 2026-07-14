@@ -76,6 +76,17 @@ class TestGetMidiInfo:
 
         assert note_track.note_count == 2
 
+    def test_all_pitches_captured_for_non_drum_channel(self, tmp_path):
+        # Notes on channel 0 are not GM drums, so drum_pitches stays empty but
+        # all_pitches still lists them — that's the pitch set the dialog's
+        # manual Drum toggle expands into percussion slots.
+        conv = _converter()
+        path = _create_midi(tmp_path, notes=[(64, 100, 240), (60, 100, 240), (64, 80, 240)])
+        note_track = conv.get_midi_info(path).tracks[1]
+
+        assert note_track.drum_pitches == []
+        assert note_track.all_pitches == [60, 64]
+
 
 class TestConvert:
 
@@ -273,6 +284,79 @@ class TestConvert:
         # remap indices: 1, 0, 2.
         assert note_on_pitches == [1, 0, 2]
 
+    def test_separate_drum_tracks_share_one_global_percussion_table(self, tmp_path):
+        """The user's CTR-tools layout: one percussion instrument per MIDI
+        track, each on a single note, all on channel 10. A drum NOTE pitch is
+        a direct index into Percussions[] with no per-track base, so every
+        track must resolve against ONE shared table. Track 0's kick → slot 0,
+        track 1's snare → slot 1 — they must NOT both collapse to slot 0."""
+        conv = _converter()
+        reader = _reader()
+
+        mid = mido.MidiFile(type=1, ticks_per_beat=480)
+        tempo_track = mido.MidiTrack()
+        tempo_track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120), time=0))
+        tempo_track.append(mido.MetaMessage("end_of_track", time=0))
+        mid.tracks.append(tempo_track)
+
+        # Three separate drum tracks, one note each, all on channel 9 (GM 10).
+        for pitch in (36, 38, 42):
+            t = mido.MidiTrack()
+            t.append(mido.Message("note_on", channel=9, note=pitch, velocity=100, time=0))
+            t.append(mido.Message("note_off", channel=9, note=pitch, velocity=0, time=60))
+            t.append(mido.MetaMessage("end_of_track", time=0))
+            mid.tracks.append(t)
+
+        path = tmp_path / "multi_drum.mid"
+        mid.save(str(path))
+
+        settings = MidiConvertSettings(
+            mappings=[
+                InstrumentMapping(),  # tempo track
+                InstrumentMapping(is_drum=True, drum_pitches=[DrumPitchMapping(midi_pitch=36, sample_id=10)]),
+                InstrumentMapping(is_drum=True, drum_pitches=[DrumPitchMapping(midi_pitch=38, sample_id=11)]),
+                InstrumentMapping(is_drum=True, drum_pitches=[DrumPitchMapping(midi_pitch=42, sample_id=12)]),
+            ],
+        )
+
+        cseq = reader.read(conv.convert(path, settings))
+
+        # One shared percussion table, one slot per distinct pitch.
+        assert [p.sample_id for p in cseq.percussions] == [10, 11, 12]
+
+        # Each track's single note points at its OWN global slot, not slot 0.
+        note_pitches = [
+            [e.pitch for e in t.events if e.event_type == CseqEventType.NOTE_ON]
+            for t in cseq.songs[0].tracks
+        ]
+        assert note_pitches == [[0], [1], [2]]
+
+    def test_drum_tracks_carry_no_change_patch(self, tmp_path):
+        conv = _converter()
+
+        mid = mido.MidiFile(type=1, ticks_per_beat=480)
+        tempo_track = mido.MidiTrack()
+        tempo_track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120), time=0))
+        tempo_track.append(mido.MetaMessage("end_of_track", time=0))
+        mid.tracks.append(tempo_track)
+
+        drum_track = mido.MidiTrack()
+        drum_track.append(mido.Message("note_on", channel=9, note=36, velocity=100, time=0))
+        drum_track.append(mido.Message("note_off", channel=9, note=36, velocity=0, time=60))
+        drum_track.append(mido.MetaMessage("end_of_track", time=0))
+        mid.tracks.append(drum_track)
+
+        path = tmp_path / "drum_nopatch.mid"
+        mid.save(str(path))
+
+        settings = MidiConvertSettings(
+            mappings=[InstrumentMapping(), InstrumentMapping(is_drum=True, sample_id=0)],
+        )
+        cseq = conv.convert_to_model(path, settings)
+        drum_cseq_track = cseq.songs[0].tracks[0]
+
+        assert all(e.event_type != CseqEventType.CHANGE_PATCH for e in drum_cseq_track.events)
+
     def test_melodic_track_pitches_pass_through_unchanged(self, tmp_path):
         conv = _converter()
         path = _create_midi(tmp_path, notes=[(60, 100, 240), (64, 90, 240)])
@@ -380,3 +464,54 @@ class TestExtractTrackEvents:
 
         assert events[0].event_type == CseqEventType.CHANGE_PATCH
         assert events[-1].event_type == CseqEventType.END_TRACK
+
+
+def _mask_song(bpm, num_tracks):
+    """A stand-in mask sequence: `num_tracks` tracks, each with a handful of
+    note events, matching the shape of an Aku Aku / Uka Uka mask sub-song."""
+    from howl_editor.ctr.formats.cseq.models import CseqSong, CseqTrack, CseqEvent
+
+    tracks = []
+    for t in range(num_tracks):
+        events = [CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=t)]
+        for n in range(4):
+            events.append(CseqEvent(delta=48, event_type=CseqEventType.NOTE_ON, pitch=60 + n, velocity=90))
+            events.append(CseqEvent(delta=24, event_type=CseqEventType.NOTE_OFF, pitch=60 + n))
+        events.append(CseqEvent(delta=0, event_type=CseqEventType.END_TRACK))
+        tracks.append(CseqTrack(flags=0, events=events, instrument=t))
+
+    return CseqSong(bpm=bpm, tpqn=480, tracks=tracks)
+
+
+class TestMidiIntoMaskSequence:
+    """The user's scenario: a race-track song (0-27) holds three sub-songs —
+    main music + Aku Aku + Uka Uka masks. Importing a MIDI into the main
+    sequence must leave the two masks untouched."""
+
+    def test_replacing_main_sequence_preserves_masks(self, tmp_path):
+        from howl_editor.ctr.formats.cseq.editor import CseqEditor
+        from howl_editor.ctr.formats.cseq.models import CseqFile
+
+        vlq = VlqCodec()
+        writer = CseqWriter(vlq)
+        reader = _reader()
+        editor = CseqEditor(reader, writer)
+
+        original = CseqFile(songs=[_mask_song(120, 8), _mask_song(130, 3), _mask_song(140, 3)])
+        blob = writer.serialize(original)
+
+        # Convert a MIDI and graft its single sub-song into sequence 0.
+        path = _create_midi(tmp_path, bpm=100, notes=[(60, 100, 240), (64, 90, 240)])
+        settings = MidiConvertSettings(
+            mappings=[InstrumentMapping(), InstrumentMapping(sample_id=0)],
+        )
+        imported = _converter().convert_to_model(path, settings)
+
+        new_blob = editor.replace_sequence(blob, 0, imported.songs[0])
+        parsed = reader.read(new_blob)
+
+        # Still three sequences, and the two masks are byte-for-byte intact.
+        assert len(parsed.songs) == 3
+        assert parsed.songs[0].bpm == 100
+        assert [len(t.events) for t in parsed.songs[1].tracks] == [len(t.events) for t in original.songs[1].tracks]
+        assert [len(t.events) for t in parsed.songs[2].tracks] == [len(t.events) for t in original.songs[2].tracks]

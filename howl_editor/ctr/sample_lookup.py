@@ -43,6 +43,21 @@ class SampleLookup:
 
         return None
 
+    def bank_spu_order(self, hwl: HowlFile, bank_index: int) -> list[int]:
+        """Return the SPU indices of a bank's samples in bank order.
+
+        Used to prefill MIDI-import SPU assignments: a music maker who lays out
+        their MIDI tracks to mirror a bank's instrument order gets each track
+        pointed at the matching sample without looking IDs up by hand. Returns
+        an empty list if the bank index is out of range or unreadable."""
+        if bank_index < 0 or bank_index >= len(hwl.banks):
+            return []
+
+        try:
+            return [s.spu_index for s in self._bank_reader.parse(hwl.banks[bank_index], hwl.spu_addrs)]
+        except Exception:
+            return []
+
     def collect_song_samples(self, hwl: HowlFile, cseq: CseqFile) -> dict[int, bytes]:
         """Collect all sample data needed by a CSEQ file from the HWL's banks."""
         needed_ids = set()
@@ -97,6 +112,42 @@ class SampleLookup:
                 continue
 
         return _DEFAULT_SAMPLE_RATE
+
+    def sample_rate_map(self, hwl: HowlFile) -> dict[int, int]:
+        """Build spu_index → playback-rate (Hz) for every sample referenced
+        anywhere in the HWL, in one pass.
+
+        Same source priority as `lookup_sample_rate` (OtherFX, then EngineFX,
+        then song instruments, then song percussions — first reference wins),
+        but resolves the whole file at once so callers like the MIDI-import
+        dialog can update a sample's frequency the instant its SPU is picked,
+        without re-scanning per lookup. SPUs with no rate reference are simply
+        absent from the map."""
+        rates: dict[int, int] = {}
+
+        for fx in hwl.other_fx:
+            if fx.pitch > 0:
+                rates.setdefault(fx.spu_index, self._pitch_to_hz(fx.pitch))
+
+        for fx in hwl.engine_fx:
+            if fx.pitch > 0:
+                rates.setdefault(fx.spu_index, self._pitch_to_hz(fx.pitch))
+
+        for song_data in hwl.songs:
+            try:
+                cseq = self._cseq_reader.read(song_data)
+            except Exception:
+                continue
+
+            for inst in cseq.instruments:
+                if inst.frequency > 0:
+                    rates.setdefault(inst.sample_id, self._pitch_to_hz(inst.frequency))
+
+            for perc in cseq.percussions:
+                if perc.frequency > 0:
+                    rates.setdefault(perc.sample_id, self._pitch_to_hz(perc.frequency))
+
+        return rates
 
     def _pitch_to_hz(self, pitch: int) -> int:
         return int(pitch / spu.FREQUENCY_UNIT * spu.SAMPLE_RATE)
