@@ -40,3 +40,21 @@ tr:hover {
 .kv td:last-child {
     text-align: left;
 }
+
+.diag-error, .diag-warning {
+    color: #ffffff;
+    white-space: normal;
+    text-align: left;
+}
+
+.diag-error {
+    background-color: #c62828;
+}
+
+.diag-warning {
+    background-color: #e08600;
+}
+
+.diag-spacer {
+    margin: 0;
+}

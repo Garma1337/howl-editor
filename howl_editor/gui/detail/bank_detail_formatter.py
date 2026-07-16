@@ -51,7 +51,7 @@ class BankDetailFormatter:
 
         return size
 
-    def format_details(self, hwl: HowlFile, index: int) -> str:
+    def format_details(self, hwl: HowlFile, index: int, banner: str = "") -> str:
         bank = hwl.banks[index]
         name = self._bank_reader.get_name(index)
         title = f"Bank {index}" + (f" - {name}" if name else "")
@@ -88,7 +88,7 @@ class BankDetailFormatter:
             sample_ids=sample_ids,
         )
 
-        return self._template_engine.render("document.html", body=body)
+        return self._template_engine.render("document.html", body=body, banner=banner)
 
     def format_sample_details(
         self, hwl: HowlFile, bank_index: int, sample_index: int,

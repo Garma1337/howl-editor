@@ -5,9 +5,9 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox, QDialog, QInputDialog
 
-from howl_editor.ctr.constants import MAX_CSEQ_BYTES
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
+from howl_editor.gui.dialog.diagnosis_report_dialog import DiagnosisReportDialog
 from howl_editor.gui.dialog.saphi_export_dialog import SaphiExportDialog
 from howl_editor.midi.converter import HAS_MIDO
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
@@ -68,7 +68,8 @@ class ToolsHandler:
         try:
             cseq_data = self._window._midi_converter.convert(path, dialog.get_settings())
 
-            if not self._confirm_cseq_size(cseq_data):
+            guard = self._window._cseq_size_guard
+            if guard is not None and not self._window.confirm_within_limit(guard.check(cseq_data)):
                 return
 
             if self._window.hwl and self._ask_store_in_hwl("song"):
@@ -174,6 +175,16 @@ class ToolsHandler:
             QMessageBox.critical(self._window, "Error", f"Failed to parse .sca file:\n{e}")
             return
 
+        song_guard = self._window._cseq_size_guard
+        if song_guard is not None and not self._window.confirm_within_limit(song_guard.check(sca.cseq)):
+            return
+
+        bank_guard = self._window._bank_size_guard
+        if bank_guard is not None and not self._window.confirm_within_limit(
+            bank_guard.check(self._window.hwl, len(self._window.hwl.banks), sca.bank),
+        ):
+            return
+
         bank_index = self._window._editor.add_bank(self._window.hwl, sca.bank)
         song_index = self._window._editor.add_song(self._window.hwl, sca.cseq)
         self._window._mark_modified()
@@ -209,29 +220,28 @@ class ToolsHandler:
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Batch export failed:\n{e}")
 
+    def diagnose_howl(self):
+        """Run the whole-file engine-limit sweep and show the report."""
+        if not self._window.hwl or self._window._howl_diagnostics is None:
+            return
+
+        try:
+            data = self._window._writer.serialize(self._window.hwl)
+            report = self._window._howl_diagnostics.diagnose(
+                self._window.hwl,
+                howl_file_size=len(data),
+                iso_budget_bytes=self._window._original_howl_size,
+            )
+        except Exception as e:
+            QMessageBox.critical(self._window, "Error", f"Diagnosis failed:\n{e}")
+            return
+
+        DiagnosisReportDialog(
+            self._window, report, self._window._severity_presenter,
+        ).exec()
+
     def _ask_store_in_hwl(self, item_type: str) -> bool:
         return QMessageBox.question(
             self._window, "Add to HWL?",
             f"Add {item_type} to the loaded HWL file?\n\nSelect No to save as a standalone file instead.",
         ) == QMessageBox.Yes
-
-    def _confirm_cseq_size(self, cseq_data: bytes) -> bool:
-        validator = self._window._cseq_size_validator
-
-        if validator is None or validator.is_within_limit(cseq_data):
-            return True
-
-        size = len(cseq_data)
-        overflow = validator.calculate_overflow_bytes(cseq_data)
-        limit = MAX_CSEQ_BYTES
-
-        answer = QMessageBox.warning(
-            self._window, "CSEQ exceeds engine limit",
-            f"This CSEQ is {size} bytes ({overflow} over the {limit}-byte "
-            f"(0x5800) engine limit). The game will refuse to load songs "
-            f"above this size. Consider shortening the song, removing "
-            f"tracks, or reducing event density.\n\nContinue anyway?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-
-        return answer == QMessageBox.Yes

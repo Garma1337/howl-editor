@@ -19,7 +19,7 @@ class HowlDetailFormatter:
         self._template_engine = template_engine
         self._sizes = size_formatter
 
-    def format_details(self, hwl: HowlFile, file_path: str | None, raw_data: bytes | None = None) -> str:
+    def format_details(self, hwl: HowlFile, file_path: str | None, raw_data: bytes | None = None, banner: str = "") -> str:
         version_str = f"{hwl.version} ({hwl.version:#x})"
         if raw_data:
             info = self._version_detector.detect(raw_data)
@@ -48,7 +48,7 @@ class HowlDetailFormatter:
             rows.append({"key": "File", "value": file_path})
 
         body = self._template_engine.render("howl_details.html", rows=rows)
-        return self._template_engine.render("document.html", body=body)
+        return self._template_engine.render("document.html", body=body, banner=banner)
 
     def format_spu_table(self, hwl: HowlFile) -> str:
         entries = [

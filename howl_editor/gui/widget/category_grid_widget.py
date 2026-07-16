@@ -53,8 +53,14 @@ class CategoryGridWidget(QWidget):
     def show_stats(self, stats: HowlStats) -> None:
         self._stats.show_stats(stats)
 
-    def populate(self, groups: list[EntryGroup], modified_counts: dict[str, int]) -> None:
+    def populate(
+        self,
+        groups: list[EntryGroup],
+        modified_counts: dict[str, int],
+        badges: dict[str, str] | None = None,
+    ) -> None:
         self._clear()
+        badges = badges or {}
 
         for index, group in enumerate(groups):
             row = index // _CARDS_PER_ROW
@@ -63,6 +69,7 @@ class CategoryGridWidget(QWidget):
             card = CategoryCardWidget(
                 group, modified_counts.get(group.name, 0),
                 self._stylesheets, self._icon_resolver,
+                badge=badges.get(group.name, ""),
             )
             card.sig_clicked.connect(self.sig_category_clicked)
             self._grid.addWidget(card, row, col)

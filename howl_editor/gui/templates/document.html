@@ -3,6 +3,7 @@
     <style>{% include "style.css" %}</style>
 </head>
 <body>
+{% if banner %}{{ banner | raw }}{% endif %}
 {{ body | raw }}
 </body>
 </html>

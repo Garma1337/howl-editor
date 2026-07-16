@@ -51,6 +51,23 @@ class TestSerializeWithData:
         # Bank starts at sector 1 (header uses sector 0)
         assert data[SECTOR_SIZE:SECTOR_SIZE + 4] == bank_content
 
+
+class TestSerializedSize:
+
+    def test_matches_serialize_length_empty(self, howl_writer):
+        hwl = HowlFile()
+
+        assert howl_writer.serialized_size(hwl) == len(howl_writer.serialize(hwl))
+
+    def test_matches_serialize_length_with_data(self, howl_writer):
+        hwl = HowlFile(
+            spu_addrs=[SpuAddrEntry(0, 42), SpuAddrEntry(0, 7)],
+            banks=[b"\x00" * 3000, b"\x11" * 100],
+            songs=[b"\x22" * 5000],
+        )
+
+        assert howl_writer.serialized_size(hwl) == len(howl_writer.serialize(hwl))
+
     def test_song_data_preserved(self, howl_writer):
         song_content = b"\xCA\xFE"
         hwl = HowlFile(songs=[song_content])

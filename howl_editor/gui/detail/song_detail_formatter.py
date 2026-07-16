@@ -50,7 +50,7 @@ class SongDetailFormatter:
             return self._sizes.format_bytes(len(song_data))
         return f"{info.num_instruments}i/{info.num_percussions}p, {info.num_songs} seq"
 
-    def format_details(self, hwl: HowlFile, index: int) -> str:
+    def format_details(self, hwl: HowlFile, index: int, banner: str = "") -> str:
         data = hwl.songs[index]
         name = self._cseq_reader.get_name(index)
         title = f"Song {index}" + (f" - {name}" if name else "")
@@ -63,7 +63,7 @@ class SongDetailFormatter:
                                              rows=[{"key": "Raw size", "value": self._sizes.format_bytes(len(data))}])
                 + f"<p>Parse error: {e}</p>"
             )
-            return self._template_engine.render("document.html", body=body)
+            return self._template_engine.render("document.html", body=body, banner=banner)
 
         instruments = [
             {
@@ -111,4 +111,4 @@ class SongDetailFormatter:
             percussions=percussions,
             sequences=sequences,
         )
-        return self._template_engine.render("document.html", body=body)
+        return self._template_engine.render("document.html", body=body, banner=banner)

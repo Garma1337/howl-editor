@@ -13,6 +13,11 @@ from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.howl_stats import HowlStatsCalculator
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
+from howl_editor.ctr.diagnostics.bank_size_guard import BankSizeGuard
+from howl_editor.ctr.diagnostics.cseq_size_guard import CseqSizeGuard
+from howl_editor.ctr.diagnostics.howl_diagnostics import HowlDiagnostics
+from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
+from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
 from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.cseq_renderer import CseqRenderer
@@ -35,6 +40,10 @@ from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
 from howl_editor.export.batch_exporter import BatchExporter
 from howl_editor.export.sfz_exporter import SfzExporter
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
+from howl_editor.gui.detail.diagnosis_banner_formatter import DiagnosisBannerFormatter
+from howl_editor.gui.diagnostics_status_provider import DiagnosticsStatusProvider
+from howl_editor.gui.entry_badge_resolver import EntryBadgeResolver
+from howl_editor.gui.severity_presenter import SeverityPresenter
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
@@ -116,8 +125,37 @@ container.register("version_detector", lambda c: HowlVersionDetector())
 container.register("sample_classifier", lambda c: SampleClassifier(c.resolve("cseq_reader")))
 container.register("howl_stats_calculator", lambda c: HowlStatsCalculator())
 container.register("validator", lambda c: BankCseqValidator(
-    c.resolve("bank_reader"), 
+    c.resolve("bank_reader"),
     c.resolve("cseq_reader")))
+container.register("spu_residency_calculator", lambda c: SpuResidencyCalculator(
+    c.resolve("bank_reader")))
+container.register("cseq_size_guard", lambda c: CseqSizeGuard(
+    c.resolve("cseq_size_validator")))
+container.register("bank_size_guard", lambda c: BankSizeGuard(
+    c.resolve("spu_residency_calculator"),
+    c.resolve("stock_layout")))
+container.register("howl_size_guard", lambda c: HowlSizeGuard())
+container.register("howl_diagnostics", lambda c: HowlDiagnostics(
+    c.resolve("cseq_reader"),
+    c.resolve("cseq_size_validator"),
+    c.resolve("bank_reader"),
+    c.resolve("spu_residency_calculator"),
+    c.resolve("validator"),
+    c.resolve("stock_layout"),
+    c.resolve("howl_size_guard"),
+))
+container.register("diagnostics_status_provider", lambda c: DiagnosticsStatusProvider(
+    c.resolve("howl_diagnostics"),
+    c.resolve("howl_writer"),
+))
+container.register("severity_presenter", lambda c: SeverityPresenter())
+container.register("entry_badge_resolver", lambda c: EntryBadgeResolver(
+    c.resolve("severity_presenter"),
+))
+container.register("diagnosis_banner_formatter", lambda c: DiagnosisBannerFormatter(
+    c.resolve("template_engine"),
+    c.resolve("severity_presenter"),
+))
 container.register("sfz_exporter", lambda c: SfzExporter(
     c.resolve("cseq_reader"),
     c.resolve("bank_reader"),

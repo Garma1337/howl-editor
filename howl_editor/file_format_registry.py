@@ -31,3 +31,12 @@ class FileFormatRegistry:
     MIDI = FileFormat((".mid", ".midi"),  "MIDI",                  "MIDI Files (*.mid *.midi)")
     WAV  = FileFormat((".wav",),          "WAV",                   "WAV Files (*.wav)")
     SFZ  = FileFormat((".sfz",),          "SFZ Sampler Patch",     "SFZ Files (*.sfz)")
+
+    @classmethod
+    def create_combined_filter(cls, label: str, *formats: FileFormat) -> str:
+        """One file-dialog filter matching several formats at once, e.g.
+        `Sequence Files (*.cseq *.mid *.midi)`. Use as the first (default)
+        filter so a picker shows all the accepted types together instead of
+        forcing the user to switch the type dropdown."""
+        patterns = " ".join(f"*{ext}" for fmt in formats for ext in fmt.extensions)
+        return f"{label} ({patterns})"

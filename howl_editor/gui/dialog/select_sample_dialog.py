@@ -1,11 +1,12 @@
 # coding: utf-8
 
 from dataclasses import dataclass
+from typing import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QVBoxLayout,
+    QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QListWidgetItem, QPushButton, QVBoxLayout,
 )
 
 from howl_editor.gui.layout import WindowSize
@@ -28,12 +29,14 @@ class SelectSampleDialog(QDialog):
         prompt: str,
         choices: list[SampleChoice],
         current_spu_index: int | None = None,
+        on_preview: Callable[[int], None] | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(WindowSize.SELECT_SAMPLE_WIDTH, WindowSize.SELECT_SAMPLE_HEIGHT)
         self._choices = choices
         self._current = current_spu_index
+        self._on_preview = on_preview
         self._build_ui(prompt)
 
     def chosen_spu_index(self) -> int | None:
@@ -63,7 +66,25 @@ class SelectSampleDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons, alignment=Qt.AlignRight)
+
+        if self._on_preview is not None:
+            row = QHBoxLayout()
+            self._preview_button = QPushButton("▶️ Preview")
+            self._preview_button.setToolTip(
+                "Play the highlighted sample so you can hear it before picking.",
+            )
+            self._preview_button.clicked.connect(self._preview_selected)
+            row.addWidget(self._preview_button)
+            row.addStretch()
+            row.addWidget(buttons)
+            layout.addLayout(row)
+        else:
+            layout.addWidget(buttons, alignment=Qt.AlignRight)
+
+    def _preview_selected(self) -> None:
+        spu_index = self.chosen_spu_index()
+        if spu_index is not None and self._on_preview is not None:
+            self._on_preview(spu_index)
 
     def _populate(self) -> None:
         self._list.clear()

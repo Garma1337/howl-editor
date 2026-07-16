@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import os
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSettings
@@ -24,6 +25,7 @@ from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
+from howl_editor.ctr.diagnostics.howl_diagnostics import Severity, Target, TargetKind
 from howl_editor.ctr.cseq_renderer import CseqRenderer
 from howl_editor.ctr.formats.bank import BankReader, BankBuilder
 from howl_editor.ctr.formats.cseq import CseqReader, CseqWriter
@@ -120,6 +122,14 @@ class MainWindow(QMainWindow):
         adventure_hub_mask_table_query: AdventureHubMaskTableQuery | None = None,
         category_icon_resolver: CategoryIconResolver | None = None,
         cseq_size_validator: CseqSizeValidator | None = None,
+        cseq_size_guard=None,
+        bank_size_guard=None,
+        howl_size_guard=None,
+        howl_diagnostics=None,
+        diagnostics_status_provider=None,
+        entry_badge_resolver=None,
+        severity_presenter=None,
+        diagnosis_banner_formatter=None,
         drum_names: DrumNameResolver | None = None,
         stock_layout: StockLayoutResolver | None = None,
         leaf_info_formatter=None,
@@ -167,6 +177,16 @@ class MainWindow(QMainWindow):
         self._hub_mask_table_query = adventure_hub_mask_table_query
         self._icon_resolver = category_icon_resolver
         self._cseq_size_validator = cseq_size_validator
+        self._cseq_size_guard = cseq_size_guard
+        self._bank_size_guard = bank_size_guard
+        self._howl_size_guard = howl_size_guard
+        self._howl_diagnostics = howl_diagnostics
+        self._diagnostics_status = diagnostics_status_provider
+        self._entry_badge_resolver = entry_badge_resolver
+        self._severity_presenter = severity_presenter
+        self._diagnosis_banner_formatter = diagnosis_banner_formatter
+        self._original_howl_size: int | None = None
+        self._diag_index = None
         self._drum_names = drum_names
         self._stock_layout = stock_layout
         self._leaf_info_formatter = leaf_info_formatter
@@ -181,6 +201,7 @@ class MainWindow(QMainWindow):
 
         self._settings = QSettings("HowlEditor", "HowlEditor")
         self._load_vag_rate_setting()
+        self._custom_mode = self._settings.value("custom_mode", False, type=bool)
         self._max_recent = 10
 
         self._undo_stack = QUndoStack(self)
@@ -216,6 +237,8 @@ class MainWindow(QMainWindow):
                 self._stylesheets, self._hub_mask_table_query, self._icon_resolver,
                 self._leaf_info_formatter,
                 self._howl_stats_calculator, self._size_formatter,
+                self._entry_badge_resolver,
+                self._diagnosis_banner_formatter,
             )
 
             self.tabs.addTab(self.main_tab, "Category Browser")
@@ -228,6 +251,7 @@ class MainWindow(QMainWindow):
         self.music_workshop = MusicWorkshopWidget(
             self._cseq_reader, self._sample_lookup, self._drum_names,
             self._size_formatter, self._stylesheets,
+            self._severity_presenter,
         )
         self._music_workshop_handler = MusicWorkshopHandler(self)
         self.tabs.addTab(self.music_workshop, "Music Workshop")
@@ -299,8 +323,6 @@ class MainWindow(QMainWindow):
         self.music_workshop.sig_replace_sample.connect(h.replace_sample)
         self.music_workshop.sig_copy_sample.connect(h.copy_sample)
         self.music_workshop.sig_export_sample.connect(h.export_sample)
-        self.music_workshop.sig_replace_song.connect(h.replace_song)
-        self.music_workshop.sig_export_song_midi.connect(h.export_song_midi)
 
     def _build_file_content_tab(self) -> QWidget:
         splitter = QSplitter(Qt.Horizontal)
@@ -372,6 +394,7 @@ class MainWindow(QMainWindow):
         self._update_recent_files_menu()
         file_menu.addSeparator()
         self._add_action(file_menu, "Batch &Export...", self._tools.batch_export, requires_file=True)
+        self._add_action(file_menu, "Clear Audio &Cache", self._clear_audio_cache)
         file_menu.addSeparator()
         self._add_action(file_menu, "E&xit", self.close, QKeySequence.Quit)
 
@@ -382,17 +405,30 @@ class MainWindow(QMainWindow):
         redo_action = self._undo_stack.createRedoAction(self, "&Redo")
         redo_action.setShortcut(QKeySequence.Redo)
         edit_menu.addAction(redo_action)
+
         tools_menu = menubar.addMenu("&Tools")
         self._add_action(tools_menu, "Build Bank from &VAGs...", self._tools.build_bank_from_vags)
         midi_text = "&Convert MIDI to CSEQ..." if HAS_MIDO else "Convert MIDI to CSEQ (mido not installed)"
         self._add_action(tools_menu, midi_text, self._tools.midi_to_cseq, enabled=HAS_MIDO)
-        self._add_action(tools_menu, "&Validate Bank / Song...", self._tools.validate_bank_song, requires_file=True)
         tools_menu.addSeparator()
         self._add_action(tools_menu, "&Export Saphi Audio Container...", self._tools.export_for_saphi, requires_file=True)
         self._add_action(tools_menu, "&Import Saphi Audio Container...", self._tools.import_saphi, requires_file=True)
-        tools_menu.addSeparator()
-        self._build_vag_rate_submenu(tools_menu)
-        self._add_action(tools_menu, "Clear Audio &Cache", self._clear_audio_cache)
+
+        diagnose_menu = menubar.addMenu("&Diagnose")
+        self._add_action(diagnose_menu, "&Validate Bank / Song...", self._tools.validate_bank_song, requires_file=True)
+        self._add_action(diagnose_menu, "&Diagnose HOWL File...", self._tools.diagnose_howl, requires_file=True)
+
+        settings_menu = menubar.addMenu("&Settings")
+        self._custom_mode_action = QAction("&Enable custom mode", self, checkable=True)
+        self._custom_mode_action.setChecked(self._custom_mode)
+        self._custom_mode_action.setToolTip(
+            "For modded games where the stock limits don't apply: stops the size "
+            "warnings and hides the issue indicator icons.",
+        )
+        self._custom_mode_action.toggled.connect(self._set_custom_mode)
+        settings_menu.addAction(self._custom_mode_action)
+        settings_menu.addSeparator()
+        self._build_vag_rate_submenu(settings_menu)
 
     def _load_vag_rate_setting(self) -> None:
         if self._vag_rate is None:
@@ -423,6 +459,20 @@ class MainWindow(QMainWindow):
         self._vag_rate.set(rate)
         self._settings.setValue("vag_default_rate", rate)
         self.status.showMessage(f"VAG export sample rate set to {rate} Hz")
+
+    def _set_custom_mode(self, enabled: bool) -> None:
+        """Custom Mode suppresses every engine-limit guard and the warning icons,
+        for mods where the stock console limits no longer apply. The Diagnose menu
+        still works on demand."""
+        self._custom_mode = enabled
+        self._settings.setValue("custom_mode", enabled)
+        self.status.showMessage(
+            "Custom Mode ON — issue indicators disabled"
+            if enabled else "Custom Mode OFF — issue indicators active",
+        )
+
+        if self.hwl:
+            self._rebuild_tree()   # add or clear the badges
 
     def _add_action(self, menu, text, slot, shortcut=None, enabled=True, requires_file=False):
         action = QAction(text, self)
@@ -517,6 +567,7 @@ class MainWindow(QMainWindow):
         self.hwl = HowlFile()
         self.file_path = None
         self.modified = False
+        self._original_howl_size = None   # new file has no ISO baseline yet
         self._undo_stack.clear()
 
         if self._snapshot:
@@ -544,7 +595,20 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            self._writer.write_file(self.hwl, self.file_path)
+            data = self._writer.serialize(self.hwl)
+
+            slot_baseline = (
+                os.path.getsize(self.file_path)
+                if os.path.exists(self.file_path) else None
+            )
+
+            if self._howl_size_guard is not None and not self.confirm_within_limit(
+                self._howl_size_guard.check(len(data), slot_baseline),
+            ):
+                return
+
+            Path(self.file_path).write_bytes(data)
+            self._original_howl_size = len(data)
             self.modified = False
             self._undo_stack.setClean()
             self.status.showMessage(f"Saved: {self.file_path}")
@@ -560,6 +624,19 @@ class MainWindow(QMainWindow):
         if path:
             self.file_path = path
             self._save_file()
+
+    def confirm_within_limit(self, check) -> bool:
+        """Shared gate for every engine-limit guard. Returns True to proceed —
+        silently when within the limit, otherwise after the user accepts an
+        override warning. Any guard result with `within_limit` / `warning_text`
+        works (CSEQ size, bank SPU residency, HOWL file size)."""
+        if self._custom_mode or check is None or check.within_limit:
+            return True
+
+        return QMessageBox.warning(
+            self, "Exceeds engine limit", check.warning_text,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) == QMessageBox.Yes
 
     def _check_unsaved(self) -> bool:
         if not self.modified:
@@ -665,8 +742,14 @@ class MainWindow(QMainWindow):
         else:
             self._sample_types = {}
 
+        self._diag_index = (
+            self._diagnostics_status.index_for(self.hwl, self._original_howl_size)
+            if self._diagnostics_status and not self._custom_mode else None
+        )
+
         root = self._tree_item(None, f"HOWL (v{self.hwl.version})", f"{len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs", NODE_ROOT)
         root.setExpanded(True)
+        self._badge_target(root, Target(TargetKind.FILE), rollup=self._worst_overall())
 
         self._tree_item(root, "SPU Address Table", f"{len(self.hwl.spu_addrs)} entries", NODE_SPU_TABLE)
 
@@ -680,28 +763,32 @@ class MainWindow(QMainWindow):
 
         banks_node = self._tree_item(root, "Banks", str(len(self.hwl.banks)), NODE_BANKS)
         banks_node.setExpanded(True)
+        self._badge_target(banks_node, Target(TargetKind.BANK), rollup=self._worst_for_kind(TargetKind.BANK))
 
         for i, bank in enumerate(self.hwl.banks):
             info = self._detail_fmt.bank.format_tree_info(bank)
             label = self._get_item_label("Bank", i, self._bank_reader.get_name(i))
             bank_node = self._tree_item(banks_node, label, info, NODE_BANK, i)
+            self._badge_target(bank_node, Target(TargetKind.BANK, i))
             self._populate_bank_samples(bank_node, i)
 
         songs_node = self._tree_item(root, "Songs", str(len(self.hwl.songs)), NODE_SONGS)
         songs_node.setExpanded(True)
+        self._badge_target(songs_node, Target(TargetKind.SONG), rollup=self._worst_for_kind(TargetKind.SONG))
 
         for i, song in enumerate(self.hwl.songs):
             info = self._detail_fmt.song.format_tree_info(song)
             label = self._get_item_label("Song", i, self._cseq_reader.get_name(i))
             song_node = self._tree_item(songs_node, label, info, NODE_SONG, i)
+            self._badge_target(song_node, Target(TargetKind.SONG, i))
             self._populate_song_sequences(song_node, i)
 
         self._restore_tree_state(expanded, selected_path)
 
         if self.main_tab:
-            self.main_tab.refresh(self.hwl)
+            self.main_tab.refresh(self.hwl, self._diag_index)
 
-        self.music_workshop.refresh(self.hwl)
+        self.music_workshop.refresh(self.hwl, self._diag_index)
 
     def _get_item_label(self, prefix: str, index: int, name: str) -> str:
         if name:
@@ -720,6 +807,41 @@ class MainWindow(QMainWindow):
             item.setData(0, Qt.UserRole + 2, sub_index)
 
         return item
+
+    def _badge_target(self, item, target, rollup=None) -> None:
+        """Prefix a tree row with a ❌ / ⚠️ when the diagnosis flags its target.
+        `rollup` overrides the severity for parent/summary rows (Banks, Songs,
+        the file root) whose badge reflects the worst of their children."""
+        if self._diag_index is None:
+            return
+
+        severity = rollup if rollup is not None else self._diag_index.worst(target)
+        prefix = self._severity_prefix(severity)
+        if not prefix:
+            return
+
+        item.setText(0, prefix + item.text(0))
+        messages = [
+            f.message for f in self._diag_index.findings_for(target)
+            if f.severity is not Severity.INFO
+        ]
+
+        if messages:
+            item.setToolTip(0, "\n".join(messages))
+
+    def _severity_prefix(self, severity) -> str:
+        # Only warnings/errors badge a tree row — an INFO (e.g. the file summary)
+        # must not decorate the node.
+        if severity in (Severity.ERROR, Severity.WARNING) and self._severity_presenter:
+            return self._severity_presenter.emoji(severity) + " "
+
+        return ""
+
+    def _worst_overall(self):
+        return self._diag_index.worst_overall() if self._diag_index else None
+
+    def _worst_for_kind(self, kind):
+        return self._diag_index.worst_for_kind(kind) if self._diag_index else None
 
     def _populate_bank_samples(self, bank_node, bank_index: int) -> None:
         try:
@@ -759,17 +881,18 @@ class MainWindow(QMainWindow):
         index = current.data(0, Qt.UserRole + 1)
         sub_index = current.data(0, Qt.UserRole + 2)
 
+        banner = self._banner_html(node_type, index)
         formatters = {
-            NODE_ROOT: lambda: self._detail_fmt.howl.format_details(self.hwl, self.file_path),
+            NODE_ROOT: lambda: self._detail_fmt.howl.format_details(self.hwl, self.file_path, banner=banner),
             NODE_SPU_TABLE: lambda: self._detail_fmt.howl.format_spu_table(self.hwl),
             NODE_EFFECTS: lambda: self._detail_fmt.fx.format_effects_table(self.hwl),
             NODE_ENGINE_FX: lambda: self._detail_fmt.fx.format_engine_fx_table(self.hwl),
             NODE_OTHER_FX_ENTRY: lambda: self._detail_fmt.fx.format_other_fx_details(self.hwl, index),
             NODE_ENGINE_FX_ENTRY: lambda: self._detail_fmt.fx.format_engine_fx_details(self.hwl, index),
             NODE_BANKS: lambda: self._detail_fmt.bank.format_summary(self.hwl),
-            NODE_BANK: lambda: self._detail_fmt.bank.format_details(self.hwl, index),
+            NODE_BANK: lambda: self._detail_fmt.bank.format_details(self.hwl, index, banner=banner),
             NODE_SONGS: lambda: self._detail_fmt.song.format_summary(self.hwl),
-            NODE_SONG: lambda: self._detail_fmt.song.format_details(self.hwl, index),
+            NODE_SONG: lambda: self._detail_fmt.song.format_details(self.hwl, index, banner=banner),
         }
 
         # Waveform on selection: samples and FX entries (instant decode)
@@ -785,6 +908,33 @@ class MainWindow(QMainWindow):
         fn = formatters.get(node_type)
         if fn:
             self.details.setHtml(fn())
+
+    def _banner_html(self, node_type, index) -> str:
+        """The diagnosis banner fragment for the selected file / bank / song,
+        rendered by the banner formatter (template + style.css) and embedded in
+        the detail document. Empty when the item is clean or has no target."""
+        if self._diag_index is None or self._diagnosis_banner_formatter is None:
+            return ""
+
+        target = self._detail_target(node_type, index)
+        if target is None:
+            return ""
+
+        return self._diagnosis_banner_formatter.render(
+            self._diag_index.findings_for(target),
+        )
+
+    def _detail_target(self, node_type, index):
+        if node_type == NODE_ROOT:
+            return Target(TargetKind.FILE)
+
+        if node_type == NODE_BANK and index is not None:
+            return Target(TargetKind.BANK, index)
+
+        if node_type == NODE_SONG and index is not None:
+            return Target(TargetKind.SONG, index)
+
+        return None
 
     def _show_sample_waveform(self, bank_index: int, sample_index: int) -> None:
         type_labeler = self._sample_classifier.get_label if self._sample_classifier else None
@@ -1089,6 +1239,7 @@ class MainWindow(QMainWindow):
             self.file_path = path
             self.modified = False
             self._undo_stack.clear()
+            self._original_howl_size = os.path.getsize(path)
 
             if self._snapshot:
                 self._snapshot.capture(self.hwl)

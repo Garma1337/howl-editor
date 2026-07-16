@@ -29,20 +29,20 @@ class LeafInfoFormatter:
         self._lookup = sample_lookup
         self._sizes = size_formatter
 
-    def format(self, leaf: EntryLeaf, hwl: HowlFile | None = None) -> str:
+    def format(self, leaf: EntryLeaf, hwl: HowlFile | None = None, banner: str = "") -> str:
         rows = self._rows_for_leaf(leaf, hwl)
-        return self._render(leaf.name, rows)
+        return self._render(leaf.name, rows, banner)
 
     def format_entry(
         self, row: EntryRow, hwl: HowlFile | None = None,
-        leaves: list[EntryLeaf] | None = None,
+        leaves: list[EntryLeaf] | None = None, banner: str = "",
     ) -> str:
         rows = self._rows_for_entry(row, hwl, leaves)
-        return self._render(row.name, rows)
+        return self._render(row.name, rows, banner)
 
-    def _render(self, title: str, rows: list[dict]) -> str:
+    def _render(self, title: str, rows: list[dict], banner: str = "") -> str:
         body = self._engine.render("key_value.html", title=title, rows=rows)
-        return self._engine.render("document.html", body=body)
+        return self._engine.render("document.html", body=body, banner=banner)
 
     def _rows_for_leaf(self, leaf: EntryLeaf, hwl: HowlFile | None) -> list[dict]:
         if leaf.kind == LeafKind.SEQUENCE:

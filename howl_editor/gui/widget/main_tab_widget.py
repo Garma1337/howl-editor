@@ -65,6 +65,8 @@ class MainTabWidget(QWidget):
         leaf_info_formatter: LeafInfoFormatter,
         howl_stats_calculator: HowlStatsCalculator,
         size_formatter: SizeFormatter,
+        badge_resolver=None,
+        banner_formatter=None,
     ):
         super().__init__()
         self._builder = entry_builder
@@ -76,8 +78,11 @@ class MainTabWidget(QWidget):
         self._leaf_info = leaf_info_formatter
         self._stats_calculator = howl_stats_calculator
         self._size_formatter = size_formatter
+        self._badge_resolver = badge_resolver
+        self._banner_formatter = banner_formatter
         self._hwl: HowlFile | None = None
         self._groups: list[EntryGroup] = []
+        self._diag_index = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -126,7 +131,7 @@ class MainTabWidget(QWidget):
 
         self._detail = CategoryDetailWidget(
             self._leaves_builder, self._snapshot, self._stylesheets,
-            self._hub_mask, self._icon_resolver,
+            self._hub_mask, self._icon_resolver, self._badge_resolver,
         )
         self._detail.sig_back.connect(self._on_back)
         self._detail.sig_replace_parent.connect(self.sig_row_replace)
@@ -238,7 +243,9 @@ class MainTabWidget(QWidget):
         self._stack.setCurrentIndex(_PAGE_EMPTY)
         self._clear_info_panel()
 
-    def refresh(self, hwl: HowlFile | None) -> None:
+    def refresh(self, hwl: HowlFile | None, diag_index=None) -> None:
+        self._diag_index = diag_index
+
         if hwl is None:
             self.clear()
             return
@@ -254,7 +261,8 @@ class MainTabWidget(QWidget):
             g.name: sum(1 for r in g.rows if r.is_modified)
             for g in self._groups
         }
-        self._grid.populate(self._groups, modified)
+        badges = self._group_badges()
+        self._grid.populate(self._groups, modified, badges)
         self._grid.show_stats(self._stats_calculator.compute(hwl, self._snapshot))
 
         if self._stack.currentIndex() == _PAGE_DETAIL:
@@ -262,16 +270,25 @@ class MainTabWidget(QWidget):
             match = next((g for g in self._groups if g.name == current_title), None)
 
             if match is not None:
-                self._detail.show_category(hwl, match)
+                self._detail.show_category(hwl, match, diag_index)
                 return
 
         self._stack.setCurrentIndex(_PAGE_GRID)
+
+    def _group_badges(self) -> dict[str, str]:
+        if self._badge_resolver is None:
+            return {}
+
+        return {
+            g.name: self._badge_resolver.group_badge(self._diag_index, g)
+            for g in self._groups
+        }
 
     def _on_category_clicked(self, group: EntryGroup) -> None:
         if self._hwl is None:
             return
 
-        self._detail.show_category(self._hwl, group)
+        self._detail.show_category(self._hwl, group, self._diag_index)
         self._stack.setCurrentIndex(_PAGE_DETAIL)
         self._clear_info_panel()
 
@@ -280,10 +297,24 @@ class MainTabWidget(QWidget):
         self._clear_info_panel()
 
     def _on_leaf_selected(self, leaf: EntryLeaf) -> None:
-        self.info.setHtml(self._leaf_info.format(leaf, self._hwl))
+        banner = self._banner_for(
+            self._badge_resolver.leaf_findings(self._diag_index, leaf)
+            if self._badge_resolver else [],
+        )
+        self.info.setHtml(self._leaf_info.format(leaf, self._hwl, banner=banner))
 
     def _on_entry_selected(self, row, leaves) -> None:
-        self.info.setHtml(self._leaf_info.format_entry(row, self._hwl, leaves))
+        banner = self._banner_for(
+            self._badge_resolver.row_findings(self._diag_index, row)
+            if self._badge_resolver else [],
+        )
+        self.info.setHtml(self._leaf_info.format_entry(row, self._hwl, leaves, banner=banner))
+
+    def _banner_for(self, findings) -> str:
+        if self._banner_formatter is None or not findings:
+            return ""
+
+        return self._banner_formatter.render(findings)
 
     def _clear_info_panel(self) -> None:
         self.info.clear()

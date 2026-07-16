@@ -81,9 +81,3 @@ class MusicWorkshopHandler:
 
     def export_sample(self, bank_index: int, sample_index: int) -> None:
         self._w._sample_handler.export_sample(bank_index, sample_index)
-
-    def replace_song(self, song_index: int) -> None:
-        self._w._song_handler.replace_song(song_index)
-
-    def export_song_midi(self, song_index: int) -> None:
-        self._w._song_handler.export_song_as_midi(song_index)

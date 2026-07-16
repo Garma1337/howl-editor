@@ -17,6 +17,22 @@ PODIUM_BANK_OFFSET = 17
 # Per-character race banks (16 characters + the 8-driver shared bank 54).
 CHARACTER_BANK_RANGE = range(54, 71)
 
+# Bank 54 holds the samples of all 8 original drivers. A full 8-driver race
+# loads it once instead of eight individual character banks. Only race tracks
+# load it — arenas, menus, boss races and the special levels do not.
+EIGHT_DRIVER_SHARED_BANK = 54
+
+# Race-track FX banks (paired with race songs 0-17). The only level banks that
+# co-load the 8-driver shared bank in a full arcade grid.
+RACE_TRACK_BANK_RANGE = range(1, 19)
+
+# The Intro Race and Naughty Dog Crate levels destroy every bank (including the
+# universal SFX bank 0) and load only their own dedicated bank, so these banks
+# are resident entirely on their own.
+NAUGHTY_DOG_CRATE_BANK = 33
+INTRO_RACE_BANK = 34
+SOLE_RESIDENT_BANKS = (NAUGHTY_DOG_CRATE_BANK, INTRO_RACE_BANK)
+
 # Universal SFX bank — referenced by every song's runtime.
 SFX_UNIVERSAL_BANK = 0
 

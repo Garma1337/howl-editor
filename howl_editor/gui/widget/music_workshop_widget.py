@@ -1,6 +1,7 @@
 # coding: utf-8
 
 from dataclasses import dataclass
+from html import escape
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
+from howl_editor.ctr.diagnostics.howl_diagnostics import Target, TargetKind
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqInstrument, CseqPercussion
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.howl.models import HowlFile
@@ -52,8 +54,6 @@ class MusicWorkshopWidget(QWidget):
     sig_edit_percussion = Signal(int, int)       # song_index, perc_index
     sig_retarget_instrument = Signal(int, int)   # song_index, inst_index
     sig_retarget_percussion = Signal(int, int)   # song_index, perc_index
-    sig_replace_song = Signal(int)
-    sig_export_song_midi = Signal(int)
 
     def __init__(
         self,
@@ -62,6 +62,7 @@ class MusicWorkshopWidget(QWidget):
         drum_names: DrumNameResolver,
         size_formatter: SizeFormatter,
         stylesheet_loader: StylesheetLoader,
+        severity_presenter=None,
     ):
         super().__init__()
         self._cseq_reader = cseq_reader
@@ -69,11 +70,14 @@ class MusicWorkshopWidget(QWidget):
         self._drum_names = drum_names
         self._sizes = size_formatter
         self._stylesheets = stylesheet_loader
+        self._severity_presenter = severity_presenter
         self._hwl: HowlFile | None = None
         self._song_count = 0
+        self._diag_index = None
         self._build_ui()
 
-    def refresh(self, hwl: HowlFile | None) -> None:
+    def refresh(self, hwl: HowlFile | None, diag_index=None) -> None:
+        self._diag_index = diag_index
         # Hold onto the previous selection so an edit-triggered rebuild
         # doesn't drag the user back to song 0 mid-task. -1 sentinel covers
         # both "no prior selection" and "song list was empty."
@@ -186,8 +190,13 @@ class MusicWorkshopWidget(QWidget):
             except Exception:
                 summary = "unreadable"
 
-            item = QListWidgetItem(f"{label}\n{summary}")
+            emoji, tooltip = self._song_badge(i)
+            prefix = f"{emoji} " if emoji else ""
+            item = QListWidgetItem(f"{prefix}{label}\n{summary}")
             item.setData(Qt.UserRole, i)
+            if tooltip:
+                item.setToolTip(tooltip)
+
             self._song_list.addItem(item)
 
         self._song_list.blockSignals(False)
@@ -214,12 +223,56 @@ class MusicWorkshopWidget(QWidget):
         title.setObjectName("workshopTitle")
         self._detail_layout.addWidget(title)
 
+        banner = self._build_diagnosis_banner(song_index)
+        if banner is not None:
+            self._detail_layout.addWidget(banner)
+
         self._detail_layout.addWidget(self._build_song_header(cseq))
-        self._detail_layout.addWidget(self._build_song_actions(song_index, cseq))
         self._detail_layout.addWidget(self._build_sequences_section(song_index, cseq))
         self._detail_layout.addWidget(self._build_instruments_section(song_index, cseq.instruments))
         self._detail_layout.addWidget(self._build_percussion_section(song_index, cseq.percussions))
         self._detail_layout.addStretch(1)
+
+    def _song_findings(self, song_index: int) -> list:
+        """Song-level diagnosis findings (too big for the buffer, broken sample
+        references) — the problems a music editor can act on."""
+        if self._diag_index is None:
+            return []
+
+        return self._diag_index.findings_for(Target(TargetKind.SONG, song_index))
+
+    def _worst_severity(self, findings):
+        if not findings:
+            return None
+
+        return max((f.severity for f in findings), key=lambda s: s.value)
+
+    def _song_badge(self, song_index: int) -> tuple[str, str]:
+        """(emoji, tooltip) for a song-list row, '' when clean."""
+        findings = self._song_findings(song_index)
+        worst = self._worst_severity(findings)
+        if worst is None or self._severity_presenter is None:
+            return "", ""
+
+        return self._severity_presenter.emoji(worst), "\n".join(f.message for f in findings)
+
+    def _build_diagnosis_banner(self, song_index: int) -> QLabel | None:
+        """A coloured banner atop the song detail listing its findings. Colours
+        live in music_workshop.qss (keyed on the `severity` property); the
+        heading comes from the shared SeverityPresenter."""
+        findings = self._song_findings(song_index)
+        worst = self._worst_severity(findings)
+        if worst is None or self._severity_presenter is None:
+            return None
+
+        banner = QLabel()
+        banner.setObjectName("workshopDiagBanner")
+        banner.setProperty("severity", self._severity_presenter.css_class(worst))
+        banner.setWordWrap(True)
+        heading = escape(self._severity_presenter.heading(worst))
+        messages = "<br>".join(escape(f.message) for f in findings)
+        banner.setText(f"<b>{heading}</b><br>{messages}")
+        return banner
 
     def _build_song_header(self, cseq: CseqFile) -> QWidget:
         first = cseq.songs[0] if cseq.songs else None
@@ -291,25 +344,6 @@ class MusicWorkshopWidget(QWidget):
         col.addWidget(hint_widget)
 
         return frame
-
-    def _build_song_actions(self, song_index: int, cseq: CseqFile) -> QWidget:
-        wrap = QWidget()
-        layout = QHBoxLayout(wrap)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-
-        replace = QPushButton("🔄  Replace song…")
-        replace.setObjectName("workshopActionButton")
-        replace.clicked.connect(lambda: self.sig_replace_song.emit(song_index))
-        layout.addWidget(replace)
-
-        export_midi = QPushButton("💾  Export as MIDI")
-        export_midi.setObjectName("workshopActionButton")
-        export_midi.clicked.connect(lambda: self.sig_export_song_midi.emit(song_index))
-        layout.addWidget(export_midi)
-
-        layout.addStretch(1)
-        return wrap
 
     def _build_sequences_section(self, song_index: int, cseq: CseqFile) -> QWidget:
         """One row per sub-sequence with Play / Replace / Copy / Export /

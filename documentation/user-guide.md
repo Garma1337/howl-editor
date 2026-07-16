@@ -46,6 +46,8 @@ This guide covers internal behaviors and details that are not immediately obviou
   - [SFZ Export](#sfz-export)
 - [Validation and Bulk Operations](#validation-and-bulk-operations)
   - [Bank / CSEQ Validation](#bank--cseq-validation)
+  - [Engine Limits and Warning Icons](#engine-limits-and-warning-icons)
+  - [Diagnose HOWL File](#diagnose-howl-file)
   - [Batch Export](#batch-export)
   - [Saphi Audio Container (.sca)](#saphi-audio-container-sca)
     - [Export Saphi Audio Container](#export-saphi-audio-container)
@@ -61,7 +63,12 @@ The editor is split into three tabs aimed at three personas. The same underlying
 - **Music Workshop** — song-centric view aimed at composers and remixers. Shows a song's BPM / ticks-per-quarter / track count up top, plus full instrument and percussion tables with per-row Play and Actions controls. The waveform + transport dock stays pinned at the bottom of the tab. MIDI / SFZ export, MIDI track replacement, and per-instrument editing live here.
 - **File Browser** — raw structural view of the HOWL file. Banks, songs, sequences, samples, FX tables, and the SPU address table all appear under a filterable tree. Move Up/Down, drag-reorder, Add/Replace/Remove of containers, Merge Bank, and Build Bank from VAGs all live here.
 
-The Tools menu (Convert MIDI → CSEQ, Validate, Saphi import/export, Clear Audio Cache, VAG export sample rate) is cross-cutting and reachable from any tab.
+The menu bar is cross-cutting and reachable from any tab:
+
+- **File** — New / Open / Save / Save As, Recent Files, Batch Export, Clear Audio Cache.
+- **Tools** — Build Bank from VAGs, Convert MIDI → CSEQ, Export / Import Saphi Audio Container.
+- **Diagnose** — Validate Bank / Song, Diagnose HOWL File.
+- **Settings** — Custom Mode, VAG export sample rate.
 
 ### HWL Version Detection
 
@@ -226,7 +233,7 @@ The playback is suitable for previewing songs, verifying note arrangements, and 
 
 Decoded audio is cached in `%TEMP%/howl-editor/` (or the platform equivalent) using an MD5 checksum of the WAV data as the filename. Clicking the same sample or sequence again plays the cached file instantly without re-decoding.
 
-To clear the cache, use **Tools > Clear Audio Cache**.
+To clear the cache, use **File > Clear Audio Cache**.
 
 ### Waveform Preview
 
@@ -282,12 +289,11 @@ The Music Workshop tab is a two-pane song-centric view. The left pane lists ever
 
 The detail panel is organized top-to-bottom as:
 
-1. **Title** — song index + stock name.
+1. **Title** — song index + stock name. When the song exceeds an engine limit, a warning banner appears directly under it (see [Engine Limits and Warning Icons](#engine-limits-and-warning-icons)).
 2. **Stats strip** — six cards: Tempo (BPM), Resolution (TPQN), Tracks (with drum-track indices as a hint), Sequences, Instruments, Percussion.
-3. **Song actions** — Replace song · Export as MIDI.
-4. **Sequences table** — one row per sub-sequence (Adventure Hub style multi-sequence songs have several; most songs have one). Each row shows # / BPM / track count / drum-track indices and exposes a ▶️ Play button plus a ⚙️ Actions menu with Replace · Copy to song · Export as MIDI · Inspect events · Remove.
-5. **Instruments table** — one row per melodic instrument. Columns: index, sample SPU, source bank, pitch (Hz with note name + cents), volume, ADSR (read-only). Each row has ▶️ Play and ⚙️ Actions.
-6. **Percussion table** — one row per percussion slot. Columns: MIDI note, GM drum name (Kick / Snare / etc.), sample SPU, source bank, pitch. Same ▶️ + ⚙️ pattern.
+3. **Sequences table** — one row per sub-sequence (Adventure Hub style multi-sequence songs have several; most songs have one). Each row shows # / BPM / track count / drum-track indices and exposes a ▶️ Play button plus a ⚙️ Actions menu with Replace · Copy to song · Export as MIDI · Inspect events · Remove. (Whole-song replace and export live in the File Browser.)
+4. **Instruments table** — one row per melodic instrument. Columns: index, sample SPU, source bank, pitch (Hz with note name + cents), volume, ADSR (read-only). Each row has ▶️ Play and ⚙️ Actions.
+5. **Percussion table** — one row per percussion slot. Columns: MIDI note, GM drum name (Kick / Snare / etc.), sample SPU, source bank, pitch. Same ▶️ + ⚙️ pattern.
 
 At the bottom of the tab a docked waveform + transport bar shows whatever's currently playing.
 
@@ -303,9 +309,13 @@ Edits are undoable.
 
 #### Retargeting a Sample
 
-The ⚙️ menu also has **Point at another sample…** which opens a filterable list of every SPU index in the file (annotated with source bank + size). Picking one rewires that instrument or percussion entry to play a different sample, without exporting or reimporting any VAGs. Just changes the `sample_id` field on the entry and rewrites the CSEQ blob.
+The ⚙️ menu also has **Point at another sample…** which opens a filterable list of every SPU index in the file (annotated with source bank + size). Picking one rewires that instrument or percussion entry to play a different sample, without exporting or reimporting any VAGs. Select an entry and hit **▶️ Preview** to hear it first, so you can audition candidates before committing the change.
 
 This is the fastest way to do things like "make Coco Park's lead synth use Crash Cove's lead synth sample" or "swap a kick drum for a different bank's kick."
+
+> **⚠️ The chosen sample must belong to a bank the level actually loads.** Retargeting points the entry at a different sample; it does not copy that sample into the song's bank. In game, only the samples from the banks loaded for that level are available (the shared SFX bank + the level bank + the character banks). If you point at a sample that lives only in *another level's* bank, it plays **silence** in game — even though it auditions correctly in the editor.
+>
+> To reuse a sample from a bank the level doesn't load, first **Copy sample** (⚙️ on the sample row) into the level's own bank, *then* retarget the entry at that copy. To check what a level loads, see [Audio Loading](audio-loading.md); to confirm nothing is missing, run bank/CSEQ [validation](#bank--cseq-validation) against the level's bank.
 
 #### Inspecting Track Events
 
@@ -324,13 +334,24 @@ MIDI pitches pass through unchanged; for drum tracks this means the MIDI's note 
 
 ### MIDI to CSEQ Conversion
 
-When converting a MIDI file to CSEQ:
+When converting a MIDI file to CSEQ, each MIDI track with note events becomes a CSEQ track. The conversion dialog is a table with one row per track (or per drum hit — see below) and columns **SPU Sample ID**, **Frequency (Hz)**, and **Drum**.
 
-- Each MIDI track with note events becomes a CSEQ track
-- You must manually map each track to an SPU sample ID and set the playback frequency
-- **Frequency encoding**: The internal format uses 4096 as a base for 44100 Hz. The dialog accepts Hz and converts automatically.
-- **Drum tracks**: Check the "Drum?" checkbox for percussion tracks. These use the percussion instrument table instead of the melodic instrument table.
-- The conversion preserves: note on/off, velocity, pan, pitch bend, program change, and tempo
+**SPU + frequency prefill.** The dialog prefills every sample ID and rate so you can usually accept the defaults:
+
+- If the song has a **paired bank** (converting/replacing in an HWL where the song maps to a known bank), the SPU column prefills from that bank's samples **in bank order** — so a MIDI laid out to mirror the bank maps across untouched. Otherwise it prefills sequentially (0, 1, 2, …) within the SPU range.
+- The **Frequency** column prefills from each SPU's known playback rate. If you **change an SPU** to one with a known rate, its frequency updates to match automatically; if the rate is unknown, your entered frequency is left alone (unknown rates fall back to 11025 Hz).
+- The prefills are just defaults — override any cell before accepting.
+- **Frequency encoding**: the internal format uses 4096 as a base for 44100 Hz. The dialog accepts Hz and converts automatically.
+
+**Drum tracks.** Percussion on **MIDI channel 10** is auto-detected and expanded into **one row per unique drum hit**, each labeled with its GM drum name and needing its own SPU sample. If your percussion is on another channel, tick the **Drum** box on that track's row to expand it the same way.
+
+You can spread percussion across **multiple** drum tracks — each unique drum hit across all of them maps to its own percussion slot.
+
+The conversion preserves: note on/off, velocity, pan, pitch bend, program change, and tempo.
+
+#### Replacing a Sequence Directly from MIDI
+
+The Sequences table's ⚙️ **Replace** action (and drag-and-drop onto a sequence row) accepts a **MIDI file** as well as a `.cseq`. The file picker shows both types together by default, so you don't have to switch the type dropdown to reach a MIDI. Picking a MIDI opens the conversion dialog above and grafts the result into **just that one sequence** — the song's other sequences are left intact. This matters for songs 0–27, which carry the main track plus the Aku Aku / Uka Uka mask sequences: replacing the music leaves those masks untouched. (Picking a multi-sequence `.cseq` instead prompts for which sub-song to graft.) There's no need to convert the MIDI to `.cseq` first.
 
 #### Standalone vs HWL
 
@@ -360,7 +381,7 @@ The dialog remembers your choices for the rest of the session — handy when bat
 
 ### VAG Export Sample Rate
 
-Under **Tools → VAG export sample rate** you can pick the default Hz value used when decoding VAG bytes to WAV for export. The HWL format doesn't store a per-sample rate (playback is derived from FX / instrument entries), so when exporting a raw sample to WAV the editor has to pick one. Choices: **11025**, **22050**, **33075**, **44100**. The selection persists across restarts via `QSettings`.
+Under **Settings → VAG export sample rate** you can pick the default Hz value used when decoding VAG bytes to WAV for export. The HWL format doesn't store a per-sample rate (playback is derived from FX / instrument entries), so when exporting a raw sample to WAV the editor has to pick one. Choices: **11025**, **22050**, **33075**, **44100**. The selection persists across restarts via `QSettings`.
 
 Affects: Export Sample as WAV, Export Bank Samples as WAVs, Batch Export's sample WAVs, and the SFZ exporter's WAV writes. Does **not** affect in-editor playback (which uses the FX-table-derived rate, falling back to 11025 only when no reference exists).
 
@@ -387,12 +408,38 @@ Samples are deduplicated by SPU index — if two instruments reference the same 
 
 ### Bank / CSEQ Validation
 
-The validation tool (Tools > Validate Bank / Song) checks whether a bank contains all the SPU sample IDs that a CSEQ song needs. It reports:
+The validation tool (Diagnose > Validate Bank / Song) checks whether a bank contains all the SPU sample IDs that a CSEQ song needs. It reports:
 
 - How many of the required samples are present
 - A list of every missing SPU index
 
 Note that in the actual game, multiple banks are loaded simultaneously (SFX bank + level bank + character banks). A single bank not passing validation doesn't necessarily mean the song won't play - the missing samples may be provided by another bank loaded at runtime. See the [audio loading documentation](audio-loading.md) for details on which banks the game loads together.
+
+### Engine Limits and Warning Icons
+
+The console imposes hard limits on audio data. Exceeding one doesn't produce an error on the console - the game may crash, play garbled audio, or silently drop sounds. The editor watches for three of these limits:
+
+- **A song is too big.** Each song must fit the fixed buffer the game loads it into. A song over that size overruns the buffer and crashes or corrupts playback.
+- **A level's banks don't fit in sound memory.** The samples of all the banks a race loads together must fit the console's SPU sound RAM. Samples that don't fit are dropped and go silent in game.
+- **The file is too big for its slot on the disc.** The `.HWL` sits at a fixed position in the game's disc image. Growing it past the number of disc sectors it originally occupied shifts every file after it and corrupts the disc layout.
+
+Whenever you make an edit that would break one of these limits - replacing a sequence, importing a MIDI, adding or replacing a sample or bank, or saving a file that has grown too large - the editor warns you and lets you continue anyway (so you can keep working and fix it later, or rebuild the disc image yourself).
+
+Items that currently exceed a limit are marked throughout the editor with a status icon: **❌** for a problem that crashes the game or makes it read garbage data, and **⚠️** for something that loads but won't sound right — for example samples that go silent. The icon appears next to the affected bank, song, or the file itself in the File Browser tree, the Category Browser, and the Music Workshop's song list; selecting the item shows a banner explaining what's wrong (hovering the icon shows the same text). Because the mark reflects the actual data, an item you chose to keep despite a warning stays flagged until you bring it back under the limit.
+
+**Custom Mode** (Settings > Enable custom mode) turns all of this off. For mods where the stock console limits no longer apply, enabling it stops the size warnings when you edit or save and hides the status icons and banners, so you aren't nagged about limits that don't apply to your build. The Diagnose HOWL File tool still works on demand if you want to check sizes. The setting persists across restarts.
+
+### Diagnose HOWL File
+
+Diagnose > Diagnose HOWL File runs every engine-limit check over the whole file at once and lists what it finds, most serious first. It flags:
+
+- Songs too big for the game's song buffer
+- Level banks whose combined samples overflow SPU sound memory
+- Songs that reference a sample id that doesn't exist, or one missing from the level's own banks
+- Banks or songs whose data can't be read
+- A file that has grown past the disc slot it was loaded from
+
+Each entry explains the problem in plain terms; use **Copy to clipboard** to save the whole report. This is the same set of checks that drives the warning icons, gathered into one place so you can review a file's health at a glance.
 
 ### Batch Export
 
@@ -449,7 +496,7 @@ The Saphi Audio Container (`.sca`) bundles a single bank + song pair into one fi
 - A per-sample `spuSize` array extracted from the loaded HWL's SPU Address Table (in bank-header order) — this lets the Saphi runtime use the source HWL's sizes even when they differ from the player's ISO HOWL
 - A small UTF-8 JSON metadata chunk with `name` and `author`
 
-The dialog warns if the selected bank exceeds the Saphi size cap. Bank/song pairing is not validated at export — use [Tools > Validate Bank/Song](#bank--cseq-validation) first if you want to confirm the bank contains every sample the CSEQ references.
+The dialog warns if the selected bank exceeds the Saphi size cap. Bank/song pairing is not validated at export — use [Diagnose > Validate Bank/Song](#bank--cseq-validation) first if you want to confirm the bank contains every sample the CSEQ references.
 
 #### Import Saphi Audio Container
 

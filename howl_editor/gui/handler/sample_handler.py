@@ -20,6 +20,14 @@ class SampleHandler:
     def __init__(self, window):
         self._window = window
 
+    def _bank_within_limit(self, index: int, blob) -> bool:
+        """Gate a prospective bank blob through the SPU-residency guard, warning
+        (with override) if the bank's worst-case race no longer fits SPU RAM."""
+        guard = self._window._bank_size_guard
+        return guard is None or self._window.confirm_within_limit(
+            guard.check(self._window.hwl, index, blob),
+        )
+
     def export_sample(self, bank_index: int, sample_index: int):
         if not self._window.hwl:
             return
@@ -78,10 +86,18 @@ class SampleHandler:
 
         try:
             vag = self._window._vag_reader.read_file(path)
+            # add_sample appends a new SPU entry in place; keep a restore point so
+            # declining the residency guard leaves no dangling entry behind.
+            spu_before = list(self._window.hwl.spu_addrs)
             new_blob = self._window._bank_builder.add_sample(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
                 vag.data, self._window._bank_reader,
             )
+
+            if not self._bank_within_limit(bank_index, new_blob):
+                self._window.hwl.spu_addrs[:] = spu_before
+                return
+
             self._window._undo_stack.push(
                 SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),
             )
@@ -109,10 +125,16 @@ class SampleHandler:
                 return
 
             spu_index = self._find_spu_index(bank_index, sample_index)
+            spu_before = list(self._window.hwl.spu_addrs)
             new_blob = self._window._bank_builder.replace_sample(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
                 sample_index, vag.data, self._window._bank_reader,
             )
+
+            if not self._bank_within_limit(bank_index, new_blob):
+                self._window.hwl.spu_addrs[:] = spu_before
+                return
+
             self._window._undo_stack.push(
                 SwapBlobCommand(self._window, f"Replace Sample in Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),
             )
@@ -259,6 +281,8 @@ class SampleHandler:
     def _apply_copy(
         self, src_data: bytes, target_bank: int, target_sample: int | None,
     ) -> None:
+        spu_before = list(self._window.hwl.spu_addrs)
+
         if target_sample is None:
             new_blob = self._window._bank_builder.add_sample(
                 self._window.hwl.banks[target_bank], self._window.hwl.spu_addrs,
@@ -276,6 +300,10 @@ class SampleHandler:
             )
             description = f"Copy sample over Bank {target_bank} sample {target_sample}"
             message = f"Replaced sample {target_sample} in bank {target_bank}"
+
+        if not self._bank_within_limit(target_bank, new_blob):
+            self._window.hwl.spu_addrs[:] = spu_before
+            return
 
         self._window._undo_stack.push(SwapBlobCommand(
             self._window, description, HowlCollection.BANKS, target_bank, new_blob,

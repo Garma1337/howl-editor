@@ -25,11 +25,13 @@ class CategoryCardWidget(QFrame):
         modified_count: int,
         stylesheet_loader: StylesheetLoader,
         icon_resolver: CategoryIconResolver,
+        badge: str = "",
     ):
         super().__init__()
         self._group = group
         self._modified_count = modified_count
         self._icon_resolver = icon_resolver
+        self._badge = badge
         self.setObjectName("categoryCard")
         self.setStyleSheet(stylesheet_loader.load("category_card.qss"))
         self.setCursor(Qt.PointingHandCursor)
@@ -63,6 +65,12 @@ class CategoryCardWidget(QFrame):
             modified = QLabel(f"{self._modified_count} modified")
             modified.setObjectName("categoryModified")
             chips.addWidget(modified)
+
+        if self._badge:
+            warning = QLabel(self._badge)
+            warning.setObjectName("categoryWarning")
+            warning.setToolTip("This category has items that exceed an engine limit.")
+            chips.addWidget(warning)
 
         chips.addStretch(1)
         outer.addLayout(chips)

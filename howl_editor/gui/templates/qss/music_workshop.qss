@@ -117,19 +117,6 @@ QTableWidget#workshopTable::item {
     padding: 4px 8px;
 }
 
-QPushButton#workshopActionButton {
-    background: palette(button);
-    color: palette(button-text);
-    border: 1px solid palette(mid);
-    border-radius: 5px;
-    padding: 6px 12px;
-    font-size: 12px;
-}
-
-QPushButton#workshopActionButton:hover {
-    background: palette(midlight);
-}
-
 QFrame#workshopPlayerDock {
     background: palette(window);
     border-top: 1px solid palette(mid);
@@ -147,4 +134,19 @@ QPushButton#workshopRowButton {
 
 QPushButton#workshopRowButton:hover {
     background: palette(midlight);
+}
+
+QLabel#workshopDiagBanner {
+    padding: 10px 12px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 500;
+}
+
+QLabel#workshopDiagBanner[severity="error"] {
+    background: #c62828;
+}
+
+QLabel#workshopDiagBanner[severity="warning"] {
+    background: #e08600;
 }

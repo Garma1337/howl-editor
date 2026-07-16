@@ -16,6 +16,14 @@ class BankHandler:
     def __init__(self, window):
         self._window = window
 
+    def _bank_within_limit(self, index: int, blob) -> bool:
+        """Gate a prospective bank blob through the SPU-residency guard, warning
+        (with override) if the bank's worst-case race no longer fits SPU RAM."""
+        guard = self._window._bank_size_guard
+        return guard is None or self._window.confirm_within_limit(
+            guard.check(self._window.hwl, index, blob),
+        )
+
     def add_bank(self):
         if not self._window.hwl:
             return
@@ -24,7 +32,11 @@ class BankHandler:
         if not path:
             return
 
-        self._window._editor.add_bank(self._window.hwl, Path(path).read_bytes())
+        data = Path(path).read_bytes()
+        if not self._bank_within_limit(len(self._window.hwl.banks), data):
+            return
+
+        self._window._editor.add_bank(self._window.hwl, data)
         self._window._mark_modified()
         self._window._rebuild_tree()
         self._window._notify(f"Added bank from {Path(path).name}")
@@ -108,6 +120,9 @@ class BankHandler:
         result = dialog.get_result()
         new_blob = self._window._bank_builder.merge(result)
 
+        if not self._bank_within_limit(index, new_blob):
+            return
+
         self._window._undo_stack.push(
             SwapBlobCommand(self._window, f"Merge into Bank {index}", HowlCollection.BANKS, index, new_blob),
         )
@@ -119,8 +134,12 @@ class BankHandler:
         if not path:
             return
 
+        data = Path(path).read_bytes()
+        if not self._bank_within_limit(index, data):
+            return
+
         self._window._undo_stack.push(
-            SwapBlobCommand(self._window, f"Replace Bank {index}", HowlCollection.BANKS, index, Path(path).read_bytes()),
+            SwapBlobCommand(self._window, f"Replace Bank {index}", HowlCollection.BANKS, index, data),
         )
 
         self._window._notify(f"Replaced bank {index} with {Path(path).name}")

@@ -64,6 +64,9 @@ class EntryParentWidget(QFrame):
         default_expanded: bool = True,
         icon_image_path: Path | None = None,
         hub_names: tuple[str, ...] | list[str] = (),
+        diagnostic_badge: str = "",
+        diagnostic_label: str = "",
+        diagnostic_tooltip: str = "",
     ):
         super().__init__()
         self._row = row
@@ -73,9 +76,15 @@ class EntryParentWidget(QFrame):
         self._icon_resolver = icon_resolver
         self._icon_image_path = icon_image_path
         self._hub_names = tuple(hub_names)
+        self._diagnostic_badge = diagnostic_badge
+        self._diagnostic_label = diagnostic_label
+        self._diagnostic_tooltip = diagnostic_tooltip
         self._hub_combo: QComboBox | None = None
         self.setObjectName("entryParent")
         self._build_ui(can_reset, default_expanded)
+
+        if self._diagnostic_tooltip:
+            self.setToolTip(self._diagnostic_tooltip)
 
     def _build_ui(self, can_reset: bool, default_expanded: bool) -> None:
         outer = QVBoxLayout(self)
@@ -363,6 +372,11 @@ class EntryParentWidget(QFrame):
 
         if self._row.is_broken:
             badges.append(self._make_badge(f"⚠️ Missing {self._row.missing_count}", "#ff3b30"))
+
+        if self._diagnostic_badge and self._diagnostic_label:
+            is_error = self._diagnostic_badge == "❌"
+            color = "#c62828" if is_error else "#e08600"
+            badges.append(self._make_badge(self._diagnostic_label, color))
 
         return badges
 

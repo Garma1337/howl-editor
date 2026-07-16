@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
+from howl_editor.gui.widget.no_scroll_spin_box import NoScrollSpinBox
 from howl_editor.gui.layout import WindowSize
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.models import (
@@ -73,7 +74,7 @@ class ConvertMidiDialog(QDialog):
     def _build_bpm_row(self) -> QHBoxLayout:
         layout = QHBoxLayout()
         layout.addWidget(QLabel("BPM (0 = from MIDI):"))
-        self.bpm_spin = QSpinBox()
+        self.bpm_spin = NoScrollSpinBox()
         self.bpm_spin.setRange(0, 300)
         self.bpm_spin.setValue(0)
         layout.addWidget(self.bpm_spin)
@@ -179,12 +180,12 @@ class ConvertMidiDialog(QDialog):
         self.table.setItem(row, _COL_NOTES, notes_item)
 
         default_spu = self._default_spu_for_row(row)
-        spu_spin = QSpinBox()
+        spu_spin = NoScrollSpinBox()
         spu_spin.setRange(0, 65535)
         spu_spin.setValue(default_spu)
         self.table.setCellWidget(row, _COL_SPU, spu_spin)
 
-        freq_spin = QSpinBox()
+        freq_spin = NoScrollSpinBox()
         freq_spin.setRange(100, 44100)
         freq_spin.setValue(self._default_freq_hz_for_spu(default_spu))
         self.table.setCellWidget(row, _COL_FREQ, freq_spin)

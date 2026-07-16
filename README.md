@@ -58,7 +58,7 @@ The editor is organized into three tabs aimed at three personas:
 - **Automatic pitch detection** for bank samples - looks up the correct playback rate from FX and instrument tables
 - **Low-rate sample resampling** - samples whose intended rate falls outside the audio backend's playable range are resampled to a safe rate while preserving audible pitch, instead of playing silently
 - **Configurable VAG export sample rate** (11025 / 22050 / 33075 / 44100 Hz) used by all WAV-export paths
-- **Audio cache** - decoded audio is cached in `%TEMP%/howl-editor/` for instant replay (clearable via Tools menu)
+- **Audio cache** - decoded audio is cached in `%TEMP%/howl-editor/` for instant replay (clearable via File menu)
 
 ### Effects Tables
 
@@ -79,6 +79,9 @@ The editor is organized into three tabs aimed at three personas:
 ### Analysis
 
 - **Bank/CSEQ validation** - verify a bank contains all samples needed by a song, lists all missing sample IDs
+- **Diagnose HOWL File** - whole-file sweep for data the console can't load: songs over the song-buffer limit, level banks that overflow SPU sound memory, broken sample references, unreadable blobs, and a file grown past its disc slot
+- **Engine-limit guards and warning icons** - edits that would exceed a hard console limit (song size, SPU residency, file size) warn before applying, and offending banks/songs/the file are marked with a ❌ / ⚠️ icon across the File Browser tree, Category Browser, and Music Workshop, with a banner explaining each one
+- **Custom Mode** (Settings menu) - disables every engine-limit check and hides the status icons, for modded games where the stock limits no longer apply
 - **NTSC-U bank and song names** shown in tree view and detail panels (Custom label for modded entries)
 
 ## Requirements

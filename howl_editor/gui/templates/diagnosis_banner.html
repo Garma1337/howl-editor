@@ -1,0 +1,9 @@
+<table width="100%" cellspacing="0" cellpadding="8" class="diag-banner">
+    <tr>
+        <td class="diag-{{ severity_class }}">
+            <b>{{ heading }}</b><br>
+            {% for line in messages %}{{ line }}<br>{% endfor %}
+        </td>
+    </tr>
+</table>
+<p class="diag-spacer"></p>

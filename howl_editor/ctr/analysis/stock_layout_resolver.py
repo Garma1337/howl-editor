@@ -30,6 +30,14 @@ class StockLayoutResolver:
     def is_menu_song(self, song_index: int) -> bool:
         return song_index in data.MENU_SONG_RANGE
 
+    def is_race_track_bank(self, bank_index: int) -> bool:
+        return bank_index in data.RACE_TRACK_BANK_RANGE
+
+    def loads_in_isolation(self, bank_index: int) -> bool:
+        """True for banks whose level destroys all others and loads only this
+        bank (Intro Race, Naughty Dog Crate) — nothing else is co-resident."""
+        return bank_index in data.SOLE_RESIDENT_BANKS
+
     def is_character_bank(self, bank_index: int) -> bool:
         return bank_index in data.CHARACTER_BANK_RANGE
 

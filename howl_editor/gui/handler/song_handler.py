@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QInputDialog
 
 from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.file_format_registry import FileFormatRegistry
+from howl_editor.ps1 import spu
 from howl_editor.gui.command import RemoveItemCommand, SwapBlobCommand
 from howl_editor.gui.dialog.copy_target_dialog import (
     CopyTargetContainer, CopyTargetDialog,
@@ -25,6 +26,12 @@ class SongHandler:
     def __init__(self, window):
         self._w = window
 
+    def _cseq_within_limit(self, blob) -> bool:
+        """Gate a prospective CSEQ blob through the engine size guard, warning
+        (with override) if it exceeds the console's song buffer."""
+        guard = self._w._cseq_size_guard
+        return guard is None or self._w.confirm_within_limit(guard.check(blob))
+
     def add_song(self):
         if not self._w.hwl:
             return
@@ -33,7 +40,11 @@ class SongHandler:
         if not path:
             return
 
-        self._w._editor.add_song(self._w.hwl, Path(path).read_bytes())
+        data = Path(path).read_bytes()
+        if not self._cseq_within_limit(data):
+            return
+
+        self._w._editor.add_song(self._w.hwl, data)
         self._w._mark_modified()
         self._w._rebuild_tree()
         self._w._notify(f"Added song {len(self._w.hwl.songs) - 1} from {Path(path).name}")
@@ -145,8 +156,12 @@ class SongHandler:
         if not path:
             return
 
+        data = Path(path).read_bytes()
+        if not self._cseq_within_limit(data):
+            return
+
         self._w._undo_stack.push(
-            SwapBlobCommand(self._w, f"Replace Song {index}", HowlCollection.SONGS, index, Path(path).read_bytes()),
+            SwapBlobCommand(self._w, f"Replace Song {index}", HowlCollection.SONGS, index, data),
         )
         self._w._notify(f"Replaced song {index} with {Path(path).name}")
 
@@ -165,9 +180,12 @@ class SongHandler:
         if not self._w.hwl:
             return
 
+        both = FileFormatRegistry.create_combined_filter(
+            "Sequence Files", FileFormatRegistry.CSEQ, FileFormatRegistry.MIDI,
+        )
         path, _ = QFileDialog.getOpenFileName(
             self._w, "Select Source Sequence", "",
-            f"{FileFormatRegistry.CSEQ.file_filter};;{FileFormatRegistry.MIDI.file_filter};;All Files (*)",
+            f"{both};;{FileFormatRegistry.CSEQ.file_filter};;{FileFormatRegistry.MIDI.file_filter};;All Files (*)",
         )
         if not path:
             return
@@ -188,6 +206,9 @@ class SongHandler:
             new_blob = self._w._cseq_editor.replace_sequence(
                 self._w.hwl.songs[song_index], seq_index, source_seq,
             )
+            if not self._cseq_within_limit(new_blob):
+                return
+
             self._w._undo_stack.push(
                 SwapBlobCommand(self._w, f"Replace Sequence in Song {song_index}", HowlCollection.SONGS, song_index, new_blob),
             )
@@ -439,6 +460,7 @@ class SongHandler:
                 prompt=f"Select which SPU sample {kind} {entry_index} should point at:",
                 choices=choices,
                 current_spu_index=current_id,
+                on_preview=self._preview_sample,
             )
 
             if dialog.exec() != QDialog.Accepted:
@@ -463,6 +485,17 @@ class SongHandler:
             self._w._notify(f"{kind.capitalize()} {entry_index} now points at SPU #{new_id}")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Retarget failed:\n{e}")
+
+    def _preview_sample(self, spu_index: int) -> None:
+        """Audition a candidate sample straight from the retarget picker, at
+        the rate the file already associates with it, so the user can hear it
+        before committing the repoint."""
+        if not self._w.hwl:
+            return
+
+        rate_hz = self._w._sample_lookup.lookup_sample_rate(self._w.hwl, spu_index)
+        pitch = int(rate_hz * spu.FREQUENCY_UNIT / spu.SAMPLE_RATE)
+        self._w._playback.play_spu_sample(spu_index, pitch, "Preview")
 
     def _build_sample_choices(self) -> list[SampleChoice]:
         """One option per entry in the SPU address table. Each choice is
@@ -520,6 +553,9 @@ class SongHandler:
             new_blob = self._w._cseq_editor.append_sequence(
                 self._w.hwl.songs[song_index], source_cseq.songs[source_seq_index],
             )
+            if not self._cseq_within_limit(new_blob):
+                return
+
             self._w._undo_stack.push(
                 SwapBlobCommand(self._w, f"Add Sequence to Song {song_index}", HowlCollection.SONGS, song_index, new_blob),
             )
@@ -604,6 +640,9 @@ class SongHandler:
             )
             description = f"Copy sequence over Song {target_song} sequence {target_seq}"
             message = f"Replaced sequence {target_seq} in song {target_song}"
+
+        if not self._cseq_within_limit(new_blob):
+            return
 
         self._w._undo_stack.push(SwapBlobCommand(
             self._w, description, HowlCollection.SONGS, target_song, new_blob,

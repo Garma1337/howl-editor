@@ -56,6 +56,7 @@ class CategoryDetailWidget(QWidget):
         stylesheet_loader: StylesheetLoader,
         hub_mask_table_query: AdventureHubMaskTableQuery,
         icon_resolver: CategoryIconResolver,
+        badge_resolver=None,
     ):
         super().__init__()
         self._leaves_builder = leaves_builder
@@ -63,8 +64,10 @@ class CategoryDetailWidget(QWidget):
         self._stylesheets = stylesheet_loader
         self._hub_mask_table_query = hub_mask_table_query
         self._icon_resolver = icon_resolver
+        self._badge_resolver = badge_resolver
         self._current_group: EntryGroup | None = None
         self._current_hwl: HowlFile | None = None
+        self._diag_index = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -113,9 +116,10 @@ class CategoryDetailWidget(QWidget):
 
         return header
 
-    def show_category(self, hwl: HowlFile, group: EntryGroup) -> None:
+    def show_category(self, hwl: HowlFile, group: EntryGroup, diag_index=None) -> None:
         self._current_hwl = hwl
         self._current_group = group
+        self._diag_index = diag_index
         self._title.setText(group.name)
         self._update_title_icon(group)
         self._render_entries()
@@ -179,6 +183,9 @@ class CategoryDetailWidget(QWidget):
                 default_expanded=single_entry_category,
                 icon_image_path=entry_icon,
                 hub_names=hub_names,
+                diagnostic_badge=self._row_badge(row),
+                diagnostic_label=self._row_label(row),
+                diagnostic_tooltip=self._row_tooltip(row),
             )
             parent.sig_replace_parent.connect(self.sig_replace_parent)
             parent.sig_export_song_parent.connect(self.sig_export_song_parent)
@@ -195,6 +202,25 @@ class CategoryDetailWidget(QWidget):
             parent.sig_entry_selected.connect(self.sig_entry_selected)
             parent.sig_play_hub.connect(self._on_play_hub)
             self._insert_widget(parent)
+
+    def _row_badge(self, row: EntryRow) -> str:
+        if self._badge_resolver is None:
+            return ""
+
+        return self._badge_resolver.row_badge(self._diag_index, row)
+
+    def _row_label(self, row: EntryRow) -> str:
+        if self._badge_resolver is None:
+            return ""
+
+        return self._badge_resolver.row_label(self._diag_index, row)
+
+    def _row_tooltip(self, row: EntryRow) -> str:
+        if self._badge_resolver is None:
+            return ""
+
+        findings = self._badge_resolver.row_findings(self._diag_index, row)
+        return "\n".join(f.message for f in findings)
 
     def _build_fx_row(self, row: EntryRow) -> QFrame:
         icon = "🔊" if row.kind == EntryKind.OTHER_FX else "🚗"

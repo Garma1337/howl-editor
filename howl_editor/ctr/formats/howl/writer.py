@@ -40,6 +40,13 @@ class HowlWriter:
         """Serialize and write to disk."""
         Path(path).write_bytes(self.serialize(hwl))
 
+    def serialized_size(self, hwl: HowlFile) -> int:
+        """The exact byte length `serialize()` would produce, computed from the
+        sector layout alone — no buffer allocated, no blobs copied. Lets callers
+        that only need the file size (e.g. the disc-slot check) avoid building
+        the whole file."""
+        return self._calculate_layout(hwl).total_sectors * SECTOR_SIZE
+
     def _calculate_layout(self, hwl: HowlFile) -> HowlLayout:
         header_bytes = HowlHeader.SIZE + hwl.header_data_size
         header_sectors = bytes_to_sectors(header_bytes)
