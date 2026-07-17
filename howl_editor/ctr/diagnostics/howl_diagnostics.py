@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from howl_editor.ctr import constants
+from howl_editor.ctr.diagnostics.bank_slice_validator import BankSliceValidator
 from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
+from howl_editor.ctr.diagnostics.pitch_ceiling_validator import PitchCeilingValidator
 from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
@@ -13,6 +15,7 @@ from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr import stock_layout as layout
+from howl_editor.ps1 import spu
 
 
 class Severity(Enum):
@@ -33,7 +36,9 @@ class Category(Enum):
     CSEQ_SIZE = "CSEQ size"
     UNREADABLE_SONG = "Unreadable song"
     SAMPLE_REFERENCE = "Sample reference"
+    PITCH_CEILING = "Pitch ceiling"
     UNREADABLE_BANK = "Unreadable bank"
+    BANK_SLICING = "Bank slicing"
     SPU_RESIDENCY = "SPU residency"
     HOWL_SIZE = "HOWL size"
     SUMMARY = "Summary"
@@ -83,14 +88,18 @@ class HowlDiagnostics:
         validator: BankCseqValidator,
         stock_layout: StockLayoutResolver,
         howl_size_guard: HowlSizeGuard,
+        slice_validator: BankSliceValidator,
+        pitch_ceiling_validator: PitchCeilingValidator,
     ):
         self._cseq_reader = cseq_reader
         self._cseq_size = cseq_size_validator
         self._bank_reader = bank_reader
         self._residency = residency
+        self._slices = slice_validator
         self._validator = validator
         self._layout = stock_layout
         self._howl_size = howl_size_guard
+        self._pitch_ceiling = pitch_ceiling_validator
 
     def diagnose(
         self,
@@ -103,6 +112,7 @@ class HowlDiagnostics:
 
         findings.extend(self._check_songs(hwl))
         findings.extend(self._check_bank_parsing(hwl))
+        findings.extend(self._check_bank_slicing(hwl))
         findings.extend(self._check_level_residency(hwl))
         findings.extend(self._check_file_size(hwl, howl_file_size, iso_budget_bytes))
         findings.append(self._summary(hwl, howl_file_size))
@@ -135,8 +145,33 @@ class HowlDiagnostics:
                 continue
 
             out.extend(self._check_sample_refs(hwl, i, cseq, name))
+            out.extend(self._check_pitch_ceiling(i, cseq, name))
 
         return out
+
+    def _check_pitch_ceiling(self, song_index, cseq, name) -> list[Finding]:
+        """Notes whose pitch register saturates the SPU. They play flat rather
+        than failing, so this warns instead of erroring."""
+        result = self._pitch_ceiling.validate(cseq)
+        out: list[Finding] = []
+
+        for item in result.exceedances:
+            out.append(Finding(
+                Severity.WARNING, Category.PITCH_CEILING, Target(TargetKind.SONG, song_index),
+                f"{name}: {self._pitch_subject(item)} needs pitch {item.register} "
+                f"({item.over_by} over the SPU's {spu.MAX_PITCH} ceiling). The console "
+                f"cannot play faster than 4.0×, so this and every higher note collapse "
+                f"onto the same pitch and the part goes flat. Lower the base pitch "
+                f"(currently {item.base_pitch}) and speed the sample up to compensate.",
+            ))
+
+        return out
+
+    def _pitch_subject(self, item) -> str:
+        if item.is_drum:
+            return f"percussion {item.slot} (SPU {item.sample_id})"
+
+        return f"instrument {item.slot} (SPU {item.sample_id}) at note {item.note}"
 
     def _check_sample_refs(self, hwl, song_index, cseq, name) -> list[Finding]:
         out: list[Finding] = []
@@ -185,6 +220,41 @@ class HowlDiagnostics:
                 ))
 
         return out
+
+    def _check_bank_slicing(self, hwl: HowlFile) -> list[Finding]:
+        """A bank's samples are delimited by the shared SPU size table, so a
+        sample resized on behalf of another bank leaves this one being cut at
+        offsets its bytes don't match. The slices stop being valid VAG, which
+        is what this reports."""
+        out: list[Finding] = []
+
+        for i, blob in enumerate(hwl.banks):
+            try:
+                result = self._slices.validate(blob, hwl.spu_addrs)
+            except Exception:
+                continue
+
+            if result.is_valid:
+                continue
+
+            out.append(Finding(
+                Severity.ERROR, Category.BANK_SLICING, Target(TargetKind.BANK, i),
+                f"{self._bank_label(i)}: {result.corrupted_count} of "
+                f"{result.declared_count} samples are cut at the wrong offset"
+                f"{self._slice_origin(result)}. This bank's audio data no longer "
+                f"matches the sample sizes it is read with — most likely a sample it "
+                f"shares was resized while being replaced in another bank. In game "
+                f"these samples play as noise.",
+            ))
+
+        return out
+
+    def _slice_origin(self, result) -> str:
+        first = result.first_bad
+        if first is None:
+            return ""
+
+        return f", starting at slot {first.slot} (SPU {first.spu_index})"
 
     def _check_level_residency(self, hwl: HowlFile) -> list[Finding]:
         """For each stock race track, the samples resident together (SFX bank +

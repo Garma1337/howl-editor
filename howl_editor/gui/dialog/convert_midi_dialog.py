@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QDialogButtonBox, QCheckBox,
 )
 
-from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
+from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.gui.layout import WindowSize
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.models import (
@@ -20,7 +20,7 @@ from howl_editor.midi.models import (
 _COL_LABEL = 0
 _COL_NOTES = 1
 _COL_SPU = 2
-_COL_FREQ = 3
+_COL_PITCH = 3
 _COL_DRUM = 4
 
 
@@ -42,7 +42,7 @@ class ConvertMidiDialog(QDialog):
         self, parent, midi_info: MidiInfo, max_spu_index: int,
         drum_names: DrumNameResolver | None = None,
         bank_spu_order: list[int] | None = None,
-        spu_sample_rates: dict[int, int] | None = None,
+        spu_base_pitches: dict[int, int] | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Convert MIDI to CSEQ - Instrument Mapping")
@@ -51,7 +51,7 @@ class ConvertMidiDialog(QDialog):
         self._max_spu = max_spu_index
         self._drum_names = drum_names or DrumNameResolver()
         self._bank_spu_order = bank_spu_order
-        self._spu_sample_rates = spu_sample_rates or {}
+        self._spu_base_pitches = spu_base_pitches or {}
         self._drum_override: dict[int, bool] = {}
         self._row_meta: list[ConvertRowMeta] = []
 
@@ -90,7 +90,7 @@ class ConvertMidiDialog(QDialog):
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
-            ["Track / Drum hit", "Notes", "SPU Sample ID", "Frequency (Hz)", "Drum"],
+            ["Track / Drum hit", "Notes", "SPU Sample ID", "Base pitch (note 60)", "Drum"],
         )
         self.table.horizontalHeader().setStretchLastSection(True)
 
@@ -184,13 +184,18 @@ class ConvertMidiDialog(QDialog):
         spu_spin.setValue(default_spu)
         self.table.setCellWidget(row, _COL_SPU, spu_spin)
 
-        freq_spin = QSpinBox()
-        freq_spin.setRange(100, 44100)
-        freq_spin.setValue(self._default_freq_hz_for_spu(default_spu))
-        self.table.setCellWidget(row, _COL_FREQ, freq_spin)
+        pitch_spin = QSpinBox()
+        pitch_spin.setRange(0, cseq_fmt.MAX_PITCH_REGISTER)
+        pitch_spin.setValue(self._default_pitch_for_spu(default_spu))
+        pitch_spin.setToolTip(
+            "The SPU pitch register this instrument plays at MIDI note 60.\n"
+            "4096 plays the sample back at 1.0× speed; halving it drops an "
+            "octave, doubling it raises one.",
+        )
+        self.table.setCellWidget(row, _COL_PITCH, pitch_spin)
 
         spu_spin.valueChanged.connect(
-            lambda value, fs=freq_spin: self._sync_freq_to_spu(value, fs),
+            lambda value, ps=pitch_spin: self._sync_pitch_to_spu(value, ps),
         )
 
         if self._is_first_row_of_track(row):
@@ -244,17 +249,18 @@ class ConvertMidiDialog(QDialog):
     def _track_for(self, midi_index: int) -> MidiTrackInfo:
         return self.midi_info.tracks[midi_index]
 
-    def _default_freq_hz_for_spu(self, spu: int) -> int:
-        """The sample's known playback rate, so the Frequency column prefills
-        alongside the SPU. Falls back to the default rate when the SPU has no
-        looked-up rate (unknown bank, or a SPU the user typed by hand)."""
-        return self._spu_sample_rates.get(spu, VagSampleRateProvider.DEFAULT_RATE)
+    def _default_pitch_for_spu(self, spu: int) -> int:
+        """The base pitch this sample is already played at elsewhere in the
+        file, so the column prefills with a value known to work rather than a
+        guess. Falls back to the neutral default only when nothing references
+        the SPU yet."""
+        return self._spu_base_pitches.get(spu, cseq_fmt.DEFAULT_BASE_PITCH)
 
-    def _sync_freq_to_spu(self, spu: int, freq_spin: QSpinBox) -> None:
-        """Update the frequency to match a newly chosen SPU, but only when that
-        SPU has a known rate — otherwise leave whatever the user has entered."""
-        if spu in self._spu_sample_rates:
-            freq_spin.setValue(self._spu_sample_rates[spu])
+    def _sync_pitch_to_spu(self, spu: int, pitch_spin: QSpinBox) -> None:
+        """Carry a newly chosen SPU's existing base pitch across, but only when
+        it has one — otherwise leave whatever the user has entered."""
+        if spu in self._spu_base_pitches:
+            pitch_spin.setValue(self._spu_base_pitches[spu])
 
     def _default_spu_for_row(self, row: int) -> int:
         """Prefill SPU sample IDs so a music maker can usually accept the
@@ -285,8 +291,7 @@ class ConvertMidiDialog(QDialog):
 
         for row, meta in enumerate(self._row_meta):
             spu = self.table.cellWidget(row, _COL_SPU).value()
-            freq_hz = self.table.cellWidget(row, _COL_FREQ).value()
-            freq = int(freq_hz * 4096 / 44100)
+            freq = self.table.cellWidget(row, _COL_PITCH).value()
 
             if meta.is_drum_track:
                 mapping = settings.mappings[meta.midi_track_index]

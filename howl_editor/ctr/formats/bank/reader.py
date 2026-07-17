@@ -17,6 +17,14 @@ class BankReader:
     def get_name(self, index: int) -> str:
         return self._name_resolver.bank_name(index)
 
+    def sample_ids(self, bank_data: bytes) -> list[int]:
+        """The SPU ids this bank declares, straight from its header.
+
+        Unlike `parse`, this needs no size table and survives a bank whose
+        blob no longer matches it — so it stays usable for asking which banks
+        claim a given sample."""
+        return self._read_sample_ids(bank_data, self._read_sample_count(bank_data))
+
     def parse(self, bank_data: bytes, spu_addrs: list[SpuAddrEntry]) -> list[BankSample]:
         """Parse a bank blob into individual samples."""
         num_samples = self._read_sample_count(bank_data)

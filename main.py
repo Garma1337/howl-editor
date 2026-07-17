@@ -54,6 +54,8 @@ if __name__ == "__main__":
         cseq_size_guard=container.resolve("cseq_size_guard"),
         bank_size_guard=container.resolve("bank_size_guard"),
         howl_size_guard=container.resolve("howl_size_guard"),
+        shared_sample_guard=container.resolve("shared_sample_guard"),
+        shared_sample_propagator=container.resolve("shared_sample_propagator"),
         howl_diagnostics=container.resolve("howl_diagnostics"),
         diagnostics_status_provider=container.resolve("diagnostics_status_provider"),
         entry_badge_resolver=container.resolve("entry_badge_resolver"),

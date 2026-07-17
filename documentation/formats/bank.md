@@ -63,6 +63,8 @@ sample_byte_size = spu_addrs[sampleID].spuSize * 8
 
 The sample data is raw VAG ADPCM frames (headerless). See [vag.md](vag.md) for the frame encoding.
 
+Nothing in the blob itself marks where one sample ends and the next begins: the boundaries exist only as the running sum of `spu_addrs[sampleID].spuSize`. The size table is therefore load-bearing for the blob's structure, and because it is global, a given sample id has exactly one size across every bank that claims it.
+
 ## How Banks Reference Samples
 
 ```mermaid
@@ -115,8 +117,12 @@ flowchart TD
 - For each sample where `spuAddr == 0` (not yet loaded), assign a new SPU address from the allocation pointer
 - Track the address range (min/max) for this bank
 
+The allocation pointer advances by `spuSize` for **every** sample in the id array, including ones skipped as already loaded. A deduplicated sample therefore still occupies its slot in the bank's SPU region, keeping the region aligned with the blob.
+
 ### Stage 2: DMA Transfer
 - Transfer sample data from RAM to SPU memory via DMA
+
+The transfer is a single contiguous block covering the whole payload, not a per-sample copy. Per-sample addresses come from the size table while the bytes come from the blob's layout, and the transfer performs no bounds checking against sample boundaries — the two agree only as long as each sample's stored length matches its `spuSize`.
 
 ### Stage 3: Verify Transfer
 - Wait for SPU transfer completion
@@ -130,6 +136,8 @@ When SPU memory needs to be reclaimed, the game scans the SPU Address Table and 
 ## Sample Deduplication
 
 Multiple banks can reference the same sample ID. When loading a bank, if a sample's `spuAddr` is already non-zero (loaded by a previous bank), the SPU address is preserved and the data is not re-transferred. This saves SPU memory when banks share samples (e.g., the common SFX bank shares samples with level-specific banks).
+
+Note that each bank still stores its **own copy** of a shared sample's bytes — only the id and the size entry are shared, and the copies are free to differ. Since the transfer is skipped for whichever bank loads second, only the first loader's copy is ever heard; the rest occupy disc space and are never played.
 
 ## Example
 

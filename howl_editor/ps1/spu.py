@@ -30,3 +30,14 @@ SAMPLE_RATE = 44100.0
 # Unit of the SPU's pitch register: pitch == FREQUENCY_UNIT means 1.0× sample
 # playback ratio. Halving plays an octave down, doubling plays an octave up.
 FREQUENCY_UNIT = 4096.0
+
+# Hardware ceiling on the pitch register. The field is 16 bits wide, but the
+# SPU saturates at 0x3FFF — 4.0× playback — and anything above simply plays at
+# 4.0×. There is no software clamp in the engine (howl_InitChannelAttr_Music
+# assigns the computed pitch straight to the voice), so a note that computes
+# past this doesn't error: it just comes out flat, along with every note above
+# it, and the top of the melody goes tuneless.
+#
+# Distinct from cseq.format.MAX_PITCH_REGISTER (0xFFFF), which is only what the
+# on-disc field can *hold* — this is what the console can actually *play*.
+MAX_PITCH = 0x3FFF

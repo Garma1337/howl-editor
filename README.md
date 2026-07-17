@@ -38,7 +38,7 @@ The editor is organized into three tabs aimed at three personas:
 
 ### Instruments & Percussion (Music Workshop)
 
-- **Per-instrument editing** of volume and pitch (frequency register, with live ≈Hz readout)
+- **Per-instrument editing** of volume and pitch (base-pitch register — a playback-speed multiplier, not a sample rate — with live ≈Hz readout)
 - **Per-percussion editing** of volume and pitch
 - **Retarget** an instrument or percussion entry at a different SPU sample without exporting / reimporting VAGs
 - **Audition** any instrument or percussion sample directly from its row
@@ -79,8 +79,9 @@ The editor is organized into three tabs aimed at three personas:
 ### Analysis
 
 - **Bank/CSEQ validation** - verify a bank contains all samples needed by a song, lists all missing sample IDs
-- **Diagnose HOWL File** - whole-file sweep for data the console can't load: songs over the song-buffer limit, level banks that overflow SPU sound memory, broken sample references, unreadable blobs, and a file grown past its disc slot
-- **Engine-limit guards and warning icons** - edits that would exceed a hard console limit (song size, SPU residency, file size) warn before applying, and offending banks/songs/the file are marked with a ❌ / ⚠️ icon across the File Browser tree, Category Browser, and Music Workshop, with a banner explaining each one
+- **Diagnose HOWL File** - whole-file sweep for data the console can't load: songs over the song-buffer limit, level banks that overflow SPU sound memory, broken sample references, banks whose samples are cut at the wrong offset, notes that exceed the SPU's pitch ceiling, unreadable blobs, and a file grown past its disc slot
+- **Engine-limit guards and warning icons** - edits that would exceed a hard console limit (song size, SPU residency, file size, pitch ceiling) warn before applying, and offending banks/songs/the file are marked with a ❌ / ⚠️ icon across the File Browser tree, Category Browser, and Music Workshop, with a banner explaining each one
+- **Shared-sample protection** - sample sizes are global, so replacing a sample other banks share would silently corrupt them; the editor names the affected banks and offers to update them all in one undoable step
 - **Custom Mode** (Settings menu) - disables every engine-limit check and hides the status icons, for modded games where the stock limits no longer apply
 - **NTSC-U bank and song names** shown in tree view and detail panels (Custom label for modded entries)
 

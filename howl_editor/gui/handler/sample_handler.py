@@ -1,5 +1,6 @@
 # coding: utf-8
 
+from enum import Enum
 from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
@@ -13,6 +14,14 @@ from howl_editor.gui.dialog.copy_target_dialog import (
 from howl_editor.ps1 import spu
 from howl_editor.ps1.formats.vag.models import VagSample
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
+
+
+class SharedChoice(Enum):
+    """What to do about the other banks claiming the sample being replaced."""
+    ALONE = "alone"            # nothing else claims it — no question to ask
+    UPDATE_ALL = "update_all"
+    THIS_ONLY = "this_only"
+    CANCEL = "cancel"
 
 
 class SampleHandler:
@@ -126,6 +135,15 @@ class SampleHandler:
 
             spu_index = self._find_spu_index(bank_index, sample_index)
             spu_before = list(self._window.hwl.spu_addrs)
+
+            shared = self._resolve_shared_sample(bank_index, spu_index, len(vag.data))
+            if shared is SharedChoice.CANCEL:
+                return
+
+            companions = self._companion_blobs(
+                shared, spu_before, spu_index, vag.data, bank_index,
+            )
+
             new_blob = self._window._bank_builder.replace_sample(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
                 sample_index, vag.data, self._window._bank_reader,
@@ -135,17 +153,106 @@ class SampleHandler:
                 self._window.hwl.spu_addrs[:] = spu_before
                 return
 
-            self._window._undo_stack.push(
-                SwapBlobCommand(self._window, f"Replace Sample in Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),
-            )
+            self._push_replacement(bank_index, new_blob, companions)
 
             if spu_index is not None:
                 self._propagate_sample_rate_to_fx(spu_index, vag.sample_rate)
 
-            self._window._notify(f"Replaced sample {sample_index} in bank {bank_index}")
+            self._window._notify(self._replace_message(bank_index, sample_index, companions))
             self._warn_if_bank_oversized(bank_index, len(new_blob))
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Replace failed:\n{e}")
+
+    def _resolve_shared_sample(
+        self, bank_index: int, spu_index: int | None, new_data_len: int,
+    ) -> 'SharedChoice':
+        """Ask what to do when the sample's id is claimed by other banks too.
+
+        Their blobs are cut using the size entry this edit would move, so
+        leaving them untouched corrupts them silently — the user has to be told
+        before the write, not after."""
+        guard = self._window._shared_sample_guard
+
+        if guard is None or spu_index is None:
+            return SharedChoice.ALONE
+
+        check = guard.check(self._window.hwl, bank_index, spu_index, new_data_len)
+        if check.within_limit:
+            return SharedChoice.ALONE
+
+        return self._ask_shared_sample(check)
+
+    def _ask_shared_sample(self, check) -> 'SharedChoice':
+        box = QMessageBox(self._window)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Sample shared with other banks")
+        box.setText(check.warning_text)
+        update = box.addButton("Update all owning banks", QMessageBox.AcceptRole)
+        only = box.addButton("Only this bank", QMessageBox.DestructiveRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(update)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is update:
+            return SharedChoice.UPDATE_ALL
+        if clicked is only:
+            return SharedChoice.THIS_ONLY
+
+        return SharedChoice.CANCEL
+
+    def _companion_blobs(
+        self,
+        choice: 'SharedChoice',
+        spu_before: list,
+        spu_index: int | None,
+        new_data: bytes,
+        bank_index: int,
+    ) -> dict[int, bytes]:
+        """Rebuilt blobs for the co-owning banks, computed against the size
+        table as it stands now — before `replace_sample` moves the entry."""
+        propagator = self._window._shared_sample_propagator
+
+        if choice is not SharedChoice.UPDATE_ALL or propagator is None or spu_index is None:
+            return {}
+
+        return propagator.rebuild_owners(
+            self._window.hwl, spu_before, spu_index, new_data, bank_index,
+        )
+
+    def _push_replacement(
+        self, bank_index: int, new_blob: bytes, companions: dict[int, bytes],
+    ) -> None:
+        """One undo step covers the edit and every bank dragged along with it,
+        so undoing can't leave the file half-propagated."""
+        stack = self._window._undo_stack
+
+        if companions:
+            stack.beginMacro(f"Replace Sample in Bank {bank_index} (+{len(companions)} shared)")
+
+        stack.push(SwapBlobCommand(
+            self._window, f"Replace Sample in Bank {bank_index}",
+            HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True,
+        ))
+
+        for other_index, blob in companions.items():
+            stack.push(SwapBlobCommand(
+                self._window, f"Update Shared Sample in Bank {other_index}",
+                HowlCollection.BANKS, other_index, blob, snapshot_spu=False,
+            ))
+
+        if companions:
+            stack.endMacro()
+
+    def _replace_message(
+        self, bank_index: int, sample_index: int, companions: dict[int, bytes],
+    ) -> str:
+        base = f"Replaced sample {sample_index} in bank {bank_index}"
+
+        if not companions:
+            return base
+
+        return f"{base} (also updated bank(s) {sorted(companions)})"
 
     def _find_spu_index(self, bank_index: int, sample_index: int) -> int | None:
         try:

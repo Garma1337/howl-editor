@@ -136,9 +136,12 @@ class TestBankSpuOrder:
         assert _lookup().bank_spu_order(HowlFile(), 0) == []
 
 
-class TestSampleRateMap:
+class TestSamplePitchMap:
+    """Anything setting an instrument's pitch wants the stored register, not a
+    rate: the register is what the file holds, and the Hz form cannot be
+    converted back without losing precision to truncation."""
 
-    def test_maps_rates_from_fx_and_songs(self):
+    def test_maps_pitches_from_fx_and_songs(self):
         cseq_data = build_cseq_bytes(
             instruments=[CseqInstrument(sample_id=7, frequency=4096)],
             percussions=[CseqPercussion(sample_id=10, frequency=2048)],
@@ -149,7 +152,7 @@ class TestSampleRateMap:
             songs=[cseq_data],
         )
 
-        assert _lookup().sample_rate_map(hwl) == {5: 44100, 3: 22050, 7: 44100, 10: 22050}
+        assert _lookup().sample_pitch_map(hwl) == {5: 4096, 3: 2048, 7: 4096, 10: 2048}
 
     def test_first_reference_wins(self):
         # OtherFX outranks a song instrument for the same SPU, matching
@@ -160,15 +163,23 @@ class TestSampleRateMap:
             songs=[cseq_data],
         )
 
-        assert _lookup().sample_rate_map(hwl)[5] == 44100
+        assert _lookup().sample_pitch_map(hwl)[5] == 4096
 
-    def test_omits_samples_with_no_rate_reference(self):
+    def test_survives_a_pitch_no_rate_can_represent(self):
+        """2755 is a real stock base pitch. Routed through Hz it comes back as
+        2754 — the kind of silent drift that made the register the only safe
+        thing to carry."""
+        cseq_data = build_cseq_bytes(instruments=[CseqInstrument(sample_id=1, frequency=2755)])
+
+        assert _lookup().sample_pitch_map(HowlFile(songs=[cseq_data]))[1] == 2755
+
+    def test_omits_samples_with_no_pitch_reference(self):
         hwl = HowlFile(other_fx=[OtherFX(spu_index=5, pitch=0)])
 
-        assert _lookup().sample_rate_map(hwl) == {}
+        assert _lookup().sample_pitch_map(hwl) == {}
 
     def test_empty_for_empty_hwl(self):
-        assert _lookup().sample_rate_map(HowlFile()) == {}
+        assert _lookup().sample_pitch_map(HowlFile()) == {}
 
 
 class TestLookupSampleRate:

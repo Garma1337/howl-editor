@@ -50,6 +50,14 @@ MAX_VOLUME = 0xFF
 # value is 0xFFFF. spu.FREQUENCY_UNIT (4096) maps to 1.0× playback rate.
 MAX_PITCH_REGISTER = 0xFFFF
 
+# Fallback base pitch offered for a sample nothing in the file references yet,
+# so there is no stored pitch to copy. Nothing can derive the right value here:
+# the correct base pitch depends on the musical pitch of the recording, which a
+# VAG does not carry. 0x400 is only the value this editor has always defaulted
+# to (it plays a sample back at 11025 Hz) — the user is expected to set it by
+# listening, not to trust it.
+DEFAULT_BASE_PITCH = 0x400
+
 # CseqInstrument.adsr is u32 in the on-wire struct — it's the raw SPU
 # ADSR register pair. Bits 0-15 are ADSR1 (attack/decay/sustain level),
 # bits 16-31 are ADSR2 (sustain rate/release). Each half is a u16.

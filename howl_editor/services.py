@@ -12,17 +12,22 @@ from howl_editor.core.template_engine import TemplateEngine
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.howl_stats import HowlStatsCalculator
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.ctr.analysis.sample_ownership import SampleOwnershipResolver
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
-from howl_editor.ctr.diagnostics.bank_size_guard import BankSizeGuard
-from howl_editor.ctr.diagnostics.cseq_size_guard import CseqSizeGuard
-from howl_editor.ctr.diagnostics.howl_diagnostics import HowlDiagnostics
-from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
-from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
 from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.cseq_renderer import CseqRenderer
+from howl_editor.ctr.diagnostics.bank_size_guard import BankSizeGuard
+from howl_editor.ctr.diagnostics.bank_slice_validator import BankSliceValidator
+from howl_editor.ctr.diagnostics.cseq_size_guard import CseqSizeGuard
+from howl_editor.ctr.diagnostics.howl_diagnostics import HowlDiagnostics
+from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
+from howl_editor.ctr.diagnostics.pitch_ceiling_validator import PitchCeilingValidator
+from howl_editor.ctr.diagnostics.shared_sample_guard import SharedSampleGuard
+from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
 from howl_editor.ctr.formats.bank.builder import BankBuilder
 from howl_editor.ctr.formats.bank.reader import BankReader
+from howl_editor.ctr.formats.bank.shared_sample_propagator import SharedSamplePropagator
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.editor import CseqEditor
 from howl_editor.ctr.formats.cseq.reader import CseqReader
@@ -40,20 +45,20 @@ from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
 from howl_editor.export.batch_exporter import BatchExporter
 from howl_editor.export.sfz_exporter import SfzExporter
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
-from howl_editor.gui.detail.diagnosis_banner_formatter import DiagnosisBannerFormatter
-from howl_editor.gui.diagnostics_status_provider import DiagnosticsStatusProvider
-from howl_editor.gui.entry_badge_resolver import EntryBadgeResolver
-from howl_editor.gui.severity_presenter import SeverityPresenter
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
 from howl_editor.gui.detail.detail_formatter import DetailFormatter
+from howl_editor.gui.detail.diagnosis_banner_formatter import DiagnosisBannerFormatter
 from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
 from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
 from howl_editor.gui.detail.leaf_info_formatter import LeafInfoFormatter
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
+from howl_editor.gui.diagnostics_status_provider import DiagnosticsStatusProvider
 from howl_editor.gui.entries.blob_modification_detector import BlobModificationDetector
 from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
 from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
+from howl_editor.gui.entry_badge_resolver import EntryBadgeResolver
 from howl_editor.gui.entry_drop_router import EntryDropRouter
+from howl_editor.gui.severity_presenter import SeverityPresenter
 from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.midi.converter import MidiConverter
@@ -64,6 +69,7 @@ from howl_editor.paths import RENDERED_SONG_CACHE_DIR
 from howl_editor.ps1.adsr_decoder import AdsrDecoder
 from howl_editor.ps1.formats.vag.decoder import VagDecoder
 from howl_editor.ps1.formats.vag.reader import VagReader
+from howl_editor.ps1.formats.vag.structure_validator import VagStructureValidator
 from howl_editor.ps1.formats.vag.writer import VagWriter
 from howl_editor.saphi.formats.sca.chunk_reader import ScaChunkReader
 from howl_editor.saphi.formats.sca.chunk_writer import ScaChunkWriter
@@ -135,6 +141,22 @@ container.register("bank_size_guard", lambda c: BankSizeGuard(
     c.resolve("spu_residency_calculator"),
     c.resolve("stock_layout")))
 container.register("howl_size_guard", lambda c: HowlSizeGuard())
+container.register("vag_structure_validator", lambda c: VagStructureValidator())
+container.register("pitch_ceiling_validator", lambda c: PitchCeilingValidator(
+    c.resolve("pitch_calculator")))
+container.register("bank_slice_validator", lambda c: BankSliceValidator(
+    c.resolve("bank_reader"),
+    c.resolve("vag_structure_validator")))
+container.register("sample_ownership", lambda c: SampleOwnershipResolver(
+    c.resolve("bank_reader")))
+container.register("shared_sample_propagator", lambda c: SharedSamplePropagator(
+    c.resolve("bank_reader"),
+    c.resolve("bank_builder"),
+    c.resolve("sample_ownership")))
+container.register("shared_sample_guard", lambda c: SharedSampleGuard(
+    c.resolve("sample_ownership"),
+    c.resolve("bank_slice_validator"),
+    c.resolve("bank_reader")))
 container.register("howl_diagnostics", lambda c: HowlDiagnostics(
     c.resolve("cseq_reader"),
     c.resolve("cseq_size_validator"),
@@ -143,6 +165,8 @@ container.register("howl_diagnostics", lambda c: HowlDiagnostics(
     c.resolve("validator"),
     c.resolve("stock_layout"),
     c.resolve("howl_size_guard"),
+    c.resolve("bank_slice_validator"),
+    c.resolve("pitch_ceiling_validator"),
 ))
 container.register("diagnostics_status_provider", lambda c: DiagnosticsStatusProvider(
     c.resolve("howl_diagnostics"),

@@ -113,25 +113,28 @@ class SampleLookup:
 
         return _DEFAULT_SAMPLE_RATE
 
-    def sample_rate_map(self, hwl: HowlFile) -> dict[int, int]:
-        """Build spu_index → playback-rate (Hz) for every sample referenced
-        anywhere in the HWL, in one pass.
+    def sample_pitch_map(self, hwl: HowlFile) -> dict[int, int]:
+        """spu_index → base-pitch register, for every sample referenced anywhere.
 
         Same source priority as `lookup_sample_rate` (OtherFX, then EngineFX,
-        then song instruments, then song percussions — first reference wins),
-        but resolves the whole file at once so callers like the MIDI-import
-        dialog can update a sample's frequency the instant its SPU is picked,
-        without re-scanning per lookup. SPUs with no rate reference are simply
-        absent from the map."""
-        rates: dict[int, int] = {}
+        then song instruments, then percussions — first reference wins), but
+        hands back the raw register rather than converting it to Hz.
+
+        Callers setting an instrument's pitch want this. A pitch register is
+        not a sample rate: it is a playback-speed multiplier, and the value
+        that sounds right depends on the musical pitch of the recording, which
+        nothing in the file records. Presenting it as Hz invites picking a
+        round rate that transposes the instrument by an octave. It also
+        round-trips lossily — 2755 comes back as 2754."""
+        pitches: dict[int, int] = {}
 
         for fx in hwl.other_fx:
             if fx.pitch > 0:
-                rates.setdefault(fx.spu_index, self._pitch_to_hz(fx.pitch))
+                pitches.setdefault(fx.spu_index, fx.pitch)
 
         for fx in hwl.engine_fx:
             if fx.pitch > 0:
-                rates.setdefault(fx.spu_index, self._pitch_to_hz(fx.pitch))
+                pitches.setdefault(fx.spu_index, fx.pitch)
 
         for song_data in hwl.songs:
             try:
@@ -141,13 +144,13 @@ class SampleLookup:
 
             for inst in cseq.instruments:
                 if inst.frequency > 0:
-                    rates.setdefault(inst.sample_id, self._pitch_to_hz(inst.frequency))
+                    pitches.setdefault(inst.sample_id, inst.frequency)
 
             for perc in cseq.percussions:
                 if perc.frequency > 0:
-                    rates.setdefault(perc.sample_id, self._pitch_to_hz(perc.frequency))
+                    pitches.setdefault(perc.sample_id, perc.frequency)
 
-        return rates
+        return pitches
 
     def _pitch_to_hz(self, pitch: int) -> int:
         return int(pitch / spu.FREQUENCY_UNIT * spu.SAMPLE_RATE)

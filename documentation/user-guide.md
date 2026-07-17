@@ -30,6 +30,7 @@ This guide covers internal behaviors and details that are not immediately obviou
   - [Waveform Preview](#waveform-preview)
 - [Bank and Sample Workflows](#bank-and-sample-workflows)
   - [Reordering Banks and Songs](#reordering-banks-and-songs)
+  - [Replacing a Shared Sample](#replacing-a-shared-sample)
   - [Copying Samples and Sequences](#copying-samples-and-sequences)
   - [Bank Merging](#bank-merging)
 - [Music Production Workflows](#music-production-workflows)
@@ -121,7 +122,7 @@ When you add a new sample to a bank or build a bank from VAG files, the editor a
 
 - **Build bank from VAGs**: New entries are appended to the end of the SPU table. If the table currently has 528 entries, the first new sample gets index 528, the next 529, etc.
 - **Add sample to bank**: A new entry is appended to the end of the SPU table with the sample's size.
-- **Replace sample**: The existing SPU index is kept, but the size entry is updated to match the new data.
+- **Replace sample**: The existing SPU index is kept, but the size entry is updated to match the new data. Because that entry is shared, replacing a sample other banks also claim needs care — see [Replacing a Shared Sample](#replacing-a-shared-sample).
 - **Remove sample**: The sample is removed from the bank, but the SPU table entry is **not** deleted (removing it would shift all subsequent indices and break references in other banks and CSEQ files).
 
 #### VAG Sample Rate Persistence
@@ -136,8 +137,9 @@ If you don't want an auto-created Effects entry (e.g., the sample is purely a mu
 
 #### Important Considerations
 
-- SPU indices are global across the entire HWL file. If two banks reference the same SPU index, they share the same sample data.
-- Changing a sample's data in one bank affects playback in any other bank that references the same SPU index.
+- SPU indices are global across the entire HWL file, and sharing is common — a universal effect can be claimed by thirty banks at once.
+- **Each bank carries its own copy of a shared sample's bytes; only the index and the size entry are shared.** The two copies can even hold different audio. At runtime the game uploads a shared sample only once — whichever bank loads first wins — so the other copies are never heard.
+- **Resizing a shared sample corrupts every other bank that claims it.** A bank blob is bare concatenated audio: the only thing marking where one sample ends and the next begins is that shared size entry. Give a sample a new length in one bank and the others still hold their old bytes while being read with the new size, so every sample from that one onward is cut at the wrong offset and plays as noise. Nothing errors — the file just quietly stops working, in a bank you never touched. See [Replacing a Shared Sample](#replacing-a-shared-sample).
 - The SPU table can have gaps (unused entries). The game skips entries with spuSize = 0.
 
 ## General UI Behaviors
@@ -247,6 +249,20 @@ Banks, songs, and sequences can be reordered via right-click **Move Up** / **Mov
 
 Bank and song names are tied to index positions, not to the data (see [Bank Names](#bank-names)). Moving bank 0 ("SFX") to position 5 means the label "SFX" will appear on whatever bank now occupies index 0, not on the moved bank.
 
+### Replacing a Shared Sample
+
+Sample sizes live in one table keyed by SPU index and shared by every bank that claims that index, so replacing a sample with one of a **different length** rewrites a number the other banks are read with. They still hold their own, now-stale bytes, and get cut at the wrong offsets — see [Important Considerations](#important-considerations).
+
+When this would happen, the editor names the banks and how many of their samples would break, and offers three choices:
+
+- **Update all owning banks** — the replacement is written into every bank claiming that index, so the whole file stays coherent. This changes those banks' audio: they all end up playing the new sample. That is closer to what the console does anyway, since a shared index is only ever uploaded once. This is the safe default.
+- **Only this bank** — writes just the bank you're editing and leaves the others mis-cut. Do this only if you intend to fix them yourself; they will be flagged with ❌ until you do.
+- **Cancel** — abandon the replacement.
+
+Either way it's one undo step: undoing puts every bank back.
+
+Replacing a sample with one of **exactly the same length** never triggers this — the size entry doesn't move, so the other banks keep slicing correctly (they simply keep their own audio for that index).
+
 ### Copying Samples and Sequences
 
 The Actions menu on a sample leaf (category view) and the right-click menu on a sample row (file browser) both expose **Copy to Bank…**. A matching **Copy to Song…** is available on sequence leaves. Both flows open the same picker:
@@ -334,14 +350,14 @@ MIDI pitches pass through unchanged; for drum tracks this means the MIDI's note 
 
 ### MIDI to CSEQ Conversion
 
-When converting a MIDI file to CSEQ, each MIDI track with note events becomes a CSEQ track. The conversion dialog is a table with one row per track (or per drum hit — see below) and columns **SPU Sample ID**, **Frequency (Hz)**, and **Drum**.
+When converting a MIDI file to CSEQ, each MIDI track with note events becomes a CSEQ track. The conversion dialog is a table with one row per track (or per drum hit — see below) and columns **SPU Sample ID**, **Base pitch (note 60)**, and **Drum**.
 
-**SPU + frequency prefill.** The dialog prefills every sample ID and rate so you can usually accept the defaults:
+**SPU + base pitch prefill.** The dialog prefills every sample ID and pitch so you can usually accept the defaults:
 
 - If the song has a **paired bank** (converting/replacing in an HWL where the song maps to a known bank), the SPU column prefills from that bank's samples **in bank order** — so a MIDI laid out to mirror the bank maps across untouched. Otherwise it prefills sequentially (0, 1, 2, …) within the SPU range.
-- The **Frequency** column prefills from each SPU's known playback rate. If you **change an SPU** to one with a known rate, its frequency updates to match automatically; if the rate is unknown, your entered frequency is left alone (unknown rates fall back to 11025 Hz).
+- The **Base pitch** column prefills from the pitch that sample is already played at elsewhere in the file — a value known to work. If you **change an SPU** to one with a known pitch, the column updates to match; if nothing references it, your entered value is left alone (and a brand-new sample falls back to 1024).
 - The prefills are just defaults — override any cell before accepting.
-- **Frequency encoding**: the internal format uses 4096 as a base for 44100 Hz. The dialog accepts Hz and converts automatically.
+- **Base pitch is not a sample rate.** It's the speed the sample plays at MIDI note 60: 4096 is 1.0×, halving drops an octave, doubling raises one. The value that sounds *right* depends on the musical pitch of the recording, which nothing in the file records — so there's no number that can be derived for you. Set it by ear. Entering your WAV's sample rate is the classic way to end up an octave or two out of tune. See [Pitch and Frequency](formats/cseq.md#pitch-and-frequency).
 
 **Drum tracks.** Percussion on **MIDI channel 10** is auto-detected and expanded into **one row per unique drum hit**, each labeled with its GM drum name and needing its own SPU sample. If your percussion is on another channel, tick the **Drum** box on that track's row to expand it the same way.
 
@@ -417,11 +433,12 @@ Note that in the actual game, multiple banks are loaded simultaneously (SFX bank
 
 ### Engine Limits and Warning Icons
 
-The console imposes hard limits on audio data. Exceeding one doesn't produce an error on the console - the game may crash, play garbled audio, or silently drop sounds. The editor watches for three of these limits:
+The console imposes hard limits on audio data. Exceeding one doesn't produce an error on the console - the game may crash, play garbled audio, or silently drop sounds. The editor watches for these limits:
 
 - **A song is too big.** Each song must fit the fixed buffer the game loads it into. A song over that size overruns the buffer and crashes or corrupts playback.
 - **A level's banks don't fit in sound memory.** The samples of all the banks a race loads together must fit the console's SPU sound RAM. Samples that don't fit are dropped and go silent in game.
 - **The file is too big for its slot on the disc.** The `.HWL` sits at a fixed position in the game's disc image. Growing it past the number of disc sectors it originally occupied shifts every file after it and corrupts the disc layout.
+- **A note asks for more pitch than the SPU can play.** The pitch register saturates at 4.0× speed. Notes past that stop getting higher, so the affected note and every one above it collapse onto the same pitch and the part goes flat. Raising an instrument's base pitch is what brings this into range — doubling it halves the headroom. Stock songs sit about an octave clear of the ceiling.
 
 Whenever you make an edit that would break one of these limits - replacing a sequence, importing a MIDI, adding or replacing a sample or bank, or saving a file that has grown too large - the editor warns you and lets you continue anyway (so you can keep working and fix it later, or rebuild the disc image yourself).
 
@@ -436,6 +453,8 @@ Diagnose > Diagnose HOWL File runs every engine-limit check over the whole file 
 - Songs too big for the game's song buffer
 - Level banks whose combined samples overflow SPU sound memory
 - Songs that reference a sample id that doesn't exist, or one missing from the level's own banks
+- **Banks whose samples are cut at the wrong offset** — the damage left behind when a shared sample was resized on behalf of another bank (see [Replacing a Shared Sample](#replacing-a-shared-sample)). Worth running on any file edited before this check existed, since the symptom shows up in a bank you never opened.
+- **Notes that ask for more pitch than the console can play** — the SPU tops out at 4.0× speed, so a note past that plays flat and drags every higher note onto the same pitch
 - Banks or songs whose data can't be read
 - A file that has grown past the disc slot it was loaded from
 

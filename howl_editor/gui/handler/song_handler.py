@@ -270,18 +270,20 @@ class SongHandler:
 
         max_spu = len(self._w.hwl.spu_addrs) if self._w.hwl else 0
         bank_order = None
-        spu_rates = None
+        spu_pitches = None
+
         if self._w._sample_lookup is not None and self._w.hwl is not None:
-            # Rates for every referenced sample — so both the initial prefill and
-            # any later SPU change in the dialog resolve a frequency, not just
-            # the paired bank's samples.
-            spu_rates = self._w._sample_lookup.sample_rate_map(self._w.hwl) or None
+            # Base pitches for every referenced sample — so both the initial
+            # prefill and any later SPU change in the dialog resolve a pitch,
+            # not just the paired bank's samples.
+            spu_pitches = self._w._sample_lookup.sample_pitch_map(self._w.hwl) or None
             if bank_index is not None:
                 bank_order = self._w._sample_lookup.bank_spu_order(self._w.hwl, bank_index) or None
 
         dialog = ConvertMidiDialog(
-            self._w, info, max_spu, self._w._drum_names, bank_order, spu_rates,
+            self._w, info, max_spu, self._w._drum_names, bank_order, spu_pitches,
         )
+
         if dialog.exec() != QDialog.Accepted:
             return None
 

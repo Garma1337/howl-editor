@@ -10,6 +10,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
+from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.midi.models import MidiInfo, MidiTrackInfo
 
@@ -195,61 +196,71 @@ class TestBankSpuPrefill:
         assert [m.sample_id for m in dlg.get_settings().mappings] == [8, 4]
 
 
-def _freq_values(dialog: ConvertMidiDialog) -> list[int]:
+def _pitch_values(dialog: ConvertMidiDialog) -> list[int]:
     return [
         dialog.table.cellWidget(row, 3).value()
         for row in range(dialog.table.rowCount())
     ]
 
 
-class TestFrequencyPrefill:
-    """The Frequency column prefills from each prefilled SPU's known sample
-    rate, so the music maker doesn't have to look up and re-enter the rate for
-    every channel. Changing the SPU carries its rate across too."""
+class TestBasePitchPrefill:
+    """The base-pitch column prefills from the pitch each prefilled SPU is
+    already played at elsewhere in the file, so the music maker starts from a
+    value known to work. Changing the SPU carries its pitch across too.
 
-    def test_prefills_frequency_from_sample_rate(self, qt_app):
+    The column is the SPU pitch register, never a sample rate: the correct
+    value depends on the musical pitch of the recording, which the file does
+    not record, so nothing here may silently invent one."""
+
+    def test_prefills_pitch_from_referenced_pitch(self, qt_app):
         dlg = ConvertMidiDialog(
             None, _info(3), max_spu_index=99,
             bank_spu_order=[12, 7, 30],
-            spu_sample_rates={12: 22050, 7: 44100, 30: 11025},
+            spu_base_pitches={12: 2048, 7: 4096, 30: 1024},
         )
 
-        assert _freq_values(dlg) == [22050, 44100, 11025]
+        assert _pitch_values(dlg) == [2048, 4096, 1024]
 
-    def test_defaults_when_rate_unknown(self, qt_app):
-        # No rate map → every row falls back to the default rate.
+    def test_defaults_when_pitch_unknown(self, qt_app):
+        # Nothing references these SPUs → every row falls back to the default.
         dlg = ConvertMidiDialog(None, _info(2), max_spu_index=10)
 
-        assert _freq_values(dlg) == [11025, 11025]
+        assert _pitch_values(dlg) == [cseq_fmt.DEFAULT_BASE_PITCH] * 2
 
-    def test_changing_spu_updates_frequency(self, qt_app):
+    def test_changing_spu_updates_pitch(self, qt_app):
         dlg = ConvertMidiDialog(
             None, _info(1), max_spu_index=99,
             bank_spu_order=[12],
-            spu_sample_rates={12: 22050, 5: 44100},
+            spu_base_pitches={12: 2048, 5: 4096},
         )
 
         dlg.table.cellWidget(0, 2).setValue(5)
 
-        assert _freq_values(dlg) == [44100]
+        assert _pitch_values(dlg) == [4096]
 
-    def test_unknown_spu_leaves_frequency_untouched(self, qt_app):
+    def test_unknown_spu_leaves_pitch_untouched(self, qt_app):
         dlg = ConvertMidiDialog(
             None, _info(1), max_spu_index=99,
             bank_spu_order=[12],
-            spu_sample_rates={12: 22050},
+            spu_base_pitches={12: 2048},
         )
 
-        dlg.table.cellWidget(0, 2).setValue(999)  # not in the rate map
+        dlg.table.cellWidget(0, 2).setValue(999)  # nothing references it
 
-        assert _freq_values(dlg) == [22050]
+        assert _pitch_values(dlg) == [2048]
 
-    def test_settings_carry_prefilled_frequency(self, qt_app):
+    def test_settings_carry_pitch_register_unconverted(self, qt_app):
+        # The register reaches the mapping as-is — no Hz round trip to truncate.
         dlg = ConvertMidiDialog(
             None, _info(1), max_spu_index=99,
             bank_spu_order=[7],
-            spu_sample_rates={7: 44100},
+            spu_base_pitches={7: 2755},
         )
 
-        # 44100 Hz → CSEQ frequency field 4096 (44100 * 4096 / 44100).
-        assert dlg.get_settings().mappings[0].frequency == 4096
+        assert dlg.get_settings().mappings[0].frequency == 2755
+
+    def test_pitch_range_covers_the_whole_register(self, qt_app):
+        dlg = ConvertMidiDialog(None, _info(1), max_spu_index=10)
+        spin = dlg.table.cellWidget(0, 3)
+
+        assert (spin.minimum(), spin.maximum()) == (0, cseq_fmt.MAX_PITCH_REGISTER)

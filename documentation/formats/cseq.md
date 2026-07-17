@@ -65,15 +65,15 @@ packet-beta
   80-95: "sr (u16)"
 ```
 
-| Field      | Description                                                           |
-|------------|-----------------------------------------------------------------------|
-| flags      | Always 1 in original data. 1=music sample, 2=looped, 4=voice clip    |
-| volume     | Sample volume (0-255)                                                 |
-| timeToPlay | Delay before NoteOff. 0 for music, ~300 for ~1 sec                   |
-| frequency  | Base pitch. 4096 = 44100 Hz (see [howl.md](howl.md#frequency-encoding)) |
-| sampleID   | Index into HOWL SPU Address Table                                     |
-| ad         | PSX SPU ADSR Attack/Decay register value                              |
-| sr         | PSX SPU ADSR Sustain/Release register value                           |
+| Field      | Description                                                                                                                  |
+|------------|------------------------------------------------------------------------------------------------------------------------------|
+| flags      | Always 1 in original data. 1=music sample, 2=looped, 4=voice clip                                                            |
+| volume     | Sample volume (0-255)                                                                                                        |
+| timeToPlay | Delay before NoteOff. 0 for music, ~300 for ~1 sec                                                                           |
+| frequency  | Base pitch at note 60 — a speed multiplier, not a sample rate. 4096 = 1.0× (see [Pitch and Frequency](#pitch-and-frequency)) |
+| sampleID   | Index into HOWL SPU Address Table                                                                                            |
+| ad         | PSX SPU ADSR Attack/Decay register value                                                                                     |
+| sr         | PSX SPU ADSR Sustain/Release register value                                                                                  |
 
 Common ADSR values: `ad = 0x80FF`, `sr = 0x1FC2`. These can be stored as a single 32-bit value: `adsr = (sr << 16) | ad`.
 
@@ -218,11 +218,22 @@ loop:
 
 ## Pitch and Frequency
 
-Instrument frequencies use the encoding: `4096 = 44100 Hz`
+Despite the field name, `frequency` is a **playback-speed multiplier**, not a sample rate. It is the speed the sample plays at MIDI note 60, where `4096` is 1.0× — the rate at which the SPU consumes the raw data at its 44100 Hz mixing rate:
 
 ```
-frequency_hz = (internal_value / 4096) * 44100
+playback_ratio = internal_value / 4096
+frequency_hz   = (internal_value / 4096) * 44100
 internal_value = (frequency_hz * 4096) / 44100
 ```
 
-At runtime, note pitch modifies the base frequency using a lookup table indexed by note number and octave, with optional distortion modifiers.
+The Hz form describes only how fast the bytes are consumed. It does not determine what note is heard: that depends on the musical pitch recorded in the sample, which the format stores nowhere. Two instruments with identical `frequency` values sound at different pitches whenever their samples were recorded at different pitches, so a sample's correct value is not derivable from the file.
+
+At runtime the base value is scaled by the note being played, through a lookup table indexed by note number and octave, with optional distortion modifiers. The note table is unity at note 60, so an unbent note 60 resolves to the base value itself. The result is truncated to 16 bits.
+
+### Pitch ceiling
+
+The resulting value is written to the SPU voice with no software clamp, and the hardware **saturates at 0x3FFF** — 4.0× playback. This is distinct from the field's own 16-bit width: `0xFFFF` is what the format can store, `0x3FFF` is what the hardware can play.
+
+Past the ceiling a note does not fail. It stops getting higher, so it and every note above it resolve to the same 4.0× speed. Headroom depends on the base pitch: at `4096` the ceiling is reached at note 84, at `2048` at note 96, and at `1024` the note table is exhausted before the register can saturate.
+
+Because the value governs playback speed, it fixes pitch and duration together — a sample's speed can be moved between this field and the sample data itself with no audible difference.

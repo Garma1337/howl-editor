@@ -125,6 +125,8 @@ class MainWindow(QMainWindow):
         cseq_size_guard=None,
         bank_size_guard=None,
         howl_size_guard=None,
+        shared_sample_guard=None,
+        shared_sample_propagator=None,
         howl_diagnostics=None,
         diagnostics_status_provider=None,
         entry_badge_resolver=None,
@@ -180,6 +182,8 @@ class MainWindow(QMainWindow):
         self._cseq_size_guard = cseq_size_guard
         self._bank_size_guard = bank_size_guard
         self._howl_size_guard = howl_size_guard
+        self._shared_sample_guard = shared_sample_guard
+        self._shared_sample_propagator = shared_sample_propagator
         self._howl_diagnostics = howl_diagnostics
         self._diagnostics_status = diagnostics_status_provider
         self._entry_badge_resolver = entry_badge_resolver
