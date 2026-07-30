@@ -264,3 +264,58 @@ class TestBasePitchPrefill:
         spin = dlg.table.cellWidget(0, 3)
 
         assert (spin.minimum(), spin.maximum()) == (0, cseq_fmt.MAX_PITCH_REGISTER)
+
+
+def _pitch_widget(dialog: ConvertMidiDialog, row: int):
+    return dialog.table.cellWidget(row, 3)
+
+
+def _spu_widget(dialog: ConvertMidiDialog, row: int):
+    return dialog.table.cellWidget(row, 2)
+
+
+class TestPitchPrefillRespectsUserEdits:
+    """Pointing two rows at one sample at different pitches is the supported
+    way to get pitched variants of it, so the SPU column's prefill must not
+    reset a pitch the user typed."""
+
+    def test_prefills_pitch_from_spu_when_untouched(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(1), max_spu_index=10, spu_base_pitches={5: 2048},
+        )
+        _spu_widget(dlg, 0).setValue(5)
+
+        assert _pitch_widget(dlg, 0).value() == 2048
+
+    def test_does_not_clobber_a_hand_set_pitch(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(1), max_spu_index=10, spu_base_pitches={5: 2048},
+        )
+        _pitch_widget(dlg, 0).setValue(999)
+        _spu_widget(dlg, 0).setValue(5)
+
+        assert _pitch_widget(dlg, 0).value() == 999
+
+    def test_hand_set_pitch_survives_into_settings(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _info(1), max_spu_index=10, spu_base_pitches={5: 2048},
+        )
+        _pitch_widget(dlg, 0).setValue(999)
+        _spu_widget(dlg, 0).setValue(5)
+
+        settings = dlg.get_settings()
+
+        assert settings.mappings[0].sample_id == 5
+        assert settings.mappings[0].frequency == 999
+
+    def test_prefill_does_not_mark_the_row_as_user_set(self, qt_app):
+        """The prefill writes through setValue, so it must suppress the
+        signal that would otherwise flag the cell as hand-edited and freeze
+        every later prefill."""
+        dlg = ConvertMidiDialog(
+            None, _info(1), max_spu_index=10, spu_base_pitches={5: 2048, 6: 4096},
+        )
+        _spu_widget(dlg, 0).setValue(5)
+        _spu_widget(dlg, 0).setValue(6)
+
+        assert _pitch_widget(dlg, 0).value() == 4096

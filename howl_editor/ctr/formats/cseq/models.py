@@ -16,9 +16,32 @@ class CseqEventType(IntEnum):
     NOTE_ON = 0x05
     VELOCITY = 0x06
     PAN = 0x07
-    UNKNOWN_8 = 0x08
+    REVERB = 0x08
     CHANGE_PATCH = 0x09
     PITCH_BEND = 0x0A
+
+
+# The four opcodes the runtime re-applies to voices that are ALREADY sounding
+# (cseq_opcode06/07/08/0a each walk the sequence's live channels and re-flag
+# HOWL_CHANNEL_UPDATE_DYNAMIC_ATTRS). Everything else only affects notes
+# started after it. This is CTR's whole runtime-modulation surface.
+CSEQ_MODULATION_EVENTS = frozenset({
+    CseqEventType.VELOCITY,
+    CseqEventType.PAN,
+    CseqEventType.REVERB,
+    CseqEventType.PITCH_BEND,
+})
+
+# Everything the event editor is willing to touch. Beyond the modulation set
+# this adds the two note opcodes and CHANGE_PATCH, because those are what bind
+# a track to a descriptor: a drum NOTE_ON's byte IS the index into
+# Percussions[], and CHANGE_PATCH picks the entry in Instruments[]. Without
+# them a newly added descriptor is unreachable from any sequence.
+CSEQ_EDITABLE_EVENTS = CSEQ_MODULATION_EVENTS | frozenset({
+    CseqEventType.NOTE_ON,
+    CseqEventType.NOTE_OFF,
+    CseqEventType.CHANGE_PATCH,
+})
 
 
 CSEQ_EVENT_PARAMS: dict[CseqEventType, int] = {
@@ -30,7 +53,7 @@ CSEQ_EVENT_PARAMS: dict[CseqEventType, int] = {
     CseqEventType.NOTE_ON: 2,
     CseqEventType.VELOCITY: 1,
     CseqEventType.PAN: 1,
-    CseqEventType.UNKNOWN_8: 1,
+    CseqEventType.REVERB: 1,
     CseqEventType.CHANGE_PATCH: 1,
     CseqEventType.PITCH_BEND: 1,
 }

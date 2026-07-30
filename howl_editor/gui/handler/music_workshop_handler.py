@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.gui.dialog.track_events_dialog import TrackEventsDialog
+from howl_editor.gui.handler.sequence_event_editor import SequenceEventEditor
 
 
 class MusicWorkshopHandler:
@@ -50,9 +51,11 @@ class MusicWorkshopHandler:
         title = f"Song {song_index}{suffix} · Sequence {seq_index} events"
         TrackEventsDialog(
             self._w, title, cseq.songs[seq_index],
-            on_replace_track=lambda track_idx: self._w._song_handler.replace_track_from_midi(
-                song_index, seq_index, track_idx,
+            editor=SequenceEventEditor(
+                self._w._song_handler, song_index, seq_index,
             ),
+            instrument_count=len(cseq.instruments),
+            percussion_count=len(cseq.percussions),
         ).exec()
 
     def edit_instrument(self, song_index: int, inst_index: int) -> None:
@@ -60,6 +63,12 @@ class MusicWorkshopHandler:
 
     def edit_percussion(self, song_index: int, perc_index: int) -> None:
         self._w._song_handler.edit_percussion(song_index, perc_index)
+
+    def add_instrument(self, song_index: int) -> None:
+        self._w._song_handler.add_instrument(song_index)
+
+    def add_percussion(self, song_index: int) -> None:
+        self._w._song_handler.add_percussion(song_index)
 
     def retarget_instrument(self, song_index: int, inst_index: int) -> None:
         self._w._song_handler.retarget_instrument(song_index, inst_index)

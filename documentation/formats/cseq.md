@@ -169,11 +169,19 @@ packet-beta
 | 0x05  | NoteOn       | 2      | Start note. Params: pitch, velocity      |
 | 0x06  | Velocity     | 1      | Set track volume. Param: velocity        |
 | 0x07  | Pan          | 1      | Set stereo pan. Param: pan (0x80=center) |
-| 0x08  | Unknown8     | 1      | Unknown control (reverb-related?)        |
+| 0x08  | Reverb       | 1      | Set reverb level on the track's voices   |
 | 0x09  | ChangePatch  | 1      | Select instrument. Param: instrument ID  |
 | 0x0A  | PitchBend    | 1      | Bend pitch. Param: bend amount           |
 
 Terminal events (Terminator, EndTrack, EndTrack2) signal the end of event data for a track.
+
+### Runtime modulation
+
+Four opcodes — **Velocity (0x06), Pan (0x07), Reverb (0x08) and PitchBend (0x0A)** — do not only affect notes started after them. Each one walks the sequence's currently-sounding voices and re-applies itself to all of them, then flags the channel so the driver rewrites the SPU registers on its next pass. The runtime groups exactly these three attributes under `HOWL_CHANNEL_UPDATE_DYNAMIC_ATTRS` (pitch, volume, reverb; pan rides along with volume).
+
+This is CTR's entire runtime-modulation surface, and it is **step automation only** — there is no ramp, rate, depth or duration field anywhere in the format. A smooth pitch bend or volume fade is authored as a dense run of these events, one per sequencer tick.
+
+The gradual fades that do exist in game (music crossfades, the last-lap tempo change) are hardcoded engine behaviour driven from C, not sequence data, and have no representation in a CSEQ.
 
 ### NoteOn (0x05)
 
@@ -181,11 +189,29 @@ Parameters:
 - Byte 1: Pitch index (for melodic) or drum index (for percussion)
 - Byte 2: Velocity (volume, 0-255)
 
-For melodic tracks, the pitch is used to look up a frequency from a note table. For drum tracks, the pitch is a direct index into the percussion table.
+For melodic tracks, the pitch is used to look up a frequency from a note table, which scales the instrument's base pitch — so one melodic descriptor covers the whole keyboard from a single sample.
+
+For drum tracks the byte is a **direct index into the percussion table** and is never transposed: the descriptor's stored `frequency` is played as-is. Getting one drum sample to sound at several pitches therefore needs one descriptor per pitch, all pointing at the same `sample_id`. Nothing in the format forbids that reuse — the descriptor tables and the SPU address table are independent, and 28 of the 33 stock `KART.HWL` songs share a sample across percussion descriptors this way.
 
 ### ChangePatch (0x09)
 
-Sets the current instrument for subsequent NoteOn events. The parameter is an index into either the instrument table (melodic tracks) or percussion table (drum tracks).
+Sets the current instrument for subsequent NoteOn events, as an index into the instrument table.
+
+This applies to **melodic tracks only**. A drum track addresses the percussion table per note (see NoteOn above) and never reads the sequence's instrument binding, so ChangePatch on a drum track has no effect — which is why stock drum tracks carry none.
+
+### PitchBend (0x0A)
+
+The runtime calls the parameter `distort`, but it is a plain **fixed-point semitone offset with 6 fractional bits**, biased so `0x80` is neutral:
+
+```
+semitones = (value / 64) - 2
+```
+
+The engine splits it as `coarse = (value >> 6) - 2`, indexing the note-frequency table, and `fine = value & 0x3F`, indexing a 64-entry interpolation table. That table spans exactly one semitone (entry 63 gives ratio 1.0585; entry 64 would be 2^(1/12) = 1.05946), so a carry from `fine = 63` into the next coarse step is ordinary fixed-point carry, **not** a discontinuity. Treat the byte as one linear scale; do not convert the two halves separately.
+
+The byte covers −2.00 to +1.98 semitones, which happens to match a MIDI pitch wheel's default ±2 range, so wheel data maps across the full byte 1:1. Scaling must use the 256-step span rather than the inclusive maximum of 255 — dividing by 255 puts a centered wheel on 127 instead of `0x80` and detunes the track about 1.6 cents flat.
+
+Drum voices take a different path: their fixed pitch is multiplied by a separate 256-entry table instead of being transposed.
 
 ## Variable-Length Quantity (VLQ)
 

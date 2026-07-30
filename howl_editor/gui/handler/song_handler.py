@@ -4,6 +4,10 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QInputDialog
 
+from howl_editor.ctr.formats.cseq import format as cseq_fmt
+from howl_editor.ctr.formats.cseq.models import (
+    CseqEventType, CseqInstrument, CseqSong,
+)
 from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.ps1 import spu
@@ -487,6 +491,186 @@ class SongHandler:
             self._w._notify(f"{kind.capitalize()} {entry_index} now points at SPU #{new_id}")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Retarget failed:\n{e}")
+
+    def edit_track_event(
+        self, song_index: int, seq_index: int, track_index: int,
+        event_index: int, pitch: int, velocity: int, delta: int,
+    ) -> CseqSong | None:
+        """Change one event's parameters. Returns the re-read sequence so the
+        events dialog can refresh in place, or None if the edit failed."""
+        return self._mutate_event(
+            song_index, seq_index,
+            lambda blob: self._w._cseq_editor.update_event(
+                blob, seq_index, track_index, event_index, pitch, velocity, delta,
+            ),
+            f"Edit event {event_index} on track {track_index}",
+        )
+
+    def insert_track_event(
+        self, song_index: int, seq_index: int, track_index: int,
+        event_index: int, event_type: CseqEventType, pitch: int,
+        velocity: int, delta: int,
+    ) -> CseqSong | None:
+        return self._mutate_event(
+            song_index, seq_index,
+            lambda blob: self._w._cseq_editor.insert_event(
+                blob, seq_index, track_index, event_index, event_type,
+                pitch, velocity, delta,
+            ),
+            f"Insert {event_type.name} on track {track_index}",
+        )
+
+    def delete_track_event(
+        self, song_index: int, seq_index: int, track_index: int, event_index: int,
+    ) -> CseqSong | None:
+        return self._mutate_event(
+            song_index, seq_index,
+            lambda blob: self._w._cseq_editor.delete_event(
+                blob, seq_index, track_index, event_index,
+            ),
+            f"Delete event {event_index} on track {track_index}",
+        )
+
+    def _mutate_event(
+        self, song_index: int, seq_index: int, mutate, description: str,
+    ) -> CseqSong | None:
+        """Shared plumbing for the three event edits: apply, size-check, push
+        an undo entry, then hand back the re-read sequence."""
+        if not self._w.hwl:
+            return None
+
+        try:
+            new_blob = mutate(self._w.hwl.songs[song_index])
+
+            if not self._cseq_within_limit(new_blob):
+                return None
+
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, description, HowlCollection.SONGS, song_index, new_blob,
+            ))
+            self._w._notify(description)
+
+            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            return cseq.songs[seq_index] if seq_index < len(cseq.songs) else None
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Event edit failed:\n{e}")
+            return None
+
+    def add_instrument(self, song_index: int):
+        """Append a melodic instrument descriptor to a song."""
+        self._add_descriptor(song_index, percussion=False)
+
+    def add_percussion(self, song_index: int):
+        """Append a percussion descriptor to a song."""
+        self._add_descriptor(song_index, percussion=True)
+
+    def _add_descriptor(self, song_index: int, percussion: bool):
+        """Pick a sample and a base pitch, then append a new descriptor.
+
+        Deliberately allows picking a sample another descriptor already uses:
+        that is how one sample gets sounded at several pitches (a drum track's
+        note byte indexes the percussion table directly and never transposes,
+        so pitched variants need one descriptor each). The ADPCM is not
+        copied — only the 8/12-byte descriptor is added.
+        """
+        if not self._w.hwl:
+            return
+
+        kind = "percussion" if percussion else "instrument"
+
+        try:
+            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            table = cseq.percussions if percussion else cseq.instruments
+
+            picker = SelectSampleDialog(
+                self._w,
+                title=f"Pick sample for new {kind}",
+                prompt=(
+                    f"Select which SPU sample the new {kind} should point at. "
+                    f"Picking one that is already in use is fine — it will be "
+                    f"reused, not copied."
+                ),
+                choices=self._build_sample_choices(),
+                current_spu_index=None,
+                on_preview=self._preview_sample,
+            )
+
+            if picker.exec() != QDialog.Accepted:
+                return
+
+            sample_id = picker.chosen_spu_index()
+
+            if sample_id is None:
+                return
+
+            new_index = len(table)
+            existing = self._descriptors_using(table, sample_id)
+            dialog = EditInstrumentDialog(
+                self._w,
+                title=f"New {kind.capitalize()}",
+                subject_label=self._new_descriptor_blurb(
+                    kind, new_index, sample_id, existing,
+                ),
+                initial_volume=cseq_fmt.MAX_VOLUME,
+                initial_frequency=self._seed_pitch_for(table, sample_id),
+                initial_adsr=None if percussion else CseqInstrument().adsr,
+            )
+
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            result = dialog.chosen()
+            song_blob = self._w.hwl.songs[song_index]
+
+            if percussion:
+                new_blob = self._w._cseq_editor.append_percussion(
+                    song_blob, sample_id, result.volume, result.frequency,
+                )
+            else:
+                new_blob = self._w._cseq_editor.append_instrument(
+                    song_blob, sample_id, result.volume, result.frequency, result.adsr,
+                )
+
+            if not self._cseq_within_limit(new_blob):
+                return
+
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, f"Add {kind} {new_index} to Song {song_index}",
+                HowlCollection.SONGS, song_index, new_blob,
+            ))
+            self._w._notify(
+                f"Added {kind} {new_index} (SPU #{sample_id}) to song {song_index}",
+            )
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Could not add {kind}:\n{e}")
+
+    def _descriptors_using(self, table, sample_id: int) -> list[int]:
+        return [i for i, entry in enumerate(table) if entry.sample_id == sample_id]
+
+    def _seed_pitch_for(self, table, sample_id: int) -> int:
+        """Start from the pitch an existing descriptor already plays this
+        sample at, so the user edits away from something audible rather than
+        from a guess. Falls back to the neutral default for an unused sample."""
+        for entry in table:
+            if entry.sample_id == sample_id:
+                return entry.frequency
+
+        return cseq_fmt.DEFAULT_BASE_PITCH
+
+    def _new_descriptor_blurb(
+        self, kind: str, new_index: int, sample_id: int, existing: list[int],
+    ) -> str:
+        base = f"New {kind} {new_index} → SPU #{sample_id}"
+
+        if not existing:
+            return base
+
+        shared = ", ".join(str(i) for i in existing)
+        return (
+            f"{base}<br><br>SPU #{sample_id} is already used by {kind} "
+            f"{shared}. The sample is shared, not duplicated — give this one a "
+            f"different pitch to get a second pitched variant of it."
+        )
 
     def _preview_sample(self, spu_index: int) -> None:
         """Audition a candidate sample straight from the retarget picker, at

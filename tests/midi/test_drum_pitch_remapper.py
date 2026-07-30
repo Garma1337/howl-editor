@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+import pytest
+
 from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
 
 
@@ -63,7 +65,5 @@ class TestRemap:
         assert remapper.remap(42, table) == 2
 
     def test_raises_when_pitch_not_in_table(self):
-        import pytest
-
         with pytest.raises(ValueError):
             DrumPitchRemapper().remap(99, [36, 38])

@@ -134,7 +134,12 @@ class CseqReader:
         try:
             evt_type = CseqEventType(evt_byte)
         except ValueError:
-            return CseqEvent(delta=delta, event_type=CseqEventType.END_TRACK), pos
+            raise ValueError(
+                f"Unknown CSEQ opcode 0x{evt_byte:02X} at offset {pos - 1}. "
+                f"The event stream is corrupt or misaligned; refusing to parse "
+                f"further because re-serialising would discard the rest of the "
+                f"track.",
+            ) from None
 
         pitch = 0
         velocity = 0

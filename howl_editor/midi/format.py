@@ -7,6 +7,12 @@
 CC_VOLUME = 7
 CC_PAN = 10
 
+# GM "Effects 1 Depth" is the conventional reverb-send controller, so CSEQ's
+# REVERB (0x08) round-trips through it. Nothing in GM matches CTR's per-voice
+# SPU reverb exactly — this is a carrier so the event survives a DAW round
+# trip, not a claim that a DAW will reproduce the console's reverb.
+CC_REVERB = 91
+
 # MIDI controller values are 7-bit.
 CC_MAX = 127
 

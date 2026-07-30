@@ -409,3 +409,198 @@ class TestMoveSequence:
 
         with pytest.raises(IndexError):
             cseq_editor_svc.move_sequence(blob, -1, 0)
+
+
+def _make_event_song(*events: CseqEvent) -> CseqSong:
+    """A one-track song whose event list is exactly what was passed, with the
+    terminator appended."""
+    track = CseqTrack(events=[*events, CseqEvent(event_type=CseqEventType.END_TRACK)])
+    return CseqSong(bpm=120, tpqn=480, tracks=[track])
+
+
+class TestAppendDescriptor:
+
+    def test_appends_percussion(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_song())
+
+        new_blob = cseq_editor_svc.append_percussion(blob, sample_id=7, volume=200, frequency=0x800)
+        parsed = cseq_reader.read(new_blob)
+
+        assert len(parsed.percussions) == 1
+        assert parsed.percussions[0].sample_id == 7
+        assert parsed.percussions[0].volume == 200
+        assert parsed.percussions[0].frequency == 0x800
+
+    def test_two_percussions_may_share_one_sample_at_different_pitches(
+        self, cseq_editor_svc, cseq_reader,
+    ):
+        """The whole point of the feature: one ADPCM blob, two pitched
+        variants, addressed by drum index."""
+        blob = _make_cseq_blob(_make_song())
+
+        blob = cseq_editor_svc.append_percussion(blob, sample_id=447, volume=255, frequency=1024)
+        blob = cseq_editor_svc.append_percussion(blob, sample_id=447, volume=255, frequency=767)
+        parsed = cseq_reader.read(blob)
+
+        assert [p.sample_id for p in parsed.percussions] == [447, 447]
+        assert [p.frequency for p in parsed.percussions] == [1024, 767]
+
+    def test_appends_instrument_with_adsr(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_song())
+
+        new_blob = cseq_editor_svc.append_instrument(
+            blob, sample_id=3, volume=128, frequency=0x1000, adsr=0x12345678,
+        )
+        parsed = cseq_reader.read(new_blob)
+
+        assert len(parsed.instruments) == 1
+        assert parsed.instruments[0].sample_id == 3
+        assert parsed.instruments[0].adsr == 0x12345678
+
+    def test_instrument_adsr_defaults_when_omitted(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_song())
+
+        new_blob = cseq_editor_svc.append_instrument(blob, sample_id=0, volume=255, frequency=0x1000)
+        parsed = cseq_reader.read(new_blob)
+
+        assert parsed.instruments[0].adsr == CseqInstrument().adsr
+
+    def test_clamps_out_of_range_values(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_song())
+
+        new_blob = cseq_editor_svc.append_percussion(
+            blob, sample_id=1, volume=9999, frequency=-5,
+        )
+        parsed = cseq_reader.read(new_blob)
+
+        assert parsed.percussions[0].volume == 255
+        assert parsed.percussions[0].frequency == 0
+
+    def test_preserves_existing_descriptors(self, cseq_editor_svc, cseq_reader):
+        cseq = CseqFile(
+            instruments=[CseqInstrument(sample_id=5)],
+            percussions=[CseqPercussion(sample_id=9)],
+            songs=[_make_song()],
+        )
+        blob = CseqWriter(VlqCodec()).serialize(cseq)
+
+        new_blob = cseq_editor_svc.append_percussion(blob, sample_id=1, volume=1, frequency=1)
+        parsed = cseq_reader.read(new_blob)
+
+        assert [i.sample_id for i in parsed.instruments] == [5]
+        assert [p.sample_id for p in parsed.percussions] == [9, 1]
+
+
+class TestUpdateEvent:
+
+    def test_updates_pitch_bend_value(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_event_song(
+            CseqEvent(delta=0, event_type=CseqEventType.PITCH_BEND, pitch=128),
+        ))
+
+        new_blob = cseq_editor_svc.update_event(blob, 0, 0, 0, pitch=192)
+        events = cseq_reader.read(new_blob).songs[0].tracks[0].events
+
+        assert events[0].pitch == 192
+
+    def test_updates_note_on_pitch_and_velocity(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_event_song(
+            CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=13, velocity=100),
+        ))
+
+        new_blob = cseq_editor_svc.update_event(blob, 0, 0, 0, pitch=14, velocity=90)
+        events = cseq_reader.read(new_blob).songs[0].tracks[0].events
+
+        assert events[0].pitch == 14
+        assert events[0].velocity == 90
+
+    def test_velocity_ignored_on_single_param_event(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_event_song(
+            CseqEvent(delta=0, event_type=CseqEventType.PAN, pitch=128),
+        ))
+
+        new_blob = cseq_editor_svc.update_event(blob, 0, 0, 0, pitch=200, velocity=55)
+        events = cseq_reader.read(new_blob).songs[0].tracks[0].events
+
+        assert events[0].pitch == 200
+        assert events[0].velocity == 0
+
+    def test_refuses_terminal_event(self, cseq_editor_svc):
+        blob = _make_cseq_blob(_make_event_song())
+
+        with pytest.raises(ValueError, match="does not touch"):
+            cseq_editor_svc.update_event(blob, 0, 0, 0, pitch=1)
+
+    def test_out_of_range_event_raises(self, cseq_editor_svc):
+        blob = _make_cseq_blob(_make_event_song())
+
+        with pytest.raises(IndexError):
+            cseq_editor_svc.update_event(blob, 0, 0, 99, pitch=1)
+
+
+class TestInsertEvent:
+
+    def test_inserts_before_index(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_event_song(
+            CseqEvent(delta=10, event_type=CseqEventType.NOTE_ON, pitch=1, velocity=99),
+        ))
+
+        new_blob = cseq_editor_svc.insert_event(
+            blob, 0, 0, 0, CseqEventType.PITCH_BEND, pitch=160, delta=0,
+        )
+        events = cseq_reader.read(new_blob).songs[0].tracks[0].events
+
+        assert events[0].event_type == CseqEventType.PITCH_BEND
+        assert events[0].pitch == 160
+        assert events[1].event_type == CseqEventType.NOTE_ON
+
+    def test_zero_delta_leaves_following_timing_untouched(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_event_song(
+            CseqEvent(delta=10, event_type=CseqEventType.NOTE_ON, pitch=1, velocity=99),
+        ))
+
+        new_blob = cseq_editor_svc.insert_event(
+            blob, 0, 0, 0, CseqEventType.PAN, pitch=64, delta=0,
+        )
+        events = cseq_reader.read(new_blob).songs[0].tracks[0].events
+
+        assert events[1].delta == 10
+
+    def test_refuses_terminal_type(self, cseq_editor_svc):
+        blob = _make_cseq_blob(_make_event_song())
+
+        with pytest.raises(ValueError, match="not an insertable event"):
+            cseq_editor_svc.insert_event(
+                blob, 0, 0, 0, CseqEventType.END_TRACK, pitch=0,
+            )
+
+
+class TestDeleteEvent:
+
+    def test_deletes_event(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_event_song(
+            CseqEvent(delta=0, event_type=CseqEventType.PAN, pitch=64),
+            CseqEvent(delta=5, event_type=CseqEventType.NOTE_ON, pitch=1, velocity=99),
+        ))
+
+        new_blob = cseq_editor_svc.delete_event(blob, 0, 0, 0)
+        events = cseq_reader.read(new_blob).songs[0].tracks[0].events
+
+        assert events[0].event_type == CseqEventType.NOTE_ON
+
+    def test_folds_delta_into_next_event(self, cseq_editor_svc, cseq_reader):
+        blob = _make_cseq_blob(_make_event_song(
+            CseqEvent(delta=7, event_type=CseqEventType.PAN, pitch=64),
+            CseqEvent(delta=5, event_type=CseqEventType.NOTE_ON, pitch=1, velocity=99),
+        ))
+
+        new_blob = cseq_editor_svc.delete_event(blob, 0, 0, 0)
+        events = cseq_reader.read(new_blob).songs[0].tracks[0].events
+
+        assert events[0].delta == 12
+
+    def test_refuses_terminal_event(self, cseq_editor_svc):
+        blob = _make_cseq_blob(_make_event_song())
+
+        with pytest.raises(ValueError, match="does not touch"):
+            cseq_editor_svc.delete_event(blob, 0, 0, 0)

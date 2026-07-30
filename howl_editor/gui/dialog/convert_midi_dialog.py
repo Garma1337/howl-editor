@@ -23,6 +23,8 @@ _COL_SPU = 2
 _COL_PITCH = 3
 _COL_DRUM = 4
 
+_USER_SET_PITCH = "userSetPitch"
+
 
 @dataclass
 class ConvertRowMeta:
@@ -194,6 +196,9 @@ class ConvertMidiDialog(QDialog):
         )
         self.table.setCellWidget(row, _COL_PITCH, pitch_spin)
 
+        pitch_spin.valueChanged.connect(
+            lambda _value, ps=pitch_spin: ps.setProperty(_USER_SET_PITCH, True),
+        )
         spu_spin.valueChanged.connect(
             lambda value, ps=pitch_spin: self._sync_pitch_to_spu(value, ps),
         )
@@ -257,10 +262,23 @@ class ConvertMidiDialog(QDialog):
         return self._spu_base_pitches.get(spu, cseq_fmt.DEFAULT_BASE_PITCH)
 
     def _sync_pitch_to_spu(self, spu: int, pitch_spin: QSpinBox) -> None:
-        """Carry a newly chosen SPU's existing base pitch across, but only when
-        it has one — otherwise leave whatever the user has entered."""
-        if spu in self._spu_base_pitches:
-            pitch_spin.setValue(self._spu_base_pitches[spu])
+        """Carry a newly chosen SPU's existing base pitch across, but never
+        over a pitch the user set by hand.
+
+        Rows deliberately pointed at the same sample at different pitches are
+        the supported way to get pitched variants of one sample, so silently
+        resetting an edited pitch when the SPU changes would fight exactly the
+        workflow this dialog needs to support. Once a row's pitch has been
+        touched, it is the user's."""
+        if spu not in self._spu_base_pitches:
+            return
+
+        if pitch_spin.property(_USER_SET_PITCH):
+            return
+
+        previous = pitch_spin.blockSignals(True)
+        pitch_spin.setValue(self._spu_base_pitches[spu])
+        pitch_spin.blockSignals(previous)
 
     def _default_spu_for_row(self, row: int) -> int:
         """Prefill SPU sample IDs so a music maker can usually accept the

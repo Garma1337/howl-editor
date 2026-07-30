@@ -7,6 +7,11 @@ import pytest
 from howl_editor.ctr.formats.cseq.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument,
 )
+from howl_editor.core.vlq import VlqCodec
+from howl_editor.ctr.formats.cseq.writer import CseqWriter
+from howl_editor.midi import format as midi_fmt
+from howl_editor.midi.converter import MidiConverter
+from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
 from howl_editor.midi.exporter import CseqMidiExporter, MidiExportOptions
 
 try:
@@ -298,3 +303,43 @@ class TestApplyInstrumentVolume:
         cc = [m for m in mid.tracks[1] if m.type == "control_change" and m.control == 7]
 
         assert cc == []
+
+
+class TestPitchBendScaling:
+
+    def test_neutral_bend_round_trips_to_centered_wheel(self, exporter):
+        """CSEQ's neutral distort is 0x80. Scaling by 255 rather than the
+        256-step span used to export it as +33 instead of a centered wheel."""
+        assert exporter._cseq_bend_to_midi(0x80) == 0
+
+        converter = MidiConverter(CseqWriter(VlqCodec()), DrumPitchRemapper())
+        assert converter._midi_bend_to_cseq(0) == 0x80
+
+    def test_bend_round_trips_across_the_range(self, exporter):
+        converter = MidiConverter(CseqWriter(VlqCodec()), DrumPitchRemapper())
+
+        for distort in (0, 1, 64, 128, 192, 255):
+            assert converter._midi_bend_to_cseq(exporter._cseq_bend_to_midi(distort)) == distort
+
+    def test_bend_stays_in_legal_wheel_range(self, exporter):
+        for distort in range(256):
+            wheel = exporter._cseq_bend_to_midi(distort)
+            assert -8192 <= wheel <= 8191
+
+
+class TestReverbExport:
+
+    def test_reverb_event_becomes_cc91(self, exporter):
+        cseq = CseqFile(songs=[CseqSong(bpm=120, tpqn=480, tracks=[CseqTrack(events=[
+            CseqEvent(delta=0, event_type=CseqEventType.REVERB, pitch=255),
+            CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+        ])])])
+
+        mid = mido.MidiFile(file=io.BytesIO(exporter.export(cseq)))
+        controls = [
+            m for track in mid.tracks for m in track
+            if m.type == "control_change" and m.control == midi_fmt.CC_REVERB
+        ]
+
+        assert len(controls) == 1
+        assert controls[0].value == 127

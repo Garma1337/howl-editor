@@ -2,6 +2,8 @@
 
 from struct import pack, pack_into
 
+from pathlib import Path
+
 import pytest
 
 from howl_editor.audio.wav_writer import WavWriter
@@ -116,7 +118,6 @@ def track_mask_layout():
 
 @pytest.fixture
 def stylesheet_loader():
-    from pathlib import Path
     qss_dir = Path(__file__).resolve().parent.parent / "howl_editor" / "gui" / "templates" / "qss"
     return StylesheetLoader(qss_dir)
 

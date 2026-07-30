@@ -1,5 +1,7 @@
 # coding: utf-8
 
+from struct import pack
+
 from struct import unpack_from
 
 from howl_editor.audio.wav_writer import WavWriter
@@ -373,7 +375,6 @@ class TestMixPcmStreams:
         renderer = _renderer()
         # Two stereo streams, one stereo sample each. L+L, R+R.
         # Stream A: L=100, R=200. Stream B: L=50, R=-100.
-        from struct import pack
         a = pack("<hh", 100, 200)
         b = pack("<hh", 50, -100)
 
@@ -385,7 +386,6 @@ class TestMixPcmStreams:
 
     def test_clamps_to_int16(self):
         renderer = _renderer()
-        from struct import pack
         # Two streams that would overflow int16 if summed.
         a = pack("<hh", 30000, -30000)
         b = pack("<hh", 30000, -30000)
@@ -398,7 +398,6 @@ class TestMixPcmStreams:
 
     def test_pads_shorter_streams(self):
         renderer = _renderer()
-        from struct import pack
         # Long stream: 2 stereo samples. Short stream: 1 stereo sample.
         long_stream = pack("<hhhh", 100, 100, 200, 200)
         short_stream = pack("<hh", 50, 50)

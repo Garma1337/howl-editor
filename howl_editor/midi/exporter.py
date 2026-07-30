@@ -179,6 +179,12 @@ class CseqMidiExporter:
                 value=self._cseq_cc_to_midi(event.pitch), channel=channel, time=delta,
             )
 
+        if et == CseqEventType.REVERB:
+            return mido.Message(
+                MidoMessageType.CONTROL_CHANGE, control=midi_fmt.CC_REVERB,
+                value=self._cseq_cc_to_midi(event.pitch), channel=channel, time=delta,
+            )
+
         if et == CseqEventType.PITCH_BEND:
             return mido.Message(
                 MidoMessageType.PITCHWHEEL,
@@ -216,4 +222,9 @@ class CseqMidiExporter:
         return max(0, min(midi_fmt.CC_MAX, scaled))
 
     def _cseq_bend_to_midi(self, cseq_value: int) -> int:
-        return int(cseq_value / cseq_fmt.MAX_PITCH_BEND * midi_fmt.PITCH_BEND_RANGE) - midi_fmt.PITCH_BEND_CENTER
+        """Inverse of MidiConverter._midi_bend_to_cseq. Divides by the 256-step
+        span so CSEQ's neutral 0x80 comes back as a centered wheel (0) instead
+        of the +33 that dividing by 255 produced."""
+        scaled = int(cseq_value / cseq_fmt.PITCH_BEND_STEPS * midi_fmt.PITCH_BEND_RANGE)
+        centered = scaled - midi_fmt.PITCH_BEND_CENTER
+        return max(-midi_fmt.PITCH_BEND_CENTER, min(midi_fmt.PITCH_BEND_CENTER - 1, centered))

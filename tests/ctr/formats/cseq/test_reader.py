@@ -5,6 +5,8 @@ import pytest
 from howl_editor.ctr.formats.cseq.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, CseqPercussion, CseqInfo
 )
+from howl_editor.core.vlq import VlqCodec
+from howl_editor.ctr.formats.cseq.writer import CseqWriter
 from tests.conftest import build_cseq_bytes
 
 
@@ -148,3 +150,23 @@ class TestAlignTo:
 
     def test_zero_aligned(self, cseq_reader):
         assert cseq_reader._align_to(0, 4) == 0
+
+
+class TestUnknownOpcode:
+
+    def test_unknown_opcode_raises_instead_of_truncating(self, cseq_reader):
+        """A byte outside 0x00..0x0A used to become a synthetic END_TRACK,
+        which broke the parse loop and silently dropped the rest of the track
+        — invisible until the blob was written back out short."""
+        song = CseqSong(bpm=120, tpqn=480, tracks=[CseqTrack(events=[
+            CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=1, velocity=99),
+            CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+        ])])
+        blob = bytearray(CseqWriter(VlqCodec()).serialize(CseqFile(songs=[song])))
+
+        # Corrupt the NOTE_ON opcode byte into an undefined one.
+        note_on_pos = blob.index(bytes([CseqEventType.NOTE_ON, 1, 99]))
+        blob[note_on_pos] = 0x7F
+
+        with pytest.raises(ValueError, match="Unknown CSEQ opcode 0x7F"):
+            cseq_reader.read(bytes(blob))

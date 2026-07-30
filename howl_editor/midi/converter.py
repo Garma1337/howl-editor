@@ -296,6 +296,12 @@ class MidiConverter:
                     pitch=self._midi_cc_to_cseq_byte(msg.value),
                 )
 
+            if msg.control == midi_fmt.CC_REVERB:
+                return CseqEvent(
+                    delta=delta, event_type=CseqEventType.REVERB,
+                    pitch=self._midi_cc_to_cseq_byte(msg.value),
+                )
+
         if msg.type == MidoMessageType.PITCHWHEEL:
             bend = self._midi_bend_to_cseq(msg.pitch)
             return CseqEvent(delta=delta, event_type=CseqEventType.PITCH_BEND, pitch=bend)
@@ -303,7 +309,16 @@ class MidiConverter:
         return None
 
     def _midi_bend_to_cseq(self, midi_pitch: int) -> int:
-        return max(0, min(cseq_fmt.MAX_PITCH_BEND, int((midi_pitch + midi_fmt.PITCH_BEND_CENTER) / midi_fmt.PITCH_BEND_RANGE * cseq_fmt.MAX_PITCH_BEND)))
+        """Map a mido pitch wheel (−8192…8191) onto CSEQ's distort byte.
+
+        Both sides span ±2 semitones, so this is a straight linear rescale.
+        Scaling by PITCH_BEND_STEPS (256) rather than the inclusive maximum
+        (255) is what puts a centered wheel exactly on 0x80 — dividing by 255
+        lands it on 127 and detunes every imported track ~1.6 cents flat.
+        """
+        unsigned = midi_pitch + midi_fmt.PITCH_BEND_CENTER
+        scaled = int(unsigned / midi_fmt.PITCH_BEND_RANGE * cseq_fmt.PITCH_BEND_STEPS)
+        return max(0, min(cseq_fmt.MAX_PITCH_BEND, scaled))
 
     def _midi_cc_to_cseq_byte(self, midi_value: int) -> int:
         clamped = max(0, min(midi_fmt.CC_MAX, midi_value))

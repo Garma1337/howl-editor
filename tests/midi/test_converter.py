@@ -6,9 +6,13 @@ import pytest
 
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
-from howl_editor.ctr.formats.cseq.models import CseqEventType
+from howl_editor.ctr.formats.cseq.editor import CseqEditor
+from howl_editor.ctr.formats.cseq.models import (
+    CseqEvent, CseqEventType, CseqFile, CseqSong, CseqTrack,
+)
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.writer import CseqWriter
+from howl_editor.midi import format as midi_fmt
 from howl_editor.midi.converter import MidiConverter
 from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
 from howl_editor.midi.models import (
@@ -469,8 +473,6 @@ class TestExtractTrackEvents:
 def _mask_song(bpm, num_tracks):
     """A stand-in mask sequence: `num_tracks` tracks, each with a handful of
     note events, matching the shape of an Aku Aku / Uka Uka mask sub-song."""
-    from howl_editor.ctr.formats.cseq.models import CseqSong, CseqTrack, CseqEvent
-
     tracks = []
     for t in range(num_tracks):
         events = [CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=t)]
@@ -489,9 +491,6 @@ class TestMidiIntoMaskSequence:
     sequence must leave the two masks untouched."""
 
     def test_replacing_main_sequence_preserves_masks(self, tmp_path):
-        from howl_editor.ctr.formats.cseq.editor import CseqEditor
-        from howl_editor.ctr.formats.cseq.models import CseqFile
-
         vlq = VlqCodec()
         writer = CseqWriter(vlq)
         reader = _reader()
@@ -515,3 +514,26 @@ class TestMidiIntoMaskSequence:
         assert parsed.songs[0].bpm == 100
         assert [len(t.events) for t in parsed.songs[1].tracks] == [len(t.events) for t in original.songs[1].tracks]
         assert [len(t.events) for t in parsed.songs[2].tracks] == [len(t.events) for t in original.songs[2].tracks]
+
+
+class TestReverbImport:
+
+    def test_cc91_becomes_reverb_event(self, tmp_path):
+        mid = mido.MidiFile()
+        track = mido.MidiTrack()
+        track.append(mido.Message("note_on", note=60, velocity=100, time=0))
+        track.append(mido.Message(
+            "control_change", control=midi_fmt.CC_REVERB, value=127, time=10,
+        ))
+        track.append(mido.Message("note_off", note=60, velocity=0, time=10))
+        mid.tracks.append(track)
+
+        path = tmp_path / "reverb.mid"
+        mid.save(str(path))
+
+        converter = MidiConverter(CseqWriter(VlqCodec()), DrumPitchRemapper())
+        events = converter.extract_track_events(path, 0, instrument_index=0)
+        kinds = [e.event_type for e in events]
+
+        assert CseqEventType.REVERB in kinds
+        assert events[kinds.index(CseqEventType.REVERB)].pitch == 255

@@ -324,6 +324,8 @@ class MainWindow(QMainWindow):
         self.music_workshop.sig_edit_percussion.connect(h.edit_percussion)
         self.music_workshop.sig_retarget_instrument.connect(h.retarget_instrument)
         self.music_workshop.sig_retarget_percussion.connect(h.retarget_percussion)
+        self.music_workshop.sig_add_instrument.connect(h.add_instrument)
+        self.music_workshop.sig_add_percussion.connect(h.add_percussion)
         self.music_workshop.sig_replace_sample.connect(h.replace_sample)
         self.music_workshop.sig_copy_sample.connect(h.copy_sample)
         self.music_workshop.sig_export_sample.connect(h.export_sample)

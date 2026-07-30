@@ -344,7 +344,7 @@ This is useful when debugging an imported MIDI ("why is this track empty?") or j
 
 #### Replacing One Track from MIDI
 
-Inside the **Inspect events** dialog there's a **🎼 Replace selected track from MIDI…** button. Pick the track on the left, click the button, and you can pick a MIDI file (and a track inside it if there's more than one) whose events will overwrite the CSEQ track you had selected. The track's flags (drum/melodic) and instrument binding stay put — only the event stream changes.
+Inside the **Inspect events** dialog there's a **🎼 Replace from MIDI…** button. Pick the track on the left, click the button, and you can pick a MIDI file (and a track inside it if there's more than one) whose events will overwrite the CSEQ track you had selected. The track's flags (drum/melodic) and instrument binding stay put — only the event stream changes.
 
 MIDI pitches pass through unchanged; for drum tracks this means the MIDI's note numbers must already match your percussion table indices (otherwise the wrong drum slots will fire). For melodic tracks this is rarely an issue.
 

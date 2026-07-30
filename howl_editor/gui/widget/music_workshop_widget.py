@@ -1,5 +1,7 @@
 # coding: utf-8
 
+import math
+
 from dataclasses import dataclass
 from html import escape
 
@@ -54,6 +56,8 @@ class MusicWorkshopWidget(QWidget):
     sig_edit_percussion = Signal(int, int)       # song_index, perc_index
     sig_retarget_instrument = Signal(int, int)   # song_index, inst_index
     sig_retarget_percussion = Signal(int, int)   # song_index, perc_index
+    sig_add_instrument = Signal(int)             # song_index
+    sig_add_percussion = Signal(int)             # song_index
 
     def __init__(
         self,
@@ -419,6 +423,28 @@ class MusicWorkshopWidget(QWidget):
         layout.addStretch(1)
         return wrap
 
+    def _build_section_header(
+        self, heading_text: str, button_text: str, tooltip: str, on_click,
+    ) -> QHBoxLayout:
+        """Section title with its own Add button on the right. Built as a
+        layout (not a widget) so it sits flush with the table below it, and
+        placed before the empty-state early return so an empty song can still
+        be populated."""
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+
+        heading = QLabel(heading_text)
+        heading.setObjectName("workshopSectionLabel")
+        row.addWidget(heading)
+        row.addStretch(1)
+
+        button = QPushButton(button_text)
+        button.setToolTip(tooltip)
+        button.clicked.connect(on_click)
+        row.addWidget(button)
+
+        return row
+
     def _build_instruments_section(
         self, song_index: int, instruments: list[CseqInstrument],
     ) -> QWidget:
@@ -427,9 +453,14 @@ class MusicWorkshopWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        heading = QLabel(f"Instruments ({len(instruments)})")
-        heading.setObjectName("workshopSectionLabel")
-        layout.addWidget(heading)
+        layout.addLayout(self._build_section_header(
+            f"Instruments ({len(instruments)})",
+            "➕  Add instrument…",
+            "Add a melodic instrument descriptor. Pointing it at a sample "
+            "another instrument already uses reuses that sample rather than "
+            "copying it.",
+            lambda s=song_index: self.sig_add_instrument.emit(s),
+        ))
 
         if not instruments:
             layout.addWidget(self._build_empty_label("No melodic instruments in this song."))
@@ -470,9 +501,14 @@ class MusicWorkshopWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        heading = QLabel(f"Percussion ({len(percussions)})")
-        heading.setObjectName("workshopSectionLabel")
-        layout.addWidget(heading)
+        layout.addLayout(self._build_section_header(
+            f"Percussion ({len(percussions)})",
+            "➕  Add percussion…",
+            "Add a percussion descriptor. Several descriptors may share one "
+            "sample at different pitches — that is how CTR gets pitched "
+            "variants of a single drum hit without a second copy of it.",
+            lambda s=song_index: self.sig_add_percussion.emit(s),
+        ))
 
         if not percussions:
             layout.addWidget(self._build_empty_label("No percussion in this song."))
@@ -597,7 +633,6 @@ class MusicWorkshopWidget(QWidget):
         if hz <= 0:
             return "—"
 
-        import math
         midi = 69 + 12 * math.log2(hz / 440.0)
         midi_round = int(round(midi))
         cents = int(round((midi - midi_round) * 100))
