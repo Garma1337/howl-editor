@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from howl_editor.ctr.formats.howl.collections import HowlCollection
+from howl_editor.core.progress import ProgressReporter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier, SampleType
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.reader import CseqReader
@@ -20,6 +21,22 @@ class BatchExportResult:
     songs: int = 0
     midis: int = 0
     samples: int = 0
+
+
+class _Pass:
+    """Counts finished items across the three export passes, so one progress
+    bar covers the whole run."""
+
+    def __init__(self, progress: ProgressReporter | None, total: int):
+        self._progress = progress
+        self._total = total
+        self._done = 0
+
+    def done_one(self) -> None:
+        self._done += 1
+
+        if self._progress is not None:
+            self._progress.step(self._done, self._total)
 
 
 class BatchExporter:
@@ -42,17 +59,23 @@ class BatchExporter:
 
     def export(
         self, hwl: HowlFile, output_dir: Path, wav_sample_rate: int = 11025,
+        progress: ProgressReporter | None = None,
     ) -> BatchExportResult:
+        """Write every bank, song and sample to disc. `progress` follows the
+        three passes and can stop the run between items."""
         result = BatchExportResult()
         output_dir = Path(output_dir)
+        tracker = _Pass(progress, len(hwl.banks) * 2 + len(hwl.songs))
 
-        self._export_banks(hwl, output_dir / HowlCollection.BANKS, result)
-        self._export_songs(hwl, output_dir / HowlCollection.SONGS, result)
-        self._export_samples(hwl, output_dir / "samples", result, wav_sample_rate)
+        self._export_banks(hwl, output_dir / HowlCollection.BANKS, result, tracker)
+        self._export_songs(hwl, output_dir / HowlCollection.SONGS, result, tracker)
+        self._export_samples(hwl, output_dir / "samples", result, tracker, wav_sample_rate)
 
         return result
 
-    def _export_banks(self, hwl: HowlFile, path: Path, result: BatchExportResult) -> None:
+    def _export_banks(
+        self, hwl: HowlFile, path: Path, result: BatchExportResult, tracker: "_Pass",
+    ) -> None:
         path.mkdir(parents=True, exist_ok=True)
 
         for i, bank in enumerate(hwl.banks):
@@ -60,8 +83,11 @@ class BatchExporter:
             label = self._safe_filename(name) if name else f"{i:02d}"
             (path / f"Bank_{label}.bnk").write_bytes(bank)
             result.banks += 1
+            tracker.done_one()
 
-    def _export_songs(self, hwl: HowlFile, path: Path, result: BatchExportResult) -> None:
+    def _export_songs(
+        self, hwl: HowlFile, path: Path, result: BatchExportResult, tracker: "_Pass",
+    ) -> None:
         path.mkdir(parents=True, exist_ok=True)
 
         for i, song in enumerate(hwl.songs):
@@ -69,6 +95,7 @@ class BatchExporter:
             label = self._safe_filename(name) if name else f"{i:02d}"
             (path / f"Song_{label}.cseq").write_bytes(song)
             result.songs += 1
+            tracker.done_one()
 
             if HAS_MIDO:
                 try:
@@ -83,13 +110,15 @@ class BatchExporter:
                     continue
 
     def _export_samples(
-        self, hwl: HowlFile, path: Path, result: BatchExportResult,
+        self, hwl: HowlFile, path: Path, result: BatchExportResult, tracker: "_Pass",
         wav_sample_rate: int = 11025,
     ) -> None:
         classification = self._classifier.classify(hwl)
         exported: set[int] = set()
 
         for bank_blob in hwl.banks:
+            tracker.done_one()
+
             try:
                 samples = self._bank_reader.parse(bank_blob, hwl.spu_addrs)
             except Exception:

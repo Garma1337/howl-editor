@@ -11,9 +11,7 @@ from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
 
 @dataclass(frozen=True)
 class SampleReplacementPlan:
-    """Everything replacing one sample would do, worked out before anything is
-    written — so the editor can ask once instead of prompting its way through
-    the consequences one dialog at a time."""
+    """Everything replacing one sample would do, worked out up front."""
 
     bank_index: int
     sample_index: int

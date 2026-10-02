@@ -2,6 +2,7 @@
 
 import pytest
 
+from howl_editor.core.progress import Cancelled, ProgressReporter
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
@@ -110,3 +111,25 @@ class TestBatchExport:
         assert result.banks == 0
         assert result.songs == 0
         assert result.samples == 0
+
+
+class TestExportProgress:
+
+    def test_progress_climbs_to_the_total(self, batch_exporter, tmp_path):
+        seen = []
+
+        batch_exporter.export(
+            _make_hwl(), tmp_path,
+            progress=ProgressReporter(on_progress=lambda d, t: seen.append((d, t))),
+        )
+
+        assert seen
+        assert seen == sorted(seen)
+        assert seen[-1][0] == seen[-1][1]
+
+    def test_cancelling_stops_the_run(self, batch_exporter, tmp_path):
+        with pytest.raises(Cancelled):
+            batch_exporter.export(
+                _make_hwl(), tmp_path,
+                progress=ProgressReporter(is_cancelled=lambda: True),
+            )

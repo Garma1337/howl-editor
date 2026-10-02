@@ -1,6 +1,6 @@
 # coding: utf-8
 
-from struct import unpack_from
+from array import array
 
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPainter, QColor, QPen
@@ -20,7 +20,7 @@ class WaveformWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._samples: list[int] = []
+        self._samples = array("h")
         self._loop_start: int = -1
         self.setMinimumHeight(80)
         self.setMaximumHeight(120)
@@ -30,20 +30,16 @@ class WaveformWidget(QWidget):
             self.clear()
             return
 
-        channels = unpack_from("<H", wav_data, 22)[0]
-        data_start = _WAV_HEADER_SIZE
-        pcm = wav_data[data_start:]
+        # One C-level parse of the whole buffer: a per-sample Python loop cost
+        # ~400 ms on a full song, times every waveform on screen. Interleaved
+        # stereo needs no downmix — the display is a min/max envelope, so both
+        # channels just contribute to each column. The memoryview keeps a
+        # song-sized render from being copied on the way in.
+        samples = array("h")
+        pcm = memoryview(wav_data)[_WAV_HEADER_SIZE:]
+        samples.frombytes(pcm[:len(pcm) - len(pcm) % samples.itemsize])
 
-        if channels == 2:
-            num_frames = len(pcm) // 4
-            self._samples = [
-                (unpack_from("<hh", pcm, i * 4)[0] + unpack_from("<hh", pcm, i * 4)[1]) // 2
-                for i in range(num_frames)
-            ]
-        else:
-            num_samples = len(pcm) // 2
-            self._samples = [unpack_from("<h", pcm, i * 2)[0] for i in range(num_samples)]
-
+        self._samples = samples
         self._loop_start = -1
         self.update()
 
@@ -54,7 +50,7 @@ class WaveformWidget(QWidget):
         self.update()
 
     def clear(self) -> None:
-        self._samples = []
+        self._samples = array("h")
         self._loop_start = -1
         self.update()
 

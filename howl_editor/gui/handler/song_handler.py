@@ -58,7 +58,7 @@ class SongHandler:
 
         if path:
             Path(path).write_bytes(self._w.hwl.songs[index])
-            self._w.status.showMessage(f"Exported song {index}")
+            self._w._notify(f"Exported song {index}")
 
     def _prompt_midi_options(self) -> MidiExportOptions | None:
         """Cache the last-used options on the handler so a user who exports
@@ -100,7 +100,7 @@ class SongHandler:
 
                 self._w._midi_exporter.export_to_file(cseq, out, i, options)
 
-            self._w.status.showMessage(f"Exported song {index} as MIDI")
+            self._w._notify(f"Exported song {index} as MIDI")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"MIDI export failed:\n{e}")
 
@@ -122,7 +122,7 @@ class SongHandler:
         try:
             cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
             self._w._midi_exporter.export_to_file(cseq, path, seq_index, options)
-            self._w.status.showMessage(f"Exported sequence {seq_index} as MIDI")
+            self._w._notify(f"Exported sequence {seq_index} as MIDI")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"MIDI export failed:\n{e}")
 
@@ -149,7 +149,7 @@ class SongHandler:
             written = self._w._sfz_exporter.export(
                 self._w.hwl, index, Path(path), self._w._vag_rate.rate,
             )
-            self._w.status.showMessage(
+            self._w._notify(
                 f"Exported song {index} as SFZ ({written} samples)",
             )
         except Exception as e:
@@ -263,7 +263,7 @@ class SongHandler:
 
     def _import_midi_as_cseq(self, path: str, bank_index: int | None):
         if not HAS_MIDO or self._w._midi_converter is None:
-            self._w.status.showMessage("MIDI support requires the 'mido' package")
+            self._w._notify_warning("MIDI support requires the 'mido' package")
             return None
 
         try:

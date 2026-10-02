@@ -8,7 +8,7 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut, QUndoS
 from PySide6.QtWidgets import (
     QMainWindow, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
     QSplitter, QTabWidget, QTextEdit, QWidget, QVBoxLayout, QMenu, QToolBar,
-    QStatusBar, QFileDialog, QMessageBox, QHeaderView, QAbstractItemView,
+    QFileDialog, QMessageBox, QHeaderView, QAbstractItemView,
 )
 
 try:
@@ -68,6 +68,8 @@ from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.gui.widget.main_tab_widget import MainTabWidget
 from howl_editor.gui.widget.music_workshop_widget import MusicWorkshopWidget
+from howl_editor.gui.background.process_runner import ProcessTaskRunner
+from howl_editor.gui.background.task_runner import TaskRunner
 from howl_editor.gui.widget.notification_bar import NotificationBar
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
@@ -159,6 +161,8 @@ class MainWindow(QMainWindow):
         leaf_info_formatter=None,
         howl_stats_calculator=None,
         size_formatter=None,
+        tasks: TaskRunner | None = None,
+        process_tasks: ProcessTaskRunner | None = None,
     ):
         super().__init__()
         self.setWindowTitle("HOWL Editor")
@@ -227,6 +231,8 @@ class MainWindow(QMainWindow):
         self._leaf_info_formatter = leaf_info_formatter
         self._howl_stats_calculator = howl_stats_calculator
         self._size_formatter = size_formatter
+        self._tasks = tasks
+        self._process_tasks = process_tasks
         self._sample_types: dict[int, set] = {}
 
         self.hwl: HowlFile | None = None
@@ -304,10 +310,6 @@ class MainWindow(QMainWindow):
         central_layout.addWidget(self.notifications)
         central_layout.addWidget(self.tabs, stretch=1)
         self.setCentralWidget(central)
-
-        self.status = QStatusBar()
-        self.setStatusBar(self.status)
-        self.status.showMessage("Ready - Open or create a new HWL file")
 
     def _register_player_widget(self, widget) -> None:
         if self._audio_player and self._audio_player.media_player:
@@ -507,7 +509,7 @@ class MainWindow(QMainWindow):
 
         self._vag_rate.set(rate)
         self._settings.setValue("vag_default_rate", rate)
-        self.status.showMessage(f"VAG export sample rate set to {rate} Hz")
+        self._notify_info(f"VAG export sample rate set to {rate} Hz")
 
     def _set_custom_mode(self, enabled: bool) -> None:
         """Custom Mode suppresses every engine-limit guard and the warning icons,
@@ -515,7 +517,7 @@ class MainWindow(QMainWindow):
         still works on demand."""
         self._custom_mode = enabled
         self._settings.setValue("custom_mode", enabled)
-        self.status.showMessage(
+        self._notify_info(
             "Custom Mode ON — issue indicators disabled"
             if enabled else "Custom Mode OFF — issue indicators active",
         )
@@ -570,7 +572,7 @@ class MainWindow(QMainWindow):
         if self._cseq_renderer:
             self._cseq_renderer.clear_decode_cache()
 
-        self.status.showMessage(
+        self._notify_info(
             f"Cleared {decoded} decoded WAV file(s) and {rendered} rendered song WAV(s)",
         )
 
@@ -606,7 +608,6 @@ class MainWindow(QMainWindow):
             self.main_tab.clear()
 
         self._set_file_actions_enabled(False)
-        self.status.showMessage("Ready - Open or create a new HWL file")
         self._update_title()
 
     def _new_file(self):
@@ -624,7 +625,7 @@ class MainWindow(QMainWindow):
 
         self._rebuild_tree()
         self._set_file_actions_enabled(True)
-        self.status.showMessage("New HWL file created")
+        self._notify("New HWL file created")
         self._update_title()
 
     def _open_file(self):
@@ -660,7 +661,7 @@ class MainWindow(QMainWindow):
             self._original_howl_size = len(data)
             self.modified = False
             self._undo_stack.setClean()
-            self.status.showMessage(f"Saved: {self.file_path}")
+            self._notify(f"Saved: {self.file_path}")
             self._update_title()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save:\n{e}")
@@ -709,19 +710,15 @@ class MainWindow(QMainWindow):
 
     def _notify(self, message: str) -> None:
         """Report a completed action without interrupting the next one."""
-        self.status.showMessage(message)
         self.notifications.push_success(message)
 
     def _notify_info(self, message: str) -> None:
-        self.status.showMessage(message)
         self.notifications.push(message)
 
     def _notify_warning(self, message: str) -> None:
-        self.status.showMessage(message)
         self.notifications.push_warning(message)
 
     def _notify_danger(self, message: str) -> None:
-        self.status.showMessage(message)
         self.notifications.push_danger(message)
 
     def _set_file_actions_enabled(self, enabled: bool):
@@ -1169,9 +1166,9 @@ class MainWindow(QMainWindow):
                 MoveItemCommand(self, f"Move Bank {from_index} to {to_index}", HowlCollection.BANKS, from_index, to_index),
             )
 
-            self.status.showMessage(f"Moved bank {from_index} to position {to_index}")
+            self._notify(f"Moved bank {from_index} to position {to_index}")
         except Exception as e:
-            self.status.showMessage(f"Move failed: {e}")
+            self._notify_danger(f"Move failed: {e}")
 
     def _move_song(self, from_index: int, to_index: int) -> None:
         try:
@@ -1179,17 +1176,17 @@ class MainWindow(QMainWindow):
                 MoveItemCommand(self, f"Move Song {from_index} to {to_index}", HowlCollection.SONGS, from_index, to_index),
             )
 
-            self.status.showMessage(f"Moved song {from_index} to position {to_index}")
+            self._notify(f"Moved song {from_index} to position {to_index}")
         except Exception as e:
-            self.status.showMessage(f"Move failed: {e}")
+            self._notify_danger(f"Move failed: {e}")
 
     def _move_sequence(self, song_index: int, from_index: int, to_index: int) -> None:
         try:
             cmd = MoveSequenceCommand(self, song_index, from_index, to_index)
             self._undo_stack.push(cmd)
-            self.status.showMessage(f"Moved sequence {from_index} to position {to_index}")
+            self._notify(f"Moved sequence {from_index} to position {to_index}")
         except Exception as e:
-            self.status.showMessage(f"Move failed: {e}")
+            self._notify_danger(f"Move failed: {e}")
 
     def _on_rows_moved(self, start, destination, dest_row):
         """Handle drag-and-drop reorder of banks, songs, or sequences."""
@@ -1211,13 +1208,13 @@ class MainWindow(QMainWindow):
                 self._editor.move_bank(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
                 self._mark_modified()
                 self._rebuild_tree()
-                self.status.showMessage(f"Moved bank {start} to position {dest_row}")
+                self._notify(f"Moved bank {start} to position {dest_row}")
 
             elif parent_type == NODE_SONGS:
                 self._editor.move_song(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
                 self._mark_modified()
                 self._rebuild_tree()
-                self.status.showMessage(f"Moved song {start} to position {dest_row}")
+                self._notify(f"Moved song {start} to position {dest_row}")
 
             elif parent_type == NODE_SONG:
                 song_index = parent_item.data(0, Qt.UserRole + 1)
@@ -1230,9 +1227,9 @@ class MainWindow(QMainWindow):
 
                     self._mark_modified()
                     self._rebuild_tree()
-                    self.status.showMessage(f"Moved sequence {start} to position {dest_row}")
+                    self._notify(f"Moved sequence {start} to position {dest_row}")
         except (IndexError, Exception) as e:
-            self.status.showMessage(f"Move failed: {e}")
+            self._notify_danger(f"Move failed: {e}")
             self._rebuild_tree()
 
     def _setup_shortcuts(self):
@@ -1334,7 +1331,7 @@ class MainWindow(QMainWindow):
             self._rebuild_tree()
             self._set_file_actions_enabled(True)
             self._add_to_recent(path)
-            self.status.showMessage(f"Loaded: {path} ({len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs)")
+            self._notify(f"Loaded: {path} ({len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs)")
             self._update_title()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open HWL:\n{e}")
@@ -1361,19 +1358,19 @@ class MainWindow(QMainWindow):
                 self._editor.add_bank(self.hwl, Path(path).read_bytes())
                 self._mark_modified()
                 self._rebuild_tree()
-                self.status.showMessage(f"Added bank from {Path(path).name}")
+                self._notify(f"Added bank from {Path(path).name}")
 
             elif ext == FileFormatRegistry.CSEQ.extension and self.hwl:
                 self._editor.add_song(self.hwl, Path(path).read_bytes())
                 self._mark_modified()
                 self._rebuild_tree()
-                self.status.showMessage(f"Added song from {Path(path).name}")
+                self._notify(f"Added song from {Path(path).name}")
 
             elif ext == FileFormatRegistry.VAG.extension and self.hwl:
                 self._drop_vag_file(path)
 
             elif not self.hwl and ext != FileFormatRegistry.HOWL.extension:
-                self.status.showMessage("Open a HWL file first before dropping banks, songs, or samples")
+                self._notify_warning("Open a HWL file first before dropping banks, songs, or samples")
 
     def _drop_vag_file(self, path: str):
         """Add a dropped VAG file as a sample to the currently selected bank."""
@@ -1393,7 +1390,7 @@ class MainWindow(QMainWindow):
             bank_index = 0
 
         if bank_index is None:
-            self.status.showMessage("No bank to add sample to")
+            self._notify_warning("No bank to add sample to")
             return
 
         self._sample_handler.add_sample_from_file(bank_index, path)

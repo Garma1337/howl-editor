@@ -1,10 +1,13 @@
 # coding: utf-8
 
+import pytest
+
 from struct import pack
 
 from struct import unpack_from
 
 from howl_editor.audio.wav_writer import WavWriter
+from howl_editor.core.progress import Cancelled, ProgressReporter
 from howl_editor.ctr.cseq_renderer import CseqRenderer
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument, \
     CseqPercussion
@@ -445,3 +448,46 @@ class TestRenderLayered:
 
         assert channels == 2
         assert rate == 22050
+
+
+class TestRenderProgress:
+    """Mixing a song is the one multi-second job in the editor, so it has to
+    report where it is and stop when asked."""
+
+    def _long_song(self):
+        track = CseqTrack(events=[
+            CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=0),
+            CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=60, velocity=200),
+            CseqEvent(delta=4000, event_type=CseqEventType.NOTE_OFF, pitch=60),
+            CseqEvent(delta=0, event_type=CseqEventType.END_TRACK),
+        ])
+
+        return CseqFile(
+            instruments=[CseqInstrument(sample_id=0, frequency=0x1000)],
+            songs=[CseqSong(bpm=120, tpqn=480, tracks=[track])],
+        )
+
+    def test_progress_is_reported_while_mixing(self):
+        seen = []
+        progress = ProgressReporter(on_progress=lambda d, t: seen.append((d, t)))
+
+        _renderer().render_song(self._long_song(), 0, {0: _tone_vag_frames()}, progress=progress)
+
+        assert seen
+        assert all(done <= total for done, total in seen)
+        assert seen == sorted(seen)
+
+    def test_cancelling_aborts_the_mix(self):
+        progress = ProgressReporter(
+            on_progress=lambda _d, _t: None, is_cancelled=lambda: True,
+        )
+
+        with pytest.raises(Cancelled):
+            _renderer().render_song(
+                self._long_song(), 0, {0: _tone_vag_frames()}, progress=progress,
+            )
+
+    def test_rendering_without_a_reporter_still_works(self):
+        pcm = _renderer().render_song(self._long_song(), 0, {0: _tone_vag_frames()})
+
+        assert len(pcm) > 0

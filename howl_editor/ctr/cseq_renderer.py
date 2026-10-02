@@ -4,6 +4,7 @@ from array import array
 from struct import pack
 
 from howl_editor.audio.wav_writer import WavWriter
+from howl_editor.core.progress import ProgressReporter
 from howl_editor.ctr.audio_settings import (
     DEFAULT_DISTORT, DEFAULT_PAN, DEFAULT_SEQ_VOL, PERCUSSION_ENVELOPE,
 )
@@ -17,6 +18,10 @@ from howl_editor.ps1.voice import Voice
 _SAMPLE_CLAMP_MIN = -32768
 _SAMPLE_CLAMP_MAX = 32767
 _TAIL_SECONDS = 5
+
+# Samples mixed between progress reports — checking every one would cost
+# more than the mixing itself.
+_PROGRESS_INTERVAL = 4096
 
 # Voice event actions
 _ON = "on"
@@ -54,8 +59,12 @@ class CseqRenderer:
         sample_data: dict[int, bytes],
         output_rate: int = 22050,
         active_tracks: list[int] | None = None,
+        progress: ProgressReporter | None = None,
     ) -> bytes:
-        """Render a CSEQ song to 16-bit stereo PCM bytes."""
+        """Render a CSEQ song to 16-bit stereo PCM bytes.
+
+        Mixing a full song takes seconds, so `progress` lets a caller follow it
+        and stop it: cancelling raises out of the mix loop."""
         if song_index >= len(cseq.songs):
             return b""
 
@@ -66,7 +75,9 @@ class CseqRenderer:
                 unk0=song.unk0, bpm=song.bpm, tpqn=song.tpqn, tracks=tracks,
             )
 
-        left, right = self._mix_song(song, cseq, sample_data, self._decode_cache, output_rate)
+        left, right = self._mix_song(
+            song, cseq, sample_data, self._decode_cache, output_rate, progress,
+        )
         return self._interleave_stereo(left, right)
 
     def render_song_to_wav(
@@ -76,8 +87,11 @@ class CseqRenderer:
         sample_data: dict[int, bytes],
         output_rate: int = 22050,
         active_tracks: list[int] | None = None,
+        progress: ProgressReporter | None = None,
     ) -> bytes:
-        pcm = self.render_song(cseq, song_index, sample_data, output_rate, active_tracks)
+        pcm = self.render_song(
+            cseq, song_index, sample_data, output_rate, active_tracks, progress,
+        )
         return self._wav_writer.write(pcm, output_rate, channels=2)
 
     def render_layered(
@@ -157,6 +171,7 @@ class CseqRenderer:
         sample_data: dict[int, bytes],
         decoded_cache: dict[bytes, tuple[list[int], int]],
         output_rate: int,
+        progress: ProgressReporter | None = None,
     ) -> tuple[list[int], list[int]]:
         ticks_per_second = self._compute_ticks_per_second(song.bpm, song.tpqn)
         if ticks_per_second <= 0:
@@ -174,7 +189,7 @@ class CseqRenderer:
 
         voice_events.sort(key=lambda x: x[0])
 
-        return self._render_voices(voice_events, output_rate, dt)
+        return self._render_voices(voice_events, output_rate, dt, progress)
 
     def _compute_ticks_per_second(self, bpm: int, tpqn: int) -> float:
         return (bpm * tpqn) / 60.0
@@ -272,6 +287,7 @@ class CseqRenderer:
         voice_events: list[tuple],
         output_rate: int,
         dt: float,
+        progress: ProgressReporter | None = None,
     ) -> tuple[list[int], list[int]]:
         output_left: list[int] = []
         output_right: list[int] = []
@@ -317,6 +333,9 @@ class CseqRenderer:
             output_left.append(self._clamp_sample(mix_l))
             output_right.append(self._clamp_sample(mix_r))
             sample_pos += 1
+
+            if progress is not None and sample_pos % _PROGRESS_INTERVAL == 0:
+                progress.step(sample_pos, int(total_estimate))
 
             if event_idx >= len(voice_events) and not active_voices:
                 break

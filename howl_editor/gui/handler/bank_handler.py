@@ -45,7 +45,7 @@ class BankHandler:
         path, _ = QFileDialog.getSaveFileName(self._window, f"Export Bank {index}", f"bank_{index}{FileFormatRegistry.BANK.extension}", FileFormatRegistry.BANK.file_filter)
         if path:
             Path(path).write_bytes(self._window.hwl.banks[index])
-            self._window.status.showMessage(f"Exported bank {index}")
+            self._window._notify(f"Exported bank {index}")
 
     def export_bank_samples(self, index: int):
         folder = QFileDialog.getExistingDirectory(self._window, f"Export Samples from Bank {index}")
@@ -61,7 +61,7 @@ class BankHandler:
                     Path(folder) / f"sample_{sample.spu_index}.vag",
                 )
 
-            self._window.status.showMessage(f"Exported {len(samples)} samples from bank {index}")
+            self._window._notify(f"Exported {len(samples)} samples from bank {index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Export failed:\n{e}")
 
@@ -81,7 +81,7 @@ class BankHandler:
                 wav = self._window._vag_decoder.decode_to_wav(sample.data, rate)
                 (Path(folder) / f"sample_{sample.spu_index}.wav").write_bytes(wav)
 
-            self._window.status.showMessage(f"Exported {len(samples)} WAVs from bank {index}")
+            self._window._notify(f"Exported {len(samples)} WAVs from bank {index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Export failed:\n{e}")
 

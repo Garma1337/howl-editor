@@ -75,6 +75,8 @@ if __name__ == "__main__":
         leaf_info_formatter=container.resolve("leaf_info_formatter"),
         howl_stats_calculator=container.resolve("howl_stats_calculator"),
         size_formatter=container.resolve("size_formatter"),
+        tasks=container.resolve("tasks"),
+        process_tasks=container.resolve("process_tasks"),
     )
 
     window.show()

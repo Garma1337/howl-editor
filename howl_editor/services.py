@@ -70,6 +70,8 @@ from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.severity_presenter import SeverityPresenter
 from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.spu_slot_choice_builder import SpuSlotChoiceBuilder
+from howl_editor.gui.background.process_runner import ProcessTaskRunner
+from howl_editor.gui.background.task_runner import TaskRunner
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.midi.converter import MidiConverter
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
@@ -307,3 +309,5 @@ container.register("blob_snapshot", lambda c: BlobSnapshot())
 container.register("entry_drop_router", lambda c: EntryDropRouter())
 container.register("stylesheet_loader", lambda c: StylesheetLoader(_QSS_DIR))
 container.register("category_icon_resolver", lambda c: CategoryIconResolver(_IMAGE_DIR))
+container.register("tasks", lambda c: TaskRunner())
+container.register("process_tasks", lambda c: ProcessTaskRunner())

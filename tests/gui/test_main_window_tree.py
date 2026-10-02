@@ -15,11 +15,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "minimal")
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QStatusBar
 
 from howl_editor.ctr.formats.cseq.models import CseqInstrument
 from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
 from howl_editor.gui.main_window import MainWindow
+from howl_editor.gui.widget.notification_bar import DANGER, INFO, SUCCESS, WARNING
 from howl_editor.services import container
 from tests.conftest import build_bank_blob, build_cseq_bytes
 
@@ -123,3 +124,25 @@ class TestFiltering:
 
         bank = _node(window, "Banks")
         assert not any(bank.child(i).isHidden() for i in range(bank.childCount()))
+
+
+class TestNotifying:
+    """Every report goes to the notification bar; the window has no status bar
+    behind it any more.
+    """
+
+    @pytest.mark.parametrize("notify, severity", [
+        ("_notify", SUCCESS),
+        ("_notify_info", INFO),
+        ("_notify_warning", WARNING),
+        ("_notify_danger", DANGER),
+    ])
+    def test_each_level_reaches_the_bar(self, window, notify, severity):
+        getattr(window, notify)("something happened")
+
+        assert window.notifications.messages() == ["something happened"]
+        assert window.notifications._rows[0].property("severity") == severity
+
+    def test_the_window_has_no_status_bar(self, window):
+        # statusBar() would create one on demand, so ask without conjuring it.
+        assert window.findChild(QStatusBar) is None

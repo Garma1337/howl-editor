@@ -48,7 +48,7 @@ class SampleHandler:
 
             if path:
                 self._window._vag_writer.write_file(VagSample(data=sample.data), path)
-                self._window.status.showMessage(f"Exported SPU {sample.spu_index}")
+                self._window._notify(f"Exported SPU {sample.spu_index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Export failed:\n{e}")
 
@@ -72,7 +72,7 @@ class SampleHandler:
                     sample.data, self._window._vag_rate.rate,
                 )
                 Path(path).write_bytes(wav)
-                self._window.status.showMessage(f"Exported SPU {sample.spu_index} as WAV")
+                self._window._notify(f"Exported SPU {sample.spu_index} as WAV")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Export failed:\n{e}")
 
@@ -283,7 +283,7 @@ class SampleHandler:
             return
 
         over_by = bank_size - SAPHI_BANK_MAX_SIZE
-        self._window.status.showMessage(
+        self._window._notify(
             f"⚠️ Bank {bank_index} is {bank_size} bytes — {over_by} over the "
             f"Saphi {SAPHI_BANK_MAX_SIZE}-byte limit. Saphi will reject the export.",
             10000,
@@ -396,8 +396,7 @@ class SampleHandler:
 
     def _copy_over_sample(self, src: BankSample, target_bank: int, target_sample: int) -> None:
         """Copying onto an existing sample overwrites a slot exactly as a file
-        replacement does, so it goes through the same plan and the same prompt —
-        including the banks that share the slot."""
+        replacement does, so it takes the same plan and prompt."""
         plan = self._window._replacement_planner.plan(
             self._window.hwl, target_bank, target_sample, src.data,
         )

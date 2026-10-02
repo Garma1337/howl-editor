@@ -389,6 +389,34 @@ QWidget#notificationRow {
     border-radius: 6px;
 }
 
+QWidget#notificationRow[severity="busy"] {
+    background: #3f4a55;
+}
+
+QPushButton#notificationCancel {
+    background: rgba(255, 255, 255, 0.16);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 3px 10px;
+}
+
+QPushButton#notificationCancel:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+QProgressBar#notificationProgress {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 3px;
+    max-height: 6px;
+}
+
+QProgressBar#notificationProgress::chunk {
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 3px;
+}
+
 QWidget#notificationRow[severity="success"] {
     background: #2e7d4f;
 }

@@ -1,9 +1,10 @@
 # coding: utf-8
 
 import traceback
+from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox, QDialog, QInputDialog
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog, QInputDialog
 
 from howl_editor.ctr import constants
 from howl_editor.ctr.diagnostics.spu_slot_guard import SpuSlotLimitError
@@ -177,7 +178,7 @@ class ToolsHandler:
 
             blob = self._window._sca_writer.serialize(sca)
             Path(path).write_bytes(blob)
-            self._window.status.showMessage(f"Exported {Path(path).name}")
+            self._window._notify(f"Exported {Path(path).name}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Saphi export failed:\n{e}\n{traceback.format_exc()}")
 
@@ -225,18 +226,32 @@ class ToolsHandler:
         if not folder:
             return
 
-        try:
-            self._window.status.showMessage("Batch exporting...")
-            QApplication.processEvents()
-            result = self._window._batch_exporter.export(
-                self._window.hwl, Path(folder), self._window._vag_rate.rate,
-            )
-            self._window._notify(
+        # The export runs on a worker thread while the window stays editable.
+        # Blobs are immutable, so copying the lists is enough to keep what is
+        # being written from shifting under it.
+        hwl = replace(
+            self._window.hwl,
+            banks=list(self._window.hwl.banks),
+            songs=list(self._window.hwl.songs),
+            spu_addrs=list(self._window.hwl.spu_addrs),
+        )
+        rate = self._window._vag_rate.rate
+        busy = self._window.notifications.push_busy(
+            f"Exporting everything to {Path(folder).name}…",
+        )
+        handle = self._window._tasks.run(
+            lambda progress: self._window._batch_exporter.export(
+                hwl, Path(folder), rate, progress=progress,
+            ),
+            lambda result: busy.succeeded(
                 f"Batch export complete: {result.banks} banks, {result.songs} songs, "
-                f"{result.midis} MIDI files, {result.samples} samples",
-            )
-        except Exception as e:
-            QMessageBox.critical(self._window, "Error", f"Batch export failed:\n{e}")
+                f"{result.midis} MIDI files, {result.samples} samples"
+            ),
+            on_error=lambda message: busy.failed(f"Batch export failed: {message}"),
+            on_cancelled=lambda: busy.succeeded("Batch export cancelled — partial files kept"),
+            on_progress=busy.set_progress,
+        )
+        busy.set_cancel(handle.cancel)
 
     def diagnose_howl(self):
         """Run the whole-file engine-limit sweep and show the report."""

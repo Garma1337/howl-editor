@@ -176,7 +176,7 @@ class EntryRowHandler:
     def _dispatch_drop(self, row: EntryRow, file_path: str) -> None:
         route = self._router.resolve(row, file_path)
         if route is None:
-            self._w.status.showMessage(
+            self._w._notify_warning(
                 f"Cannot use {Path(file_path).name} for {row.name}",
             )
 
@@ -296,4 +296,4 @@ class EntryRowHandler:
         )
 
     def _notify_unsupported(self, message: str) -> None:
-        self._w.status.showMessage(message)
+        self._w._notify(message)
