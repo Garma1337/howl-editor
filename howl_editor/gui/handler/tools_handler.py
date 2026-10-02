@@ -132,9 +132,19 @@ class ToolsHandler:
             result = self._window._validator.validate(
                 self._window.hwl.banks[bank_idx], self._window.hwl.songs[song_idx], self._window.hwl.spu_addrs,
             )
-            self._window._notify(result.message)
+            self._show_validation_result(result)
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Validation failed:\n{e}")
+
+    def _show_validation_result(self, result) -> None:
+        """A report the user asked for, listing every missing sample — it is
+        read, not glanced at, so it waits in a dialog instead of fading from
+        the notification bar."""
+        box = QMessageBox(self._window)
+        box.setIcon(QMessageBox.Information if result.valid else QMessageBox.Warning)
+        box.setWindowTitle("Validation Result")
+        box.setText(result.message)
+        box.exec()
 
     def export_for_saphi(self):
         if not self._window.hwl:
