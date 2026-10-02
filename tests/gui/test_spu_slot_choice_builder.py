@@ -13,8 +13,8 @@ LIMIT = constants.MAX_SPU_SLOTS
 
 
 @pytest.fixture
-def builder(bank_reader, cseq_reader):
-    usage = SpuSlotUsageResolver(bank_reader, cseq_reader)
+def builder(bank_reader, cseq_parses):
+    usage = SpuSlotUsageResolver(bank_reader, cseq_parses)
     return SpuSlotChoiceBuilder(bank_reader, usage, SpuSlotAllocator(usage))
 
 

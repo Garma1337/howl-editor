@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from howl_editor.audio.wav_writer import WavWriter
+from howl_editor.core.blob_cache import BlobCache
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
@@ -17,6 +18,7 @@ from howl_editor.ctr.formats.bank.builder import BankBuilder
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.track_mask_layout import TrackMaskLayout
 from howl_editor.ctr.formats.cseq.writer import CseqWriter
@@ -98,8 +100,12 @@ def vag_decoder():
     return VagDecoder(WavWriter())
 
 @pytest.fixture
-def sample_classifier(cseq_reader):
-    return SampleClassifier(cseq_reader)
+def cseq_parses(cseq_reader):
+    return CseqParseCache(cseq_reader, BlobCache())
+
+@pytest.fixture
+def sample_classifier(cseq_parses):
+    return SampleClassifier(cseq_parses)
 
 @pytest.fixture
 def validator(bank_reader, cseq_reader):

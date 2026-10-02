@@ -2,6 +2,7 @@
 
 import pytest
 
+from howl_editor.core.blob_cache import BlobCache
 from howl_editor.ctr.analysis.sample_ownership import SampleOwnershipResolver
 from howl_editor.ctr.diagnostics.bank_slice_validator import BankSliceValidator
 from howl_editor.ctr.diagnostics.shared_sample_guard import SharedSampleGuard
@@ -20,7 +21,7 @@ def _vag(frames: int) -> bytes:
 @pytest.fixture
 def guard(bank_reader):
     ownership = SampleOwnershipResolver(bank_reader)
-    slices = BankSliceValidator(bank_reader, VagStructureValidator())
+    slices = BankSliceValidator(bank_reader, VagStructureValidator(), BlobCache())
     return SharedSampleGuard(ownership, slices, bank_reader)
 
 

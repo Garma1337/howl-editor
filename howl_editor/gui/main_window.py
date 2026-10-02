@@ -23,6 +23,7 @@ from howl_editor.audio.linear_interpolation_resampler import LinearInterpolation
 from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.ctr.analysis.sample_replacement_planner import SampleReplacementPlanner
 from howl_editor.ctr.analysis.spu_slot_allocator import SpuSlotAllocator
 from howl_editor.ctr.analysis.spu_slot_usage import SpuSlotUsageResolver
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
@@ -33,6 +34,7 @@ from howl_editor.ctr.formats.bank import BankReader, BankBuilder
 from howl_editor.ctr.formats.cseq import CseqReader, CseqWriter
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.editor import CseqEditor
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.pitch_shifter import CseqPitchShifter
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.howl import HowlReader, HowlWriter, HowlEditor
@@ -66,6 +68,7 @@ from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.gui.widget.main_tab_widget import MainTabWidget
 from howl_editor.gui.widget.music_workshop_widget import MusicWorkshopWidget
+from howl_editor.gui.widget.notification_bar import NotificationBar
 from howl_editor.midi.converter import MidiConverter, HAS_MIDO
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.exporter import CseqMidiExporter
@@ -83,6 +86,10 @@ NODE_SONGS = 6
 NODE_SONG = 7
 NODE_SAMPLE = 8
 NODE_SEQUENCE = 9
+ROLE_LAZY_KIND = Qt.UserRole + 3
+LAZY_BANK_SAMPLES = "bank_samples"
+LAZY_SONG_SEQUENCES = "song_sequences"
+
 NODE_OTHER_FX_ENTRY = 10
 NODE_ENGINE_FX_ENTRY = 11
 
@@ -126,6 +133,8 @@ class MainWindow(QMainWindow):
         spu_slot_choices: SpuSlotChoiceBuilder | None = None,
         pitch_stepper: PitchStepper | None = None,
         pitch_shifter: CseqPitchShifter | None = None,
+        sample_replacement_planner: SampleReplacementPlanner | None = None,
+        cseq_parses: CseqParseCache | None = None,
         pitch_headroom: PitchHeadroomInspector | None = None,
         semantic_entry_builder: SemanticEntryBuilder | None = None,
         entry_leaves_builder: EntryLeavesBuilder | None = None,
@@ -190,6 +199,8 @@ class MainWindow(QMainWindow):
         self._spu_slot_choices = spu_slot_choices
         self._pitch_stepper = pitch_stepper
         self._pitch_shifter = pitch_shifter
+        self._replacement_planner = sample_replacement_planner
+        self._cseq_parses = cseq_parses
         self._pitch_headroom = pitch_headroom
         self._entry_builder = semantic_entry_builder
         self._leaves_builder = entry_leaves_builder
@@ -273,7 +284,7 @@ class MainWindow(QMainWindow):
             self.main_tab = None
 
         self.music_workshop = MusicWorkshopWidget(
-            self._cseq_reader, self._sample_lookup, self._drum_names,
+            self._cseq_reader, self._cseq_parses, self._sample_lookup, self._drum_names,
             self._size_formatter, self._stylesheets,
             self._severity_presenter,
         )
@@ -285,7 +296,14 @@ class MainWindow(QMainWindow):
 
         self.tabs.addTab(self._build_file_content_tab(), "File Browser")
 
-        self.setCentralWidget(self.tabs)
+        self.notifications = NotificationBar()
+        central = QWidget()
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self.notifications)
+        central_layout.addWidget(self.tabs, stretch=1)
+        self.setCentralWidget(central)
 
         self.status = QStatusBar()
         self.setStatusBar(self.status)
@@ -345,7 +363,8 @@ class MainWindow(QMainWindow):
         self.music_workshop.sig_retarget_instrument.connect(h.retarget_instrument)
         self.music_workshop.sig_shift_instrument_octaves.connect(h.shift_instrument_octaves)
         self.music_workshop.sig_shift_percussion_octaves.connect(h.shift_percussion_octaves)
-        self.music_workshop.sig_shift_song_octaves.connect(h.shift_song_octaves)
+        self.music_workshop.sig_shift_selected_octaves.connect(h.shift_selected_octaves)
+        self.music_workshop.sig_set_selected_volume.connect(h.set_selected_volume)
         self.music_workshop.sig_retarget_percussion.connect(h.retarget_percussion)
         self.music_workshop.sig_add_instrument.connect(h.add_instrument)
         self.music_workshop.sig_add_percussion.connect(h.add_percussion)
@@ -373,6 +392,7 @@ class MainWindow(QMainWindow):
         self.tree.customContextMenuRequested.connect(self._on_context_menu)
         self.tree.currentItemChanged.connect(self._on_selection_changed)
         self.tree.itemClicked.connect(self._on_item_clicked)
+        self.tree.itemExpanded.connect(self._ensure_children)
 
         # Drag-and-drop for reordering banks, songs, and sequences
         self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -382,7 +402,7 @@ class MainWindow(QMainWindow):
         self.tree.model().rowsMoved.connect(self._on_rows_moved)
 
         left_layout.addWidget(self.tree)
-        self.filter_widget.set_tree(self.tree)
+        self.filter_widget.set_tree(self.tree, self._ensure_children)
 
         # Right panel: detail view + waveform + audio transport
         right_panel = QWidget()
@@ -688,8 +708,21 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(title)
 
     def _notify(self, message: str) -> None:
+        """Report a completed action without interrupting the next one."""
         self.status.showMessage(message)
-        QMessageBox.information(self, "HOWL Editor", message)
+        self.notifications.push_success(message)
+
+    def _notify_info(self, message: str) -> None:
+        self.status.showMessage(message)
+        self.notifications.push(message)
+
+    def _notify_warning(self, message: str) -> None:
+        self.status.showMessage(message)
+        self.notifications.push_warning(message)
+
+    def _notify_danger(self, message: str) -> None:
+        self.status.showMessage(message)
+        self.notifications.push_danger(message)
 
     def _set_file_actions_enabled(self, enabled: bool):
         for action in self._file_actions:
@@ -728,6 +761,10 @@ class MainWindow(QMainWindow):
         while iterator.value():
             item = iterator.value()
             path = self._get_item_path(item)
+
+            if path in expanded:
+                self._ensure_children(item)
+
             item.setExpanded(path in expanded)
 
             if path == selected_path:
@@ -799,7 +836,7 @@ class MainWindow(QMainWindow):
             label = self._get_item_label("Bank", i, self._bank_reader.get_name(i))
             bank_node = self._tree_item(banks_node, label, info, NODE_BANK, i)
             self._badge_target(bank_node, Target(TargetKind.BANK, i))
-            self._populate_bank_samples(bank_node, i)
+            self._defer_children(bank_node, LAZY_BANK_SAMPLES)
 
         songs_node = self._tree_item(root, "Songs", str(len(self.hwl.songs)), NODE_SONGS)
         songs_node.setExpanded(True)
@@ -810,7 +847,7 @@ class MainWindow(QMainWindow):
             label = self._get_item_label("Song", i, self._cseq_reader.get_name(i))
             song_node = self._tree_item(songs_node, label, info, NODE_SONG, i)
             self._badge_target(song_node, Target(TargetKind.SONG, i))
-            self._populate_song_sequences(song_node, i)
+            self._defer_children(song_node, LAZY_SONG_SEQUENCES)
 
         self._restore_tree_state(expanded, selected_path)
 
@@ -872,6 +909,29 @@ class MainWindow(QMainWindow):
     def _worst_for_kind(self, kind):
         return self._diag_index.worst_for_kind(kind) if self._diag_index else None
 
+    def _defer_children(self, item, kind: str) -> None:
+        """Mark a node's children as not built yet. A stock file has ~4000 of
+        them across 71 banks, and rebuilding all of them after every edit is
+        what made the tree slow — they cost nothing while collapsed."""
+        item.setData(0, ROLE_LAZY_KIND, kind)
+        item.setChildIndicatorPolicy(QTreeWidgetItem.ShowIndicator)
+
+    def _ensure_children(self, item) -> None:
+        """Build a deferred node's children, once. Safe to call on any item."""
+        kind = item.data(0, ROLE_LAZY_KIND)
+        if kind is None:
+            return
+
+        item.setData(0, ROLE_LAZY_KIND, None)
+        index = item.data(0, Qt.UserRole + 1)
+
+        if kind == LAZY_BANK_SAMPLES:
+            self._populate_bank_samples(item, index)
+        else:
+            self._populate_song_sequences(item, index)
+
+        item.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless)
+
     def _populate_bank_samples(self, bank_node, bank_index: int) -> None:
         try:
             samples = self._bank_reader.parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
@@ -891,7 +951,7 @@ class MainWindow(QMainWindow):
 
     def _populate_song_sequences(self, song_node, song_index: int) -> None:
         try:
-            cseq = self._cseq_reader.read(self.hwl.songs[song_index])
+            cseq = self._cseq_parses.read(self.hwl.songs[song_index])
 
             for j, seq in enumerate(cseq.songs):
                 label = f"Sequence {j}"

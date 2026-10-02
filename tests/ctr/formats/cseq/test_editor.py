@@ -3,12 +3,14 @@
 import pytest
 
 from howl_editor.core.vlq import VlqCodec
+from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.ctr.formats.cseq.editor import CseqEditor
 from howl_editor.ctr.formats.cseq.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument,
     CseqPercussion,
 )
 from howl_editor.ctr.formats.cseq.writer import CseqWriter
+from tests.conftest import build_cseq_bytes
 
 
 @pytest.fixture
@@ -604,3 +606,31 @@ class TestDeleteEvent:
 
         with pytest.raises(ValueError, match="does not touch"):
             cseq_editor_svc.delete_event(blob, 0, 0, 0)
+
+
+class TestBulkVolume:
+
+    def _blob(self):
+        return build_cseq_bytes(
+            instruments=[CseqInstrument(volume=v) for v in (255, 200, 100)],
+            percussions=[CseqPercussion(volume=v) for v in (255, 180)],
+        )
+
+    def test_sets_only_the_selected_instruments(self, cseq_editor_svc, cseq_reader):
+        new_blob = cseq_editor_svc.set_instrument_volumes(self._blob(), [0, 2], 64)
+
+        assert [i.volume for i in cseq_reader.read(new_blob).instruments] == [64, 200, 64]
+
+    def test_sets_selected_percussion(self, cseq_editor_svc, cseq_reader):
+        new_blob = cseq_editor_svc.set_percussion_volumes(self._blob(), [1], 10)
+
+        assert [p.volume for p in cseq_reader.read(new_blob).percussions] == [255, 10]
+
+    def test_clamps_to_the_byte_field(self, cseq_editor_svc, cseq_reader):
+        new_blob = cseq_editor_svc.set_instrument_volumes(self._blob(), [0], 9999)
+
+        assert cseq_reader.read(new_blob).instruments[0].volume == cseq_fmt.MAX_VOLUME
+
+    def test_an_index_that_is_not_there_raises(self, cseq_editor_svc):
+        with pytest.raises(IndexError):
+            cseq_editor_svc.set_instrument_volumes(self._blob(), [9], 64)

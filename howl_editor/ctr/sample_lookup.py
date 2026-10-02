@@ -2,7 +2,7 @@
 
 from howl_editor.ps1 import spu
 from howl_editor.ctr.formats.bank.reader import BankReader
-from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.models import CseqFile
 from howl_editor.ctr.formats.howl.models import HowlFile
 
@@ -12,9 +12,9 @@ _DEFAULT_SAMPLE_RATE = 11025
 class SampleLookup:
     """Searches HWL data structures to locate sample data and playback rates."""
 
-    def __init__(self, bank_reader: BankReader, cseq_reader: CseqReader):
+    def __init__(self, bank_reader: BankReader, cseq_parses: CseqParseCache):
         self._bank_reader = bank_reader
-        self._cseq_reader = cseq_reader
+        self._cseq_parses = cseq_parses
 
     def find_sample_data(self, hwl: HowlFile, spu_index: int) -> bytes | None:
         """Search all banks for the raw sample data of a given SPU index."""
@@ -98,7 +98,7 @@ class SampleLookup:
 
         for song_data in hwl.songs:
             try:
-                cseq = self._cseq_reader.read(song_data)
+                cseq = self._cseq_parses.read(song_data)
 
                 for inst in cseq.instruments:
                     if inst.sample_id == spu_index and inst.frequency > 0:
@@ -137,7 +137,7 @@ class SampleLookup:
 
         for song_data in hwl.songs:
             try:
-                cseq = self._cseq_reader.read(song_data)
+                cseq = self._cseq_parses.read(song_data)
             except Exception:
                 continue
 

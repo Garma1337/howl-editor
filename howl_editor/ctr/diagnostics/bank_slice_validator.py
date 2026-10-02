@@ -1,7 +1,9 @@
 # coding: utf-8
 
 from dataclasses import dataclass, field
+from struct import pack
 
+from howl_editor.core.blob_cache import BlobCache
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 from howl_editor.ps1.formats.vag.structure_validator import (
@@ -60,11 +62,25 @@ class BankSliceValidator:
     already wrong on the very first upload — no cross-bank RAM reuse needed.
     Misalignment is detectable because the slices stop being valid VAG."""
 
-    def __init__(self, bank_reader: BankReader, structure: VagStructureValidator):
+    def __init__(
+        self, bank_reader: BankReader, structure: VagStructureValidator, blob_cache: BlobCache,
+    ):
         self._bank_reader = bank_reader
         self._structure = structure
+        self._cache = blob_cache
 
     def validate(self, bank_blob: bytes, spu_addrs: list[SpuAddrEntry]) -> BankSliceResult:
+        """Cached: decoding every sample's VAG structure is the slowest check
+        in the file sweep, and it only changes when the bank or the size table
+        does. The result is shared, so treat it as read-only."""
+        return self._cache.get(
+            bank_blob, lambda blob: self._validate(blob, spu_addrs), self._sizes_salt(spu_addrs),
+        )
+
+    def _sizes_salt(self, spu_addrs: list[SpuAddrEntry]) -> bytes:
+        return pack(f"<{len(spu_addrs)}H", *(e.size for e in spu_addrs))
+
+    def _validate(self, bank_blob: bytes, spu_addrs: list[SpuAddrEntry]) -> BankSliceResult:
         declared = self._bank_reader.sample_ids(bank_blob)
         samples = self._bank_reader.parse(bank_blob, spu_addrs)
         bad: list[BadSlice] = []

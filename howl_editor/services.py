@@ -9,10 +9,12 @@ from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.core import Container
 from howl_editor.core.template_engine import TemplateEngine
+from howl_editor.core.blob_cache import BlobCache
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.howl_stats import HowlStatsCalculator
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.sample_ownership import SampleOwnershipResolver
+from howl_editor.ctr.analysis.sample_replacement_planner import SampleReplacementPlanner
 from howl_editor.ctr.analysis.spu_slot_allocator import SpuSlotAllocator
 from howl_editor.ctr.analysis.spu_slot_usage import SpuSlotUsageResolver
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
@@ -34,6 +36,7 @@ from howl_editor.ctr.formats.bank.shared_sample_propagator import SharedSamplePr
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.editor import CseqEditor
 from howl_editor.ctr.formats.cseq.pitch_shifter import CseqPitchShifter
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.cseq.track_mask_layout import TrackMaskLayout
@@ -100,6 +103,11 @@ container.register("cseq_reader", lambda c: CseqReader(
     c.resolve("vlq_codec"), c.resolve("stock_names"),
 ))
 container.register("cseq_writer", lambda c: CseqWriter(c.resolve("vlq_codec")))
+container.register("cseq_blob_cache", lambda c: BlobCache())
+container.register("cseq_parses", lambda c: CseqParseCache(
+    c.resolve("cseq_reader"),
+    c.resolve("cseq_blob_cache"),
+))
 container.register("cseq_size_validator", lambda c: CseqSizeValidator())
 container.register("vag_reader", lambda c: VagReader())
 container.register("vag_writer", lambda c: VagWriter())
@@ -143,10 +151,10 @@ container.register("vag_rate_provider", lambda c: VagSampleRateProvider())
 container.register("audio_cache", lambda c: AudioCache(RENDERED_SONG_CACHE_DIR))
 container.register("sample_lookup", lambda c: SampleLookup(
     c.resolve("bank_reader"),
-    c.resolve("cseq_reader")
+    c.resolve("cseq_parses")
 ))
 container.register("version_detector", lambda c: HowlVersionDetector())
-container.register("sample_classifier", lambda c: SampleClassifier(c.resolve("cseq_reader")))
+container.register("sample_classifier", lambda c: SampleClassifier(c.resolve("cseq_parses")))
 container.register("howl_stats_calculator", lambda c: HowlStatsCalculator())
 container.register("validator", lambda c: BankCseqValidator(
     c.resolve("bank_reader"),
@@ -164,12 +172,15 @@ container.register("pitch_ceiling_validator", lambda c: PitchCeilingValidator(
     c.resolve("pitch_calculator")))
 container.register("pitch_headroom_inspector", lambda c: PitchHeadroomInspector(
     c.resolve("pitch_calculator")))
+container.register("bank_slice_cache", lambda c: BlobCache())
 container.register("bank_slice_validator", lambda c: BankSliceValidator(
     c.resolve("bank_reader"),
-    c.resolve("vag_structure_validator")))
+    c.resolve("vag_structure_validator"),
+    c.resolve("bank_slice_cache"),
+))
 container.register("spu_slot_usage", lambda c: SpuSlotUsageResolver(
     c.resolve("bank_reader"),
-    c.resolve("cseq_reader"),
+    c.resolve("cseq_parses"),
 ))
 container.register("spu_slot_allocator", lambda c: SpuSlotAllocator(c.resolve("spu_slot_usage")))
 container.register("spu_slot_choices", lambda c: SpuSlotChoiceBuilder(
@@ -183,12 +194,19 @@ container.register("shared_sample_propagator", lambda c: SharedSamplePropagator(
     c.resolve("bank_reader"),
     c.resolve("bank_builder"),
     c.resolve("sample_ownership")))
+container.register("sample_replacement_planner", lambda c: SampleReplacementPlanner(
+    c.resolve("bank_reader"),
+    c.resolve("bank_builder"),
+    c.resolve("shared_sample_guard"),
+    c.resolve("bank_size_guard"),
+))
 container.register("shared_sample_guard", lambda c: SharedSampleGuard(
     c.resolve("sample_ownership"),
     c.resolve("bank_slice_validator"),
     c.resolve("bank_reader")))
 container.register("howl_diagnostics", lambda c: HowlDiagnostics(
     c.resolve("cseq_reader"),
+    c.resolve("cseq_parses"),
     c.resolve("cseq_size_validator"),
     c.resolve("bank_reader"),
     c.resolve("spu_residency_calculator"),

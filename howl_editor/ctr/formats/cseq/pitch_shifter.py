@@ -34,22 +34,33 @@ class CseqPitchShifter:
         self._stepper = pitch_stepper
 
     def shift_instrument(self, song_data: bytes, inst_index: int, octaves: int) -> PitchShiftResult:
-        cseq = self._reader.read(song_data)
-        self._validate_index(inst_index, len(cseq.instruments), "Instrument")
-
-        return self._apply(cseq, [cseq.instruments[inst_index]], octaves)
+        return self.shift_instruments(song_data, [inst_index], octaves)
 
     def shift_percussion(self, song_data: bytes, perc_index: int, octaves: int) -> PitchShiftResult:
+        return self.shift_percussions(song_data, [perc_index], octaves)
+
+    def shift_instruments(
+        self, song_data: bytes, inst_indices: list[int], octaves: int,
+    ) -> PitchShiftResult:
+        """Shift a selection of instruments as one edit."""
         cseq = self._reader.read(song_data)
-        self._validate_index(perc_index, len(cseq.percussions), "Percussion")
+        entries = self._pick(cseq.instruments, inst_indices, "Instrument")
 
-        return self._apply(cseq, [cseq.percussions[perc_index]], octaves)
+        return self._apply(cseq, entries, octaves)
 
-    def shift_song(self, song_data: bytes, octaves: int) -> PitchShiftResult:
-        """Shift every instrument and percussion in the song together."""
+    def shift_percussions(
+        self, song_data: bytes, perc_indices: list[int], octaves: int,
+    ) -> PitchShiftResult:
         cseq = self._reader.read(song_data)
+        entries = self._pick(cseq.percussions, perc_indices, "Percussion")
 
-        return self._apply(cseq, cseq.instruments + cseq.percussions, octaves)
+        return self._apply(cseq, entries, octaves)
+
+    def _pick(self, table: list, indices: list[int], label: str) -> list:
+        for index in indices:
+            self._validate_index(index, len(table), label)
+
+        return [table[i] for i in indices]
 
     def _apply(self, cseq, entries: list, octaves: int) -> PitchShiftResult:
         shifted = clamped = above = 0

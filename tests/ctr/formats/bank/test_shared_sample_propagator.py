@@ -2,6 +2,7 @@
 
 import pytest
 
+from howl_editor.core.blob_cache import BlobCache
 from howl_editor.ctr.analysis.sample_ownership import SampleOwnershipResolver
 from howl_editor.ctr.diagnostics.bank_slice_validator import BankSliceValidator
 from howl_editor.ctr.formats.bank.shared_sample_propagator import SharedSamplePropagator
@@ -76,7 +77,7 @@ class TestRebuildOwners:
         # Install the size this replacement would set, then re-slice bank 1.
         after = list(hwl.spu_addrs)
         after[1] = SpuAddrEntry(0, len(new_data) // 8)
-        validator = BankSliceValidator(bank_reader, VagStructureValidator())
+        validator = BankSliceValidator(bank_reader, VagStructureValidator(), BlobCache())
 
         assert validator.validate(out[1], after).is_valid
 
@@ -89,7 +90,7 @@ class TestRebuildOwners:
 
         after = list(hwl.spu_addrs)
         after[1] = SpuAddrEntry(0, len(_vag(9)) // 8)
-        validator = BankSliceValidator(bank_reader, VagStructureValidator())
+        validator = BankSliceValidator(bank_reader, VagStructureValidator(), BlobCache())
 
         assert not validator.validate(hwl.banks[1], after).is_valid
 

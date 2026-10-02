@@ -49,6 +49,8 @@ if __name__ == "__main__":
         spu_slot_choices=container.resolve("spu_slot_choices"),
         pitch_stepper=container.resolve("pitch_stepper"),
         pitch_shifter=container.resolve("pitch_shifter"),
+        sample_replacement_planner=container.resolve("sample_replacement_planner"),
+        cseq_parses=container.resolve("cseq_parses"),
         pitch_headroom=container.resolve("pitch_headroom_inspector"),
         semantic_entry_builder=container.resolve("semantic_entry_builder"),
         entry_leaves_builder=container.resolve("entry_leaves_builder"),

@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.howl.models import HowlFile
 
 
@@ -15,8 +15,8 @@ class SampleType(Enum):
 
 class SampleClassifier:
 
-    def __init__(self, cseq_reader: CseqReader):
-        self._cseq_reader = cseq_reader
+    def __init__(self, cseq_parses: CseqParseCache):
+        self._cseq_parses = cseq_parses
 
     def classify(self, hwl: HowlFile) -> dict[int, set[SampleType]]:
         result: dict[int, set[SampleType]] = {}
@@ -26,7 +26,7 @@ class SampleClassifier:
 
         for song_data in hwl.songs:
             try:
-                cseq = self._cseq_reader.read(song_data)
+                cseq = self._cseq_parses.read(song_data)
 
                 for inst in cseq.instruments:
                     result.setdefault(inst.sample_id, set()).add(SampleType.INSTRUMENT)

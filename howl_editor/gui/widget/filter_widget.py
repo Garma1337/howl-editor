@@ -9,11 +9,15 @@ class FilterWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._tree = None
+        self._ensure_children = None
         self._saved_expanded: set[int] = set()
         self._is_filtering = False
 
-    def set_tree(self, tree) -> None:
+    def set_tree(self, tree, ensure_children=None) -> None:
+        """`ensure_children` builds a node's deferred children, so filtering
+        still searches rows the tree has not expanded yet."""
         self._tree = tree
+        self._ensure_children = ensure_children
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -90,6 +94,9 @@ class FilterWidget(QWidget):
 
         When a parent matches, all its descendants are shown (ancestor_matches=True).
         """
+        if self._ensure_children is not None:
+            self._ensure_children(item)
+
         item_text = (item.text(0) + " " + item.text(1)).lower()
         self_matches = query in item_text
         show_children = ancestor_matches or self_matches

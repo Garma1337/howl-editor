@@ -48,18 +48,18 @@ class TestShiftOneEntry:
             shifter.shift_instrument(_song(instruments=[CseqInstrument()]), 3, 1)
 
 
-class TestShiftWholeSong:
+class TestReporting:
+    """What the shift tells the caller, so the status message can be honest."""
 
-    def test_moves_instruments_and_percussion_together(self, shifter, cseq_reader):
-        blob = _song(
-            instruments=[CseqInstrument(frequency=UNITY), CseqInstrument(frequency=600)],
-            percussions=[CseqPercussion(frequency=1000)],
-        )
+    def test_counts_every_entry_that_moved(self, shifter, cseq_reader):
+        blob = _song(instruments=[
+            CseqInstrument(frequency=UNITY), CseqInstrument(frequency=600),
+        ])
 
-        result = shifter.shift_song(blob, -1)
+        result = shifter.shift_instruments(blob, [0, 1], -1)
 
-        assert _pitches(cseq_reader, result.blob) == ([UNITY // 2, 300], [500])
-        assert result.shifted == 3
+        assert _pitches(cseq_reader, result.blob)[0] == [UNITY // 2, 300]
+        assert result.shifted == 2
 
     def test_reports_entries_pushed_past_the_playable_ceiling(self, shifter):
         blob = _song(instruments=[
@@ -67,7 +67,7 @@ class TestShiftWholeSong:
             CseqInstrument(frequency=1000),                     # stays well under
         ])
 
-        result = shifter.shift_song(blob, 1)
+        result = shifter.shift_instruments(blob, [0, 1], 1)
 
         assert result.above_ceiling == 1
         assert result.is_clean is False
@@ -75,20 +75,52 @@ class TestShiftWholeSong:
     def test_reports_entries_the_field_could_not_take(self, shifter, cseq_reader):
         blob = _song(instruments=[CseqInstrument(frequency=cseq_fmt.MAX_PITCH_REGISTER)])
 
-        result = shifter.shift_song(blob, 1)
+        result = shifter.shift_instruments(blob, [0], 1)
 
         assert result.clamped == 1
         assert _pitches(cseq_reader, result.blob)[0] == [cseq_fmt.MAX_PITCH_REGISTER]
 
     def test_clean_when_everything_landed_where_it_was_asked(self, shifter):
-        result = shifter.shift_song(_song(instruments=[CseqInstrument(frequency=1000)]), -1)
+        blob = _song(instruments=[CseqInstrument(frequency=1000)])
 
-        assert result.is_clean is True
+        assert shifter.shift_instruments(blob, [0], -1).is_clean is True
 
     def test_octave_down_then_up_restores_even_pitches(self, shifter, cseq_reader):
         blob = _song(instruments=[CseqInstrument(frequency=2000)])
 
-        down = shifter.shift_song(blob, -1)
-        back = shifter.shift_song(down.blob, 1)
+        down = shifter.shift_instruments(blob, [0], -1)
+        back = shifter.shift_instruments(down.blob, [0], 1)
 
         assert _pitches(cseq_reader, back.blob)[0] == [2000]
+
+
+class TestShiftSelection:
+
+    def test_only_the_selected_instruments_move(self, shifter, cseq_reader):
+        blob = _song(instruments=[
+            CseqInstrument(frequency=UNITY),
+            CseqInstrument(frequency=800),
+            CseqInstrument(frequency=600),
+        ])
+
+        result = shifter.shift_instruments(blob, [0, 2], 1)
+
+        assert _pitches(cseq_reader, result.blob)[0] == [2 * UNITY, 800, 1200]
+        assert result.shifted == 2
+
+    def test_selected_percussion_moves(self, shifter, cseq_reader):
+        blob = _song(percussions=[
+            CseqPercussion(frequency=1000), CseqPercussion(frequency=2000),
+        ])
+
+        result = shifter.shift_percussions(blob, [1], -1)
+
+        assert _pitches(cseq_reader, result.blob)[1] == [1000, 1000]
+
+    def test_an_index_that_is_not_there_is_rejected_before_anything_moves(self, shifter, cseq_reader):
+        blob = _song(instruments=[CseqInstrument(frequency=UNITY)])
+
+        with pytest.raises(IndexError):
+            shifter.shift_instruments(blob, [0, 5], 1)
+
+        assert _pitches(cseq_reader, blob)[0] == [UNITY]

@@ -1,6 +1,5 @@
 # coding: utf-8
 
-from enum import Enum
 from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
@@ -13,18 +12,11 @@ from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.gui.dialog.copy_target_dialog import (
     CopyTargetContainer, CopyTargetDialog,
 )
+from howl_editor.gui.dialog.replace_sample_dialog import ReplaceSampleDialog
 from howl_editor.gui.dialog.select_sample_dialog import SelectSampleDialog
 from howl_editor.ps1 import spu
 from howl_editor.ps1.formats.vag.models import VagSample
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
-
-
-class SharedChoice(Enum):
-    """What to do about the other banks claiming the sample being replaced."""
-    ALONE = "alone"            # nothing else claims it — no question to ask
-    UPDATE_ALL = "update_all"
-    THIS_ONLY = "this_only"
-    CANCEL = "cancel"
 
 
 class SampleHandler:
@@ -171,96 +163,62 @@ class SampleHandler:
 
         try:
             vag = self._window._vag_reader.read_file(path)
-
-            if not self._confirm_size_change(bank_index, sample_index, len(vag.data)):
-                return
-
-            spu_index = self._find_spu_index(bank_index, sample_index)
-            spu_before = list(self._window.hwl.spu_addrs)
-
-            shared = self._resolve_shared_sample(bank_index, spu_index, len(vag.data))
-            if shared is SharedChoice.CANCEL:
-                return
-
-            companions = self._companion_blobs(
-                shared, spu_before, spu_index, vag.data, bank_index,
+            plan = self._window._replacement_planner.plan(
+                self._window.hwl, bank_index, sample_index, vag.data,
             )
 
-            new_blob = self._window._bank_builder.replace_sample(
-                self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
-                sample_index, vag.data, self._window._bank_reader,
-            )
+            update_shared = self._confirm_replacement(plan, Path(path).name, bank_index)
 
-            if not self._bank_within_limit(bank_index, new_blob):
-                self._window.hwl.spu_addrs[:] = spu_before
+            if update_shared is None:
                 return
 
-            self._push_replacement(bank_index, new_blob, companions, spu_before)
-
-            if spu_index is not None:
-                self._propagate_sample_rate_to_fx(spu_index, vag.sample_rate)
-
-            self._window._notify(self._replace_message(bank_index, sample_index, companions))
-            self._warn_if_bank_oversized(bank_index, len(new_blob))
+            self._apply_replacement(
+                plan, vag.data, update_shared, sample_rate=vag.sample_rate,
+            )
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Replace failed:\n{e}")
 
-    def _resolve_shared_sample(
-        self, bank_index: int, spu_index: int | None, new_data_len: int,
-    ) -> 'SharedChoice':
-        """Ask what to do when the sample's id is claimed by other banks too.
-
-        Their blobs are cut using the size entry this edit would move, so
-        leaving them untouched corrupts them silently — the user has to be told
-        before the write, not after."""
-        guard = self._window._shared_sample_guard
-
-        if guard is None or spu_index is None:
-            return SharedChoice.ALONE
-
-        check = guard.check(self._window.hwl, bank_index, spu_index, new_data_len)
-        if check.within_limit:
-            return SharedChoice.ALONE
-
-        return self._ask_shared_sample(check)
-
-    def _ask_shared_sample(self, check) -> 'SharedChoice':
-        box = QMessageBox(self._window)
-        box.setIcon(QMessageBox.Warning)
-        box.setWindowTitle("Sample shared with other banks")
-        box.setText(check.warning_text)
-        update = box.addButton("Update all owning banks", QMessageBox.AcceptRole)
-        only = box.addButton("Only this bank", QMessageBox.DestructiveRole)
-        box.addButton(QMessageBox.Cancel)
-        box.setDefaultButton(update)
-        box.exec()
-
-        clicked = box.clickedButton()
-        if clicked is update:
-            return SharedChoice.UPDATE_ALL
-        if clicked is only:
-            return SharedChoice.THIS_ONLY
-
-        return SharedChoice.CANCEL
-
-    def _companion_blobs(
-        self,
-        choice: 'SharedChoice',
-        spu_before: list,
-        spu_index: int | None,
-        new_data: bytes,
-        bank_index: int,
-    ) -> dict[int, bytes]:
-        """Rebuilt blobs for the co-owning banks, computed against the size
-        table as it stands now — before `replace_sample` moves the entry."""
-        propagator = self._window._shared_sample_propagator
-
-        if choice is not SharedChoice.UPDATE_ALL or propagator is None or spu_index is None:
-            return {}
-
-        return propagator.rebuild_owners(
-            self._window.hwl, spu_before, spu_index, new_data, bank_index,
+    def _confirm_replacement(self, plan, source_label: str, bank_index: int) -> bool | None:
+        """Show the one prompt that covers a sample overwrite. None = cancelled,
+        otherwise whether the banks sharing the slot should be rebuilt too."""
+        dialog = ReplaceSampleDialog(
+            self._window, plan, source_label, self._bank_display(bank_index),
         )
+
+        if dialog.exec() != QDialog.Accepted:
+            return None
+
+        return dialog.chosen().update_shared_banks
+
+    def _apply_replacement(
+        self, plan, new_data: bytes, update_shared: bool,
+        sample_rate: int | None = None, verb: str = "Replaced",
+    ) -> None:
+        """Write the planned replacement. The plan was built against copies, so
+        the companion blobs are rebuilt here against the live table — before
+        replace_sample moves the size entry."""
+        spu_before = list(self._window.hwl.spu_addrs)
+        companions = (
+            self._window._shared_sample_propagator.rebuild_owners(
+                self._window.hwl, spu_before, plan.spu_index, new_data, plan.bank_index,
+            )
+            if update_shared and plan.spu_index is not None else {}
+        )
+
+        new_blob = self._window._bank_builder.replace_sample(
+            self._window.hwl.banks[plan.bank_index], self._window.hwl.spu_addrs,
+            plan.sample_index, new_data, self._window._bank_reader,
+        )
+
+        self._push_replacement(plan.bank_index, new_blob, companions, spu_before)
+
+        if sample_rate is not None and plan.spu_index is not None:
+            self._propagate_sample_rate_to_fx(plan.spu_index, sample_rate)
+
+        self._window._notify(
+            self._replace_message(plan.bank_index, plan.sample_index, companions, verb),
+        )
+        self._warn_if_bank_oversized(plan.bank_index, len(new_blob))
 
     def _push_replacement(
         self, bank_index: int, new_blob: bytes, companions: dict[int, bytes],
@@ -289,8 +247,9 @@ class SampleHandler:
 
     def _replace_message(
         self, bank_index: int, sample_index: int, companions: dict[int, bytes],
+        verb: str = "Replaced",
     ) -> str:
-        base = f"Replaced sample {sample_index} in bank {bank_index}"
+        base = f"{verb} sample {sample_index} in bank {bank_index}"
 
         if not companions:
             return base
@@ -318,37 +277,6 @@ class SampleHandler:
         for fx in self._window.hwl.other_fx:
             if fx.spu_index == spu_index:
                 fx.pitch = pitch
-
-    def _confirm_size_change(self, bank_index: int, sample_index: int, new_data_len: int) -> bool:
-        samples = self._window._bank_reader.parse(
-            self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
-        )
-
-        if sample_index >= len(samples):
-            return True
-
-        old_data_len = len(samples[sample_index].data)
-        if new_data_len == old_data_len:
-            return True
-
-        delta = new_data_len - old_data_len
-        if new_data_len > old_data_len:
-            return QMessageBox.warning(
-                self._window, "Sample is larger than original",
-                f"The new sample is {new_data_len} bytes — {delta} bytes LARGER "
-                f"than the original ({old_data_len} bytes).\n\n"
-                f"This will increase the bank's SPU footprint and may push the bank "
-                f"past Saphi's {SAPHI_BANK_MAX_SIZE}-byte limit. Continue?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-            ) == QMessageBox.Yes
-
-        QMessageBox.information(
-            self._window, "Sample size differs",
-            f"The new sample is {-delta} bytes SMALLER than the original "
-            f"({old_data_len} bytes → {new_data_len} bytes).",
-        )
-
-        return True
 
     def _warn_if_bank_oversized(self, bank_index: int, bank_size: int) -> None:
         if bank_size <= SAPHI_BANK_MAX_SIZE:
@@ -431,51 +359,56 @@ class SampleHandler:
     def _apply_copy(
         self, src: BankSample, target_bank: int, target_sample: int | None,
     ) -> None:
-        src_data = src.data
+        if target_sample is not None:
+            self._copy_over_sample(src, target_bank, target_sample)
+            return
 
-        if target_sample is None:
-            target_blob = self._window.hwl.banks[target_bank]
-            # Identical audio can share the source's slot — unless the target
-            # bank already holds that slot, where sharing would list it twice.
-            already_there = src.spu_index in self._window._bank_reader.sample_ids(target_blob)
-            spu_index = self._pick_new_slot(
-                f"Copy SPU #{src.spu_index} into {self._bank_display(target_bank)}",
-                share_spu=None if already_there else src.spu_index,
-            )
+        target_blob = self._window.hwl.banks[target_bank]
+        # Identical audio can share the source's slot — unless the target
+        # bank already holds that slot, where sharing would list it twice.
+        already_there = src.spu_index in self._window._bank_reader.sample_ids(target_blob)
+        spu_index = self._pick_new_slot(
+            f"Copy SPU #{src.spu_index} into {self._bank_display(target_bank)}",
+            share_spu=None if already_there else src.spu_index,
+        )
 
-            if spu_index is None:
-                return
+        if spu_index is None:
+            return
 
-            spu_before = list(self._window.hwl.spu_addrs)
-            new_blob = self._window._bank_builder.add_sample(
-                target_blob, self._window.hwl.spu_addrs,
-                src_data, self._window._bank_reader, spu_index=spu_index,
-            )
-            description = f"Copy sample into Bank {target_bank}"
-            message = f"Copied sample into bank {target_bank} as SPU #{spu_index}"
-        else:
-            spu_before = list(self._window.hwl.spu_addrs)
-
-            if not self._confirm_size_change(target_bank, target_sample, len(src_data)):
-                return
-
-            new_blob = self._window._bank_builder.replace_sample(
-                self._window.hwl.banks[target_bank], self._window.hwl.spu_addrs,
-                target_sample, src_data, self._window._bank_reader,
-            )
-            description = f"Copy sample over Bank {target_bank} sample {target_sample}"
-            message = f"Replaced sample {target_sample} in bank {target_bank}"
+        spu_before = list(self._window.hwl.spu_addrs)
+        new_blob = self._window._bank_builder.add_sample(
+            target_blob, self._window.hwl.spu_addrs,
+            src.data, self._window._bank_reader, spu_index=spu_index,
+        )
 
         if not self._bank_within_limit(target_bank, new_blob):
             self._window.hwl.spu_addrs[:] = spu_before
             return
 
         self._window._undo_stack.push(SwapBlobCommand(
-            self._window, description, HowlCollection.BANKS, target_bank, new_blob,
-            old_spu=spu_before,
+            self._window, f"Copy sample into Bank {target_bank}",
+            HowlCollection.BANKS, target_bank, new_blob, old_spu=spu_before,
         ))
-        self._window._notify(message)
+        self._window._notify(
+            f"Copied sample into bank {target_bank} as SPU #{spu_index}",
+        )
         self._warn_if_bank_oversized(target_bank, len(new_blob))
+
+    def _copy_over_sample(self, src: BankSample, target_bank: int, target_sample: int) -> None:
+        """Copying onto an existing sample overwrites a slot exactly as a file
+        replacement does, so it goes through the same plan and the same prompt —
+        including the banks that share the slot."""
+        plan = self._window._replacement_planner.plan(
+            self._window.hwl, target_bank, target_sample, src.data,
+        )
+        update_shared = self._confirm_replacement(
+            plan, f"SPU #{src.spu_index}", target_bank,
+        )
+
+        if update_shared is None:
+            return
+
+        self._apply_replacement(plan, src.data, update_shared, verb="Copied over")
 
     def remove_sample(self, bank_index: int, sample_index: int):
         if not self._window.hwl:

@@ -2,7 +2,7 @@
 
 from howl_editor.ctr import constants
 from howl_editor.ctr.formats.bank.reader import BankReader
-from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.howl.models import HowlFile
 
 
@@ -13,9 +13,9 @@ class SpuSlotUsageResolver:
     Free means no bank, no OtherFX or EngineFX entry and no song descriptor
     references it — any of those would sound the new sample in its place."""
 
-    def __init__(self, bank_reader: BankReader, cseq_reader: CseqReader):
+    def __init__(self, bank_reader: BankReader, cseq_parses: CseqParseCache):
         self._bank_reader = bank_reader
-        self._cseq_reader = cseq_reader
+        self._cseq_parses = cseq_parses
 
     def free_slots(self, hwl: HowlFile) -> set[int]:
         used = self._used(hwl)
@@ -43,7 +43,7 @@ class SpuSlotUsageResolver:
 
     def _song_ids(self, blob: bytes) -> set[int]:
         try:
-            cseq = self._cseq_reader.read(blob)
+            cseq = self._cseq_parses.read(blob)
         except Exception:
             return set()
 

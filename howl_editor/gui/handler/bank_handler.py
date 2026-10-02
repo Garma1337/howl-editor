@@ -87,7 +87,7 @@ class BankHandler:
 
     def merge_bank(self, index: int):
         if not self._window.hwl or len(self._window.hwl.banks) < 2:
-            QMessageBox.information(self._window, "Merge Bank", "Need at least two banks to merge.")
+            self._window._notify_warning("Need at least two banks to merge.")
             return
 
         bank_indices = [i for i in range(len(self._window.hwl.banks)) if i != index]

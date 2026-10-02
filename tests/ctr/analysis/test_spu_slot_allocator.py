@@ -13,8 +13,8 @@ LIMIT = constants.MAX_SPU_SLOTS
 
 
 @pytest.fixture
-def allocator(bank_reader, cseq_reader):
-    return SpuSlotAllocator(SpuSlotUsageResolver(bank_reader, cseq_reader))
+def allocator(bank_reader, cseq_parses):
+    return SpuSlotAllocator(SpuSlotUsageResolver(bank_reader, cseq_parses))
 
 
 def _hwl(slots: int, free: set[int] = frozenset()) -> HowlFile:

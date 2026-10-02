@@ -52,6 +52,33 @@ class CseqEditor:
         perc.frequency = max(0, min(cseq_fmt.MAX_PITCH_REGISTER, frequency))
         return self._writer.serialize(cseq)
 
+    def set_instrument_volumes(
+        self, song_data: bytes, inst_indices: list[int], volume: int,
+    ) -> bytes:
+        """Give a selection of instruments the same volume, in one edit — the
+        usual way a part is balanced against the rest of the song."""
+        cseq = self._reader.read(song_data)
+        self._apply_volume(cseq.instruments, inst_indices, volume, "Instrument")
+
+        return self._writer.serialize(cseq)
+
+    def set_percussion_volumes(
+        self, song_data: bytes, perc_indices: list[int], volume: int,
+    ) -> bytes:
+        cseq = self._reader.read(song_data)
+        self._apply_volume(cseq.percussions, perc_indices, volume, "Percussion")
+
+        return self._writer.serialize(cseq)
+
+    def _apply_volume(self, table: list, indices: list[int], volume: int, label: str) -> None:
+        clamped = max(0, min(cseq_fmt.MAX_VOLUME, volume))
+
+        for index in indices:
+            if index < 0 or index >= len(table):
+                raise IndexError(f"{label} index {index} out of range")
+
+            table[index].volume = clamped
+
     def retarget_instrument(
         self, song_data: bytes, inst_index: int, new_sample_id: int,
     ) -> bytes:

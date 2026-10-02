@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from howl_editor.ctr.diagnostics.howl_diagnostics import Target, TargetKind
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqInstrument, CseqPercussion
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr.sample_lookup import SampleLookup
@@ -59,12 +60,14 @@ class MusicWorkshopWidget(QWidget):
     sig_add_instrument = Signal(int)             # song_index
     sig_shift_instrument_octaves = Signal(int, int, int)   # song_index, inst_index, octaves
     sig_shift_percussion_octaves = Signal(int, int, int)   # song_index, perc_index, octaves
-    sig_shift_song_octaves = Signal(int, int)              # song_index, octaves
+    sig_shift_selected_octaves = Signal(int, bool, object, int)  # song, is_perc, indices, octaves
+    sig_set_selected_volume = Signal(int, bool, object)          # song, is_perc, indices
     sig_add_percussion = Signal(int)             # song_index
 
     def __init__(
         self,
         cseq_reader: CseqReader,
+        cseq_parses: CseqParseCache,
         sample_lookup: SampleLookup,
         drum_names: DrumNameResolver,
         size_formatter: SizeFormatter,
@@ -73,6 +76,7 @@ class MusicWorkshopWidget(QWidget):
     ):
         super().__init__()
         self._cseq_reader = cseq_reader
+        self._cseq_parses = cseq_parses
         self._sample_lookup = sample_lookup
         self._drum_names = drum_names
         self._sizes = size_formatter
@@ -188,7 +192,7 @@ class MusicWorkshopWidget(QWidget):
             label = f"Song {i} — {name}" if name else f"Song {i}"
 
             try:
-                cseq = self._cseq_reader.read(blob)
+                cseq = self._cseq_parses.read(blob)
                 summary = (
                     f"{cseq.songs[0].bpm} BPM · "
                     f"{len(cseq.songs[0].tracks)} tracks"
@@ -214,7 +218,7 @@ class MusicWorkshopWidget(QWidget):
             return
 
         try:
-            cseq = self._cseq_reader.read(self._hwl.songs[row])
+            cseq = self._cseq_parses.read(self._hwl.songs[row])
         except Exception as e:
             self._render_error(f"Cannot read song {row}: {e}")
             return
@@ -235,7 +239,6 @@ class MusicWorkshopWidget(QWidget):
             self._detail_layout.addWidget(banner)
 
         self._detail_layout.addWidget(self._build_song_header(cseq))
-        self._detail_layout.addWidget(self._build_song_pitch_bar(song_index))
         self._detail_layout.addWidget(self._build_sequences_section(song_index, cseq))
         self._detail_layout.addWidget(self._build_instruments_section(song_index, cseq.instruments))
         self._detail_layout.addWidget(self._build_percussion_section(song_index, cseq.percussions))
@@ -311,33 +314,6 @@ class MusicWorkshopWidget(QWidget):
         for icon, label, value, hint in cards:
             layout.addWidget(self._build_stat_card(icon, label, value, hint), stretch=1)
 
-        return bar
-
-    def _build_song_pitch_bar(self, song_index: int) -> QWidget:
-        """Transpose the whole song in one click, rather than one descriptor
-        at a time."""
-        bar = QWidget()
-        row = QHBoxLayout(bar)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(6)
-
-        label = QLabel("Whole song pitch:")
-        label.setObjectName("workshopSectionLabel")
-        row.addWidget(label)
-
-        for text, octaves in (("⬇️  Octave down", -1), ("⬆️  Octave up", 1)):
-            button = QPushButton(text)
-            button.setToolTip(
-                f"{'Halve' if octaves < 0 else 'Double'} the base pitch of every instrument "
-                f"and percussion in this song — exactly one octave "
-                f"{'down' if octaves < 0 else 'up'}."
-            )
-            button.clicked.connect(
-                lambda _checked=False, s=song_index, o=octaves: self.sig_shift_song_octaves.emit(s, o),
-            )
-            row.addWidget(button)
-
-        row.addStretch(1)
         return bar
 
     def _tracks_hint(self, drum_indices: list[int]) -> str:
@@ -499,6 +475,7 @@ class MusicWorkshopWidget(QWidget):
 
         table = self._make_table(
             ["#", "Sample", "Source bank", "Pitch", "Volume", "ADSR", ""],
+            selectable=True,
         )
 
         for i, inst in enumerate(instruments):
@@ -523,6 +500,7 @@ class MusicWorkshopWidget(QWidget):
 
         self._size_table(table)
         layout.addWidget(table)
+        layout.addWidget(self._build_selection_bar(table, song_index, percussion=False))
         return section
 
     def _build_percussion_section(
@@ -548,6 +526,7 @@ class MusicWorkshopWidget(QWidget):
 
         table = self._make_table(
             ["MIDI Note", "Drum name", "Sample", "Source bank", "Pitch", ""],
+            selectable=True,
         )
 
         for i, perc in enumerate(percussions):
@@ -571,7 +550,49 @@ class MusicWorkshopWidget(QWidget):
 
         self._size_table(table)
         layout.addWidget(table)
+        layout.addWidget(self._build_selection_bar(table, song_index, percussion=True))
         return section
+
+    def _build_selection_bar(self, table: QTableWidget, song_index: int, percussion: bool) -> QWidget:
+        """Act on several descriptors at once. Retuning a part means the same
+        edit on a run of rows, which row-by-row dialogs made tedious."""
+        bar = QWidget()
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+
+        label = QLabel()
+        label.setObjectName("workshopSelectionLabel")
+        row.addWidget(label)
+
+        buttons = [
+            (QPushButton("⬇️  Octave down"), lambda idx: self.sig_shift_selected_octaves.emit(song_index, percussion, idx, -1)),
+            (QPushButton("⬆️  Octave up"), lambda idx: self.sig_shift_selected_octaves.emit(song_index, percussion, idx, 1)),
+            (QPushButton("🔊  Set volume…"), lambda idx: self.sig_set_selected_volume.emit(song_index, percussion, idx)),
+        ]
+
+        for button, emit in buttons:
+            button.clicked.connect(lambda _checked=False, t=table, e=emit: e(self._selected_rows(t)))
+            row.addWidget(button)
+
+        row.addStretch(1)
+        self._wire_selection_bar(table, label, [b for b, _ in buttons])
+
+        return bar
+
+    def _wire_selection_bar(self, table: QTableWidget, label: QLabel, buttons: list) -> None:
+        def refresh():
+            count = len(self._selected_rows(table))
+            label.setText(f"{count} selected" if count else "Select rows to edit together")
+
+            for button in buttons:
+                button.setEnabled(count > 0)
+
+        table.itemSelectionChanged.connect(refresh)
+        refresh()
+
+    def _selected_rows(self, table: QTableWidget) -> list[int]:
+        return sorted({index.row() for index in table.selectedIndexes()})
 
     def _build_row_actions(
         self, target: SampleActionTarget, pitch: int,
@@ -679,13 +700,18 @@ class MusicWorkshopWidget(QWidget):
         return f"{name}{octave} {sign}{cents}¢"
 
     @staticmethod
-    def _make_table(headers: list[str]) -> QTableWidget:
+    def _make_table(headers: list[str], selectable: bool = False) -> QTableWidget:
         table = QTableWidget(0, len(headers))
         table.setObjectName("workshopTable")
         table.setHorizontalHeaderLabels(headers)
         table.verticalHeader().setVisible(False)
-        table.setSelectionMode(QTableWidget.NoSelection)
-        table.setFocusPolicy(Qt.NoFocus)
+
+        if selectable:
+            table.setSelectionMode(QTableWidget.ExtendedSelection)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+        else:
+            table.setSelectionMode(QTableWidget.NoSelection)
+            table.setFocusPolicy(Qt.NoFocus)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.setShowGrid(False)
         header = table.horizontalHeader()

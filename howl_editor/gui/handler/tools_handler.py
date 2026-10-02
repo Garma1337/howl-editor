@@ -131,7 +131,7 @@ class ToolsHandler:
             result = self._window._validator.validate(
                 self._window.hwl.banks[bank_idx], self._window.hwl.songs[song_idx], self._window.hwl.spu_addrs,
             )
-            QMessageBox.information(self._window, "Validation Result", result.message)
+            self._window._notify(result.message)
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Validation failed:\n{e}")
 
@@ -140,7 +140,7 @@ class ToolsHandler:
             return
 
         if not self._window.hwl.banks or not self._window.hwl.songs:
-            QMessageBox.information(self._window, "Export for Saphi","The current HWL has no banks or songs to export.")
+            self._window._notify_warning("The current HWL has no banks or songs to export.")
             return
 
         bank_labels = [self._window._get_item_label("Bank", i, self._window._bank_reader.get_name(i)) for i in range(len(self._window.hwl.banks))]
@@ -231,15 +231,10 @@ class ToolsHandler:
             result = self._window._batch_exporter.export(
                 self._window.hwl, Path(folder), self._window._vag_rate.rate,
             )
-            QMessageBox.information(
-                self._window, "Batch Export Complete",
-                f"Exported:\n"
-                f"  {result.banks} Banks\n"
-                f"  {result.songs} Songs\n"
-                f"  {result.midis} MIDI files\n"
-                f"  {result.samples} Samples (VAG + WAV)",
+            self._window._notify(
+                f"Batch export complete: {result.banks} banks, {result.songs} songs, "
+                f"{result.midis} MIDI files, {result.samples} samples",
             )
-            self._window.status.showMessage("Batch export complete")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Batch export failed:\n{e}")
 

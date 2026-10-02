@@ -315,12 +315,56 @@ class SongHandler:
             f"percussion {perc_index}",
         )
 
-    def shift_song_octaves(self, song_index: int, octaves: int):
+    def shift_selected_octaves(
+        self, song_index: int, percussion: bool, indices: list[int], octaves: int,
+    ):
+        """Shift every selected descriptor as one undoable edit."""
+        if not indices:
+            return
+
+        kind = "percussion" if percussion else "instruments"
+        shift = (
+            self._w._pitch_shifter.shift_percussions if percussion
+            else self._w._pitch_shifter.shift_instruments
+        )
+
         self._shift_octaves(
             song_index, octaves,
-            lambda blob: self._w._pitch_shifter.shift_song(blob, octaves),
-            "every instrument and percussion",
+            lambda blob: shift(blob, list(indices), octaves),
+            f"{len(indices)} {kind}",
         )
+
+    def set_selected_volume(self, song_index: int, percussion: bool, indices: list[int]):
+        """Give every selected descriptor the same volume."""
+        if not self._w.hwl or not indices:
+            return
+
+        kind = "percussion" if percussion else "instruments"
+        volume, ok = QInputDialog.getInt(
+            self._w, "Set volume",
+            f"Volume for {len(indices)} selected {kind} (0-{cseq_fmt.MAX_VOLUME}):",
+            cseq_fmt.MAX_VOLUME, 0, cseq_fmt.MAX_VOLUME,
+        )
+
+        if not ok:
+            return
+
+        try:
+            set_volumes = (
+                self._w._cseq_editor.set_percussion_volumes if percussion
+                else self._w._cseq_editor.set_instrument_volumes
+            )
+            new_blob = set_volumes(self._w.hwl.songs[song_index], list(indices), volume)
+
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, f"Set volume on {len(indices)} {kind} in Song {song_index}",
+                HowlCollection.SONGS, song_index, new_blob,
+            ))
+            self._w._notify(
+                f"Set volume {volume} on {len(indices)} {kind} in song {song_index}",
+            )
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Could not set volume:\n{e}")
 
     def _shift_octaves(self, song_index: int, octaves: int, shift, subject: str):
         if not self._w.hwl:

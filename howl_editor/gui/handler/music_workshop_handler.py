@@ -76,8 +76,11 @@ class MusicWorkshopHandler:
     def shift_percussion_octaves(self, song_index: int, perc_index: int, octaves: int) -> None:
         self._w._song_handler.shift_percussion_octaves(song_index, perc_index, octaves)
 
-    def shift_song_octaves(self, song_index: int, octaves: int) -> None:
-        self._w._song_handler.shift_song_octaves(song_index, octaves)
+    def shift_selected_octaves(self, song_index: int, percussion: bool, indices, octaves: int) -> None:
+        self._w._song_handler.shift_selected_octaves(song_index, percussion, indices, octaves)
+
+    def set_selected_volume(self, song_index: int, percussion: bool, indices) -> None:
+        self._w._song_handler.set_selected_volume(song_index, percussion, indices)
 
     def retarget_instrument(self, song_index: int, inst_index: int) -> None:
         self._w._song_handler.retarget_instrument(song_index, inst_index)

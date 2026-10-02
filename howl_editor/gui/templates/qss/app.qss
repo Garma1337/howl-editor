@@ -203,6 +203,25 @@ QCheckBox, QRadioButton {
     background: transparent;
 }
 
+/* The platform style draws an indicator that all but disappears on the dark
+   palette, so checked state gets an explicit fill. */
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid palette(mid);
+    border-radius: 8px;
+    background: palette(base);
+}
+
+QRadioButton::indicator:checked {
+    background: palette(highlight);
+    border-color: palette(highlight);
+}
+
+QRadioButton::indicator:hover {
+    border-color: palette(highlight);
+}
+
 QGroupBox {
     background: palette(window);
     color: palette(window-text);
@@ -362,4 +381,49 @@ QToolTip {
     border: 1px solid palette(mid);
     padding: 4px 6px;
     border-radius: 4px;
+}
+
+/* Notification bar — transient results of an action, in place of a modal. */
+QWidget#notificationRow {
+    background: #2d6ca3;
+    border-radius: 6px;
+}
+
+QWidget#notificationRow[severity="success"] {
+    background: #2e7d4f;
+}
+
+QWidget#notificationRow[severity="warning"] {
+    background: #b9730a;
+}
+
+QWidget#notificationRow[severity="danger"] {
+    background: #b3261e;
+}
+
+QLabel#notificationText {
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    background: transparent;
+}
+
+QLabel#notificationIcon {
+    font-size: 14px;
+    background: transparent;
+}
+
+QPushButton#notificationClose {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 0;
+}
+
+QPushButton#notificationClose:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+    color: white;
 }
