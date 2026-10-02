@@ -1,11 +1,11 @@
 # coding: utf-8
 
-from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.gui.entries.entry_leaf import LeafKind
-from howl_editor.gui.entries.semantic_entry import EntryRow
 from howl_editor.ctr.formats.cseq.models import CseqEventType, CseqEvent, CseqTrack, CseqSong
 from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
+from howl_editor.gui.entries.entry_leaf import LeafKind
+from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
 from howl_editor.gui.entries.semantic_entry import EntryKind
+from howl_editor.gui.entries.semantic_entry import EntryRow
 from tests.conftest import build_bank_blob, build_cseq_bytes
 
 

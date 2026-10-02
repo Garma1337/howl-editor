@@ -1,9 +1,9 @@
 # coding: utf-8
 
 from howl_editor.ctr import constants, stock_layout as layout
+from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.diagnostics.bank_size_guard import BankSizeGuard
 from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
-from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
 from tests.conftest import build_bank_blob
 

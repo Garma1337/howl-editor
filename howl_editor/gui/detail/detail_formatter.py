@@ -1,8 +1,8 @@
 # coding: utf-8
 
-from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
-from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
 from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
+from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
+from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
 from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
 
 

@@ -2,312 +2,351 @@
 
 from pathlib import Path
 
-from howl_editor.audio.audio_cache import AudioCache
-from howl_editor.audio.audio_player import AudioPlayer
-from howl_editor.audio.linear_interpolation_resampler import LinearInterpolationResampler
-from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
-from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.core import Container
-from howl_editor.core.template_engine import TemplateEngine
-from howl_editor.core.blob_cache import BlobCache
-from howl_editor.core.vlq import VlqCodec
-from howl_editor.ctr.analysis.howl_stats import HowlStatsCalculator
-from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
-from howl_editor.ctr.analysis.sample_ownership import SampleOwnershipResolver
-from howl_editor.ctr.analysis.sample_replacement_planner import SampleReplacementPlanner
-from howl_editor.ctr.analysis.spu_slot_allocator import SpuSlotAllocator
-from howl_editor.ctr.analysis.spu_slot_usage import SpuSlotUsageResolver
-from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
-from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
-from howl_editor.ctr.analysis.validator import BankCseqValidator
-from howl_editor.ctr.cseq_renderer import CseqRenderer
-from howl_editor.ctr.diagnostics.bank_size_guard import BankSizeGuard
-from howl_editor.ctr.diagnostics.bank_slice_validator import BankSliceValidator
-from howl_editor.ctr.diagnostics.cseq_size_guard import CseqSizeGuard
-from howl_editor.ctr.diagnostics.howl_diagnostics import HowlDiagnostics
-from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
-from howl_editor.ctr.diagnostics.pitch_ceiling_validator import PitchCeilingValidator
-from howl_editor.ctr.diagnostics.shared_sample_guard import SharedSampleGuard
-from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
-from howl_editor.ctr.diagnostics.spu_slot_guard import SpuSlotGuard
-from howl_editor.ctr.formats.bank.builder import BankBuilder
-from howl_editor.ctr.formats.bank.reader import BankReader
-from howl_editor.ctr.formats.bank.shared_sample_propagator import SharedSamplePropagator
-from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
-from howl_editor.ctr.formats.cseq.editor import CseqEditor
-from howl_editor.ctr.formats.cseq.pitch_shifter import CseqPitchShifter
-from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
-from howl_editor.ctr.formats.cseq.reader import CseqReader
-from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
-from howl_editor.ctr.formats.cseq.track_mask_layout import TrackMaskLayout
-from howl_editor.ctr.formats.cseq.writer import CseqWriter
-from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
-from howl_editor.ctr.formats.howl.editor import HowlEditor
-from howl_editor.ctr.formats.howl.reader import HowlReader
-from howl_editor.ctr.formats.howl.version import HowlVersionDetector
-from howl_editor.ctr.formats.howl.writer import HowlWriter
-from howl_editor.ctr.sample_lookup import SampleLookup
-from howl_editor.ctr.voice.gain_calculator import GainCalculator
-from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
-from howl_editor.ctr.voice.pitch_stepper import PitchStepper
-from howl_editor.ctr.voice.pitch_headroom import PitchHeadroomInspector
-from howl_editor.export.batch_exporter import BatchExporter
-from howl_editor.export.sfz_exporter import SfzExporter
-from howl_editor.gui.category_icon_resolver import CategoryIconResolver
-from howl_editor.gui.detail.bank_detail_formatter import BankDetailFormatter
-from howl_editor.gui.detail.detail_formatter import DetailFormatter
-from howl_editor.gui.detail.diagnosis_banner_formatter import DiagnosisBannerFormatter
-from howl_editor.gui.detail.fx_detail_formatter import FxDetailFormatter
-from howl_editor.gui.detail.howl_detail_formatter import HowlDetailFormatter
-from howl_editor.gui.detail.leaf_info_formatter import LeafInfoFormatter
-from howl_editor.gui.detail.song_detail_formatter import SongDetailFormatter
-from howl_editor.gui.diagnostics_status_provider import DiagnosticsStatusProvider
-from howl_editor.gui.entries.blob_modification_detector import BlobModificationDetector
-from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
-from howl_editor.gui.entry_badge_resolver import EntryBadgeResolver
-from howl_editor.gui.entry_drop_router import EntryDropRouter
-from howl_editor.gui.severity_presenter import SeverityPresenter
-from howl_editor.gui.size_formatter import SizeFormatter
-from howl_editor.gui.spu_slot_choice_builder import SpuSlotChoiceBuilder
-from howl_editor.gui.background.process_runner import ProcessTaskRunner
-from howl_editor.gui.background.task_runner import TaskRunner
-from howl_editor.gui.stylesheet_loader import StylesheetLoader
-from howl_editor.midi.converter import MidiConverter
-from howl_editor.midi.drum_name_resolver import DrumNameResolver
-from howl_editor.midi.drum_pitch_remapper import DrumPitchRemapper
-from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.paths import RENDERED_SONG_CACHE_DIR
-from howl_editor.ps1.adsr_decoder import AdsrDecoder
-from howl_editor.ps1.formats.vag.decoder import VagDecoder
-from howl_editor.ps1.formats.vag.reader import VagReader
-from howl_editor.ps1.formats.vag.structure_validator import VagStructureValidator
-from howl_editor.ps1.formats.vag.writer import VagWriter
-from howl_editor.saphi.formats.sca.chunk_reader import ScaChunkReader
-from howl_editor.saphi.formats.sca.chunk_writer import ScaChunkWriter
-from howl_editor.saphi.formats.sca.metadata_codec import ScaMetadataCodec
-from howl_editor.saphi.formats.sca.reader import ScaReader
-from howl_editor.saphi.formats.sca.sample_sizes_extractor import SampleSizesExtractor
-from howl_editor.saphi.formats.sca.spu_slot_validator import ScaSpuSlotValidator
-from howl_editor.saphi.formats.sca.writer import ScaWriter
 
 _TEMPLATE_DIR = Path(__file__).parent / "gui" / "templates"
 _QSS_DIR = _TEMPLATE_DIR / "qss"
 _IMAGE_DIR = _TEMPLATE_DIR / "images"
 
 container = Container()
-container.register("vlq_codec", lambda c: VlqCodec())
-container.register("stock_names", lambda c: StockNameResolver())
-container.register("howl_reader", lambda c: HowlReader())
-container.register("howl_writer", lambda c: HowlWriter())
-container.register("howl_editor", lambda c: HowlEditor())
-container.register("cseq_reader", lambda c: CseqReader(
-    c.resolve("vlq_codec"), c.resolve("stock_names"),
-))
-container.register("cseq_writer", lambda c: CseqWriter(c.resolve("vlq_codec")))
-container.register("cseq_blob_cache", lambda c: BlobCache())
-container.register("cseq_parses", lambda c: CseqParseCache(
-    c.resolve("cseq_reader"),
-    c.resolve("cseq_blob_cache"),
-))
-container.register("cseq_size_validator", lambda c: CseqSizeValidator())
-container.register("vag_reader", lambda c: VagReader())
-container.register("vag_writer", lambda c: VagWriter())
-container.register("bank_reader", lambda c: BankReader(c.resolve("stock_names")))
-container.register("cseq_editor", lambda c: CseqEditor(
-    c.resolve("cseq_reader"),
-    c.resolve("cseq_writer")
-))
-container.register("spu_slot_guard", lambda c: SpuSlotGuard())
-container.register("bank_builder", lambda c: BankBuilder(
-    c.resolve("vag_reader"),
-    c.resolve("spu_slot_guard"),
-))
-container.register("drum_pitch_remapper", lambda c: DrumPitchRemapper())
-container.register("gm_drum_names", lambda c: DrumNameResolver())
-container.register("midi_converter", lambda c: MidiConverter(
-    c.resolve("cseq_writer"),
-    c.resolve("drum_pitch_remapper"),
-))
-container.register("midi_exporter", lambda c: CseqMidiExporter())
-container.register("wav_writer", lambda c: WavWriter())
-container.register("vag_decoder", lambda c: VagDecoder(c.resolve("wav_writer")))
-container.register("adsr_decoder", lambda c: AdsrDecoder())
-container.register("pitch_calculator", lambda c: PitchCalculator())
-container.register("pitch_stepper", lambda c: PitchStepper())
-container.register("pitch_shifter", lambda c: CseqPitchShifter(
-    c.resolve("cseq_reader"),
-    c.resolve("cseq_writer"),
-    c.resolve("pitch_stepper"),
-))
-container.register("gain_calculator", lambda c: GainCalculator())
-container.register("cseq_renderer", lambda c: CseqRenderer(
-    c.resolve("vag_decoder"),
-    c.resolve("adsr_decoder"),
-    c.resolve("wav_writer"),
-    c.resolve("pitch_calculator"),
-    c.resolve("gain_calculator")))
-container.register("audio_player", lambda c: AudioPlayer())
-container.register("resampler", lambda c: LinearInterpolationResampler())
-container.register("vag_rate_provider", lambda c: VagSampleRateProvider())
-container.register("audio_cache", lambda c: AudioCache(RENDERED_SONG_CACHE_DIR))
-container.register("sample_lookup", lambda c: SampleLookup(
-    c.resolve("bank_reader"),
-    c.resolve("cseq_parses")
-))
-container.register("version_detector", lambda c: HowlVersionDetector())
-container.register("sample_classifier", lambda c: SampleClassifier(c.resolve("cseq_parses")))
-container.register("howl_stats_calculator", lambda c: HowlStatsCalculator())
-container.register("validator", lambda c: BankCseqValidator(
-    c.resolve("bank_reader"),
-    c.resolve("cseq_reader")))
-container.register("spu_residency_calculator", lambda c: SpuResidencyCalculator(
-    c.resolve("bank_reader")))
-container.register("cseq_size_guard", lambda c: CseqSizeGuard(
-    c.resolve("cseq_size_validator")))
-container.register("bank_size_guard", lambda c: BankSizeGuard(
-    c.resolve("spu_residency_calculator"),
-    c.resolve("stock_layout")))
-container.register("howl_size_guard", lambda c: HowlSizeGuard())
-container.register("vag_structure_validator", lambda c: VagStructureValidator())
-container.register("pitch_ceiling_validator", lambda c: PitchCeilingValidator(
-    c.resolve("pitch_calculator")))
-container.register("pitch_headroom_inspector", lambda c: PitchHeadroomInspector(
-    c.resolve("pitch_calculator")))
-container.register("bank_slice_cache", lambda c: BlobCache())
-container.register("bank_slice_validator", lambda c: BankSliceValidator(
-    c.resolve("bank_reader"),
-    c.resolve("vag_structure_validator"),
-    c.resolve("bank_slice_cache"),
-))
-container.register("spu_slot_usage", lambda c: SpuSlotUsageResolver(
-    c.resolve("bank_reader"),
-    c.resolve("cseq_parses"),
-))
-container.register("spu_slot_allocator", lambda c: SpuSlotAllocator(c.resolve("spu_slot_usage")))
-container.register("spu_slot_choices", lambda c: SpuSlotChoiceBuilder(
-    c.resolve("bank_reader"),
-    c.resolve("spu_slot_usage"),
-    c.resolve("spu_slot_allocator"),
-))
-container.register("sample_ownership", lambda c: SampleOwnershipResolver(
-    c.resolve("bank_reader")))
-container.register("shared_sample_propagator", lambda c: SharedSamplePropagator(
-    c.resolve("bank_reader"),
-    c.resolve("bank_builder"),
-    c.resolve("sample_ownership")))
-container.register("sample_replacement_planner", lambda c: SampleReplacementPlanner(
-    c.resolve("bank_reader"),
-    c.resolve("bank_builder"),
-    c.resolve("shared_sample_guard"),
-    c.resolve("bank_size_guard"),
-))
-container.register("shared_sample_guard", lambda c: SharedSampleGuard(
-    c.resolve("sample_ownership"),
-    c.resolve("bank_slice_validator"),
-    c.resolve("bank_reader")))
-container.register("howl_diagnostics", lambda c: HowlDiagnostics(
-    c.resolve("cseq_reader"),
-    c.resolve("cseq_parses"),
-    c.resolve("cseq_size_validator"),
-    c.resolve("bank_reader"),
-    c.resolve("spu_residency_calculator"),
-    c.resolve("validator"),
-    c.resolve("stock_layout"),
-    c.resolve("howl_size_guard"),
-    c.resolve("bank_slice_validator"),
-    c.resolve("pitch_ceiling_validator"),
-))
-container.register("diagnostics_status_provider", lambda c: DiagnosticsStatusProvider(
-    c.resolve("howl_diagnostics"),
-    c.resolve("howl_writer"),
-))
-container.register("severity_presenter", lambda c: SeverityPresenter())
-container.register("entry_badge_resolver", lambda c: EntryBadgeResolver(
-    c.resolve("severity_presenter"),
-))
-container.register("diagnosis_banner_formatter", lambda c: DiagnosisBannerFormatter(
-    c.resolve("template_engine"),
-    c.resolve("severity_presenter"),
-))
-container.register("sfz_exporter", lambda c: SfzExporter(
-    c.resolve("cseq_reader"),
-    c.resolve("bank_reader"),
-    c.resolve("sample_lookup"),
-    c.resolve("vag_decoder"),
-))
-container.register("batch_exporter", lambda c: BatchExporter(
-    c.resolve("bank_reader"),
-    c.resolve("cseq_reader"),
-    c.resolve("vag_writer"),
-    c.resolve("vag_decoder"),
-    c.resolve("sample_classifier"),
-    c.resolve("midi_exporter"),
-))
-container.register("template_engine", lambda c: TemplateEngine(_TEMPLATE_DIR))
-container.register("size_formatter", lambda c: SizeFormatter())
-container.register("howl_detail_formatter", lambda c: HowlDetailFormatter(
-    c.resolve("version_detector"),
-    c.resolve("template_engine"),
-    c.resolve("size_formatter")))
-container.register("fx_detail_formatter", lambda c: FxDetailFormatter(c.resolve("template_engine")))
-container.register("leaf_info_formatter", lambda c: LeafInfoFormatter(
-    c.resolve("template_engine"),
-    c.resolve("bank_reader"),
-    c.resolve("cseq_reader"),
-    c.resolve("sample_lookup"),
-    c.resolve("size_formatter"),
-))
-container.register("bank_detail_formatter", lambda c: BankDetailFormatter(
-    c.resolve("bank_reader"),
-    c.resolve("template_engine"),
-    c.resolve("size_formatter")))
-container.register("song_detail_formatter", lambda c: SongDetailFormatter(
-    c.resolve("cseq_reader"),
-    c.resolve("template_engine"),
-    c.resolve("size_formatter")))
-container.register("detail_formatter", lambda c: DetailFormatter(
-    c.resolve("howl_detail_formatter"),
-    c.resolve("fx_detail_formatter"),
-    c.resolve("bank_detail_formatter"),
-    c.resolve("song_detail_formatter"),
-))
-container.register("sca_chunk_reader", lambda c: ScaChunkReader())
-container.register("sca_chunk_writer", lambda c: ScaChunkWriter())
-container.register("sca_metadata_codec", lambda c: ScaMetadataCodec())
-container.register("sca_reader", lambda c: ScaReader(
-    c.resolve("sca_chunk_reader"),
-    c.resolve("sca_metadata_codec"),
-))
-container.register("sca_writer", lambda c: ScaWriter(
-    c.resolve("sca_chunk_writer"),
-    c.resolve("sca_metadata_codec"),
-))
-container.register("sample_sizes_extractor", lambda c: SampleSizesExtractor(c.resolve("bank_reader")))
-container.register("sca_spu_slot_validator", lambda c: ScaSpuSlotValidator(
-    c.resolve("bank_reader"),
-    c.resolve("cseq_reader"),
-    c.resolve("spu_slot_guard"),
-))
-container.register("adventure_hub_mask_table_query", lambda c: AdventureHubMaskTableQuery())
-container.register("track_mask_layout", lambda c: TrackMaskLayout())
-container.register("entry_leaves_builder", lambda c: EntryLeavesBuilder(
-    c.resolve("bank_reader"),
-    c.resolve("cseq_reader"),
-    c.resolve("track_mask_layout"),
-))
-container.register("stock_layout", lambda c: StockLayoutResolver())
-container.register("blob_modification_detector", lambda c: BlobModificationDetector())
-container.register("semantic_entry_builder", lambda c: SemanticEntryBuilder(
-    c.resolve("bank_reader"),
-    c.resolve("cseq_reader"),
-    c.resolve("stock_layout"),
-    c.resolve("blob_modification_detector"),
-    c.resolve("adventure_hub_mask_table_query"),
-))
-container.register("blob_snapshot", lambda c: BlobSnapshot())
-container.register("entry_drop_router", lambda c: EntryDropRouter())
-container.register("stylesheet_loader", lambda c: StylesheetLoader(_QSS_DIR))
-container.register("category_icon_resolver", lambda c: CategoryIconResolver(_IMAGE_DIR))
-container.register("tasks", lambda c: TaskRunner())
-container.register("process_tasks", lambda c: ProcessTaskRunner())
+container.register_lazy("vlq_codec", "howl_editor.core.vlq:VlqCodec")
+container.register_lazy(
+    "stock_names", "howl_editor.ctr.analysis.stock_name_resolver:StockNameResolver",
+)
+container.register_lazy("howl_reader", "howl_editor.ctr.formats.howl.reader:HowlReader")
+container.register_lazy("howl_writer", "howl_editor.ctr.formats.howl.writer:HowlWriter")
+container.register_lazy("howl_editor", "howl_editor.ctr.formats.howl.editor:HowlEditor")
+container.register_lazy(
+    "cseq_reader", "howl_editor.ctr.formats.cseq.reader:CseqReader",
+    "vlq_codec",
+    "stock_names",
+)
+container.register_lazy(
+    "cseq_writer", "howl_editor.ctr.formats.cseq.writer:CseqWriter",
+    "vlq_codec",
+)
+container.register_lazy("cseq_blob_cache", "howl_editor.core.blob_cache:BlobCache")
+container.register_lazy(
+    "cseq_parses", "howl_editor.ctr.formats.cseq.parse_cache:CseqParseCache",
+    "cseq_reader",
+    "cseq_blob_cache",
+)
+container.register_lazy(
+    "cseq_size_validator", "howl_editor.ctr.formats.cseq.size_validator:CseqSizeValidator",
+)
+container.register_lazy("vag_reader", "howl_editor.ps1.formats.vag.reader:VagReader")
+container.register_lazy("vag_writer", "howl_editor.ps1.formats.vag.writer:VagWriter")
+container.register_lazy(
+    "bank_reader", "howl_editor.ctr.formats.bank.reader:BankReader",
+    "stock_names",
+)
+container.register_lazy(
+    "cseq_editor", "howl_editor.ctr.formats.cseq.editor:CseqEditor",
+    "cseq_reader",
+    "cseq_writer",
+)
+container.register_lazy(
+    "spu_slot_guard", "howl_editor.ctr.diagnostics.spu_slot_guard:SpuSlotGuard",
+)
+container.register_lazy(
+    "bank_builder", "howl_editor.ctr.formats.bank.builder:BankBuilder",
+    "vag_reader",
+    "spu_slot_guard",
+)
+container.register_lazy(
+    "drum_pitch_remapper", "howl_editor.midi.drum_pitch_remapper:DrumPitchRemapper",
+)
+container.register_lazy("gm_drum_names", "howl_editor.midi.drum_name_resolver:DrumNameResolver")
+container.register_lazy(
+    "midi_converter", "howl_editor.midi.converter:MidiConverter",
+    "cseq_writer",
+    "drum_pitch_remapper",
+)
+container.register_lazy("midi_exporter", "howl_editor.midi.exporter:CseqMidiExporter")
+container.register_lazy("wav_writer", "howl_editor.audio.wav_writer:WavWriter")
+container.register_lazy(
+    "vag_decoder", "howl_editor.ps1.formats.vag.decoder:VagDecoder",
+    "wav_writer",
+)
+container.register_lazy("adsr_decoder", "howl_editor.ps1.adsr_decoder:AdsrDecoder")
+container.register_lazy(
+    "pitch_calculator", "howl_editor.ctr.voice.pitch_calculator:PitchCalculator",
+)
+container.register_lazy("pitch_stepper", "howl_editor.ctr.voice.pitch_stepper:PitchStepper")
+container.register_lazy(
+    "pitch_shifter", "howl_editor.ctr.formats.cseq.pitch_shifter:CseqPitchShifter",
+    "cseq_reader",
+    "cseq_writer",
+    "pitch_stepper",
+)
+container.register_lazy("gain_calculator", "howl_editor.ctr.voice.gain_calculator:GainCalculator")
+container.register_lazy(
+    "cseq_renderer", "howl_editor.ctr.cseq_renderer:CseqRenderer",
+    "vag_decoder",
+    "adsr_decoder",
+    "wav_writer",
+    "pitch_calculator",
+    "gain_calculator",
+)
+container.register_lazy("audio_player", "howl_editor.audio.audio_player:AudioPlayer")
+container.register_lazy(
+    "resampler", "howl_editor.audio.linear_interpolation_resampler:LinearInterpolationResampler",
+)
+container.register_lazy(
+    "vag_rate_provider", "howl_editor.audio.vag_sample_rate_provider:VagSampleRateProvider",
+)
+container.register_lazy(
+    "audio_cache", "howl_editor.audio.audio_cache:AudioCache",
+    cache_dir=RENDERED_SONG_CACHE_DIR,
+)
+container.register_lazy(
+    "sample_lookup", "howl_editor.ctr.sample_lookup:SampleLookup",
+    "bank_reader",
+    "cseq_parses",
+)
+container.register_lazy(
+    "version_detector", "howl_editor.ctr.formats.howl.version:HowlVersionDetector",
+)
+container.register_lazy(
+    "sample_classifier", "howl_editor.ctr.analysis.sample_classifier:SampleClassifier",
+    "cseq_parses",
+)
+container.register_lazy(
+    "howl_stats_calculator", "howl_editor.ctr.analysis.howl_stats:HowlStatsCalculator",
+)
+container.register_lazy(
+    "validator", "howl_editor.ctr.analysis.validator:BankCseqValidator",
+    "bank_reader",
+    "cseq_reader",
+)
+container.register_lazy(
+    "spu_residency_calculator", "howl_editor.ctr.diagnostics.spu_residency:SpuResidencyCalculator",
+    "bank_reader",
+)
+container.register_lazy(
+    "cseq_size_guard", "howl_editor.ctr.diagnostics.cseq_size_guard:CseqSizeGuard",
+    "cseq_size_validator",
+)
+container.register_lazy(
+    "bank_size_guard", "howl_editor.ctr.diagnostics.bank_size_guard:BankSizeGuard",
+    "spu_residency_calculator",
+    "stock_layout",
+)
+container.register_lazy(
+    "howl_size_guard", "howl_editor.ctr.diagnostics.howl_size_guard:HowlSizeGuard",
+)
+container.register_lazy(
+    "vag_structure_validator", "howl_editor.ps1.formats.vag.structure_validator:VagStructureValidator",
+)
+container.register_lazy(
+    "pitch_ceiling_validator", "howl_editor.ctr.diagnostics.pitch_ceiling_validator:PitchCeilingValidator",
+    "pitch_calculator",
+)
+container.register_lazy(
+    "pitch_headroom_inspector", "howl_editor.ctr.voice.pitch_headroom:PitchHeadroomInspector",
+    "pitch_calculator",
+)
+container.register_lazy("bank_slice_cache", "howl_editor.core.blob_cache:BlobCache")
+container.register_lazy(
+    "bank_slice_validator", "howl_editor.ctr.diagnostics.bank_slice_validator:BankSliceValidator",
+    "bank_reader",
+    "vag_structure_validator",
+    "bank_slice_cache",
+)
+container.register_lazy(
+    "spu_slot_usage", "howl_editor.ctr.analysis.spu_slot_usage:SpuSlotUsageResolver",
+    "bank_reader",
+    "cseq_parses",
+)
+container.register_lazy(
+    "spu_slot_allocator", "howl_editor.ctr.analysis.spu_slot_allocator:SpuSlotAllocator",
+    "spu_slot_usage",
+)
+container.register_lazy(
+    "spu_slot_choices", "howl_editor.gui.spu_slot_choice_builder:SpuSlotChoiceBuilder",
+    "bank_reader",
+    "spu_slot_usage",
+    "spu_slot_allocator",
+)
+container.register_lazy(
+    "sample_ownership", "howl_editor.ctr.analysis.sample_ownership:SampleOwnershipResolver",
+    "bank_reader",
+)
+container.register_lazy(
+    "shared_sample_propagator", "howl_editor.ctr.formats.bank.shared_sample_propagator:SharedSamplePropagator",
+    "bank_reader",
+    "bank_builder",
+    "sample_ownership",
+)
+container.register_lazy(
+    "sample_replacement_planner", "howl_editor.ctr.analysis.sample_replacement_planner:SampleReplacementPlanner",
+    "bank_reader",
+    "bank_builder",
+    "shared_sample_guard",
+    "bank_size_guard",
+)
+container.register_lazy(
+    "shared_sample_guard", "howl_editor.ctr.diagnostics.shared_sample_guard:SharedSampleGuard",
+    "sample_ownership",
+    "bank_slice_validator",
+    "bank_reader",
+)
+container.register_lazy(
+    "howl_diagnostics", "howl_editor.ctr.diagnostics.howl_diagnostics:HowlDiagnostics",
+    "cseq_reader",
+    "cseq_parses",
+    "cseq_size_validator",
+    "bank_reader",
+    "spu_residency_calculator",
+    "validator",
+    "stock_layout",
+    "howl_size_guard",
+    "bank_slice_validator",
+    "pitch_ceiling_validator",
+)
+container.register_lazy(
+    "diagnostics_status_provider", "howl_editor.gui.diagnostics_status_provider:DiagnosticsStatusProvider",
+    "howl_diagnostics",
+    "howl_writer",
+)
+container.register_lazy(
+    "severity_presenter", "howl_editor.gui.severity_presenter:SeverityPresenter",
+)
+container.register_lazy(
+    "entry_badge_resolver", "howl_editor.gui.entry_badge_resolver:EntryBadgeResolver",
+    "severity_presenter",
+)
+container.register_lazy(
+    "diagnosis_banner_formatter", "howl_editor.gui.detail.diagnosis_banner_formatter:DiagnosisBannerFormatter",
+    "template_engine",
+    "severity_presenter",
+)
+container.register_lazy(
+    "sfz_exporter", "howl_editor.export.sfz_exporter:SfzExporter",
+    "cseq_reader",
+    "bank_reader",
+    "sample_lookup",
+    "vag_decoder",
+)
+container.register_lazy(
+    "batch_exporter", "howl_editor.export.batch_exporter:BatchExporter",
+    "bank_reader",
+    "cseq_reader",
+    "vag_writer",
+    "vag_decoder",
+    "sample_classifier",
+    "midi_exporter",
+)
+container.register_lazy(
+    "template_engine", "howl_editor.core.template_engine:TemplateEngine",
+    template_dir=_TEMPLATE_DIR,
+)
+container.register_lazy("size_formatter", "howl_editor.gui.size_formatter:SizeFormatter")
+container.register_lazy(
+    "howl_detail_formatter", "howl_editor.gui.detail.howl_detail_formatter:HowlDetailFormatter",
+    "version_detector",
+    "template_engine",
+    "size_formatter",
+)
+container.register_lazy(
+    "fx_detail_formatter", "howl_editor.gui.detail.fx_detail_formatter:FxDetailFormatter",
+    "template_engine",
+)
+container.register_lazy(
+    "leaf_info_formatter", "howl_editor.gui.detail.leaf_info_formatter:LeafInfoFormatter",
+    "template_engine",
+    "bank_reader",
+    "cseq_reader",
+    "sample_lookup",
+    "size_formatter",
+)
+container.register_lazy(
+    "bank_detail_formatter", "howl_editor.gui.detail.bank_detail_formatter:BankDetailFormatter",
+    "bank_reader",
+    "template_engine",
+    "size_formatter",
+)
+container.register_lazy(
+    "song_detail_formatter", "howl_editor.gui.detail.song_detail_formatter:SongDetailFormatter",
+    "cseq_reader",
+    "template_engine",
+    "size_formatter",
+)
+container.register_lazy(
+    "detail_formatter", "howl_editor.gui.detail.detail_formatter:DetailFormatter",
+    "howl_detail_formatter",
+    "fx_detail_formatter",
+    "bank_detail_formatter",
+    "song_detail_formatter",
+)
+container.register_lazy(
+    "sca_chunk_reader", "howl_editor.saphi.formats.sca.chunk_reader:ScaChunkReader",
+)
+container.register_lazy(
+    "sca_chunk_writer", "howl_editor.saphi.formats.sca.chunk_writer:ScaChunkWriter",
+)
+container.register_lazy(
+    "sca_metadata_codec", "howl_editor.saphi.formats.sca.metadata_codec:ScaMetadataCodec",
+)
+container.register_lazy(
+    "sca_reader", "howl_editor.saphi.formats.sca.reader:ScaReader",
+    "sca_chunk_reader",
+    "sca_metadata_codec",
+)
+container.register_lazy(
+    "sca_writer", "howl_editor.saphi.formats.sca.writer:ScaWriter",
+    "sca_chunk_writer",
+    "sca_metadata_codec",
+)
+container.register_lazy(
+    "sample_sizes_extractor", "howl_editor.saphi.formats.sca.sample_sizes_extractor:SampleSizesExtractor",
+    "bank_reader",
+)
+container.register_lazy(
+    "sca_spu_slot_validator", "howl_editor.saphi.formats.sca.spu_slot_validator:ScaSpuSlotValidator",
+    "bank_reader",
+    "cseq_reader",
+    "spu_slot_guard",
+)
+container.register_lazy(
+    "adventure_hub_mask_table_query",
+    "howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query:AdventureHubMaskTableQuery",
+)
+container.register_lazy(
+    "track_mask_layout", "howl_editor.ctr.formats.cseq.track_mask_layout:TrackMaskLayout",
+)
+container.register_lazy(
+    "entry_leaves_builder", "howl_editor.gui.entries.entry_leaves_builder:EntryLeavesBuilder",
+    "bank_reader",
+    "cseq_reader",
+    "track_mask_layout",
+)
+container.register_lazy(
+    "stock_layout", "howl_editor.ctr.analysis.stock_layout_resolver:StockLayoutResolver",
+)
+container.register_lazy(
+    "blob_modification_detector", "howl_editor.gui.entries.blob_modification_detector:BlobModificationDetector",
+)
+container.register_lazy(
+    "semantic_entry_builder", "howl_editor.gui.entries.semantic_entry_builder:SemanticEntryBuilder",
+    "bank_reader",
+    "cseq_reader",
+    "stock_layout",
+    "blob_modification_detector",
+    "adventure_hub_mask_table_query",
+)
+container.register_lazy("blob_snapshot", "howl_editor.ctr.formats.howl.blob_snapshot:BlobSnapshot")
+container.register_lazy("entry_drop_router", "howl_editor.gui.entry_drop_router:EntryDropRouter")
+container.register_lazy(
+    "stylesheet_loader", "howl_editor.gui.stylesheet_loader:StylesheetLoader",
+    qss_dir=_QSS_DIR,
+)
+container.register_lazy(
+    "category_icon_resolver", "howl_editor.gui.category_icon_resolver:CategoryIconResolver",
+    image_dir=_IMAGE_DIR,
+)
+container.register_lazy("tasks", "howl_editor.gui.background.task_runner:TaskRunner")
+container.register_lazy(
+    "process_tasks", "howl_editor.gui.background.process_runner:ProcessTaskRunner",
+)

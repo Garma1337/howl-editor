@@ -1,5 +1,5 @@
 # coding: utf-8
 
-from howl_editor.midi.converter import MidiConverter
-
-__all__ = ["MidiConverter"]
+# Deliberately empty: re-exporting MidiConverter here would import mido
+# whenever anything in this package is touched, including the flag that
+# only asks whether mido is installed.

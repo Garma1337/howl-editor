@@ -1,7 +1,6 @@
 # coding: utf-8
 
 import math
-
 from dataclasses import dataclass
 from html import escape
 

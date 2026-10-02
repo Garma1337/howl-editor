@@ -10,19 +10,19 @@ from howl_editor.ctr.formats.cseq.models import (
 )
 from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.file_format_registry import FileFormatRegistry
-from howl_editor.ps1 import spu
 from howl_editor.gui.command import RemoveItemCommand, SwapBlobCommand
+from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.dialog.copy_target_dialog import (
     CopyTargetContainer, CopyTargetDialog,
 )
 from howl_editor.gui.dialog.edit_instrument_dialog import EditInstrumentDialog
 from howl_editor.gui.dialog.midi_export_options_dialog import MidiExportOptionsDialog
-from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.dialog.select_sample_dialog import (
     SampleChoice, SelectSampleDialog,
 )
-from howl_editor.midi.converter import HAS_MIDO
-from howl_editor.midi.exporter import MidiExportOptions
+from howl_editor.midi.availability import HAS_MIDO
+from howl_editor.midi.export_options import MidiExportOptions
+from howl_editor.ps1 import spu
 
 
 class SongHandler:
@@ -33,7 +33,7 @@ class SongHandler:
     def _cseq_within_limit(self, blob) -> bool:
         """Gate a prospective CSEQ blob through the engine size guard, warning
         (with override) if it exceeds the console's song buffer."""
-        guard = self._w._cseq_size_guard
+        guard = self._w._services.resolve("cseq_size_guard")
         return guard is None or self._w.confirm_within_limit(guard.check(blob))
 
     def add_song(self):
@@ -48,7 +48,7 @@ class SongHandler:
         if not self._cseq_within_limit(data):
             return
 
-        self._w._editor.add_song(self._w.hwl, data)
+        self._w._services.resolve("howl_editor").add_song(self._w.hwl, data)
         self._w._mark_modified()
         self._w._rebuild_tree()
         self._w._notify(f"Added song {len(self._w.hwl.songs) - 1} from {Path(path).name}")
@@ -74,7 +74,7 @@ class SongHandler:
         return options
 
     def export_song_as_midi(self, index: int):
-        if not self._w.hwl or not self._w._midi_exporter:
+        if not self._w.hwl or not self._w._services.resolve("midi_exporter"):
             return
 
         options = self._prompt_midi_options()
@@ -89,7 +89,7 @@ class SongHandler:
             return
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[index])
 
             for i in range(len(cseq.songs)):
                 if len(cseq.songs) > 1:
@@ -98,14 +98,14 @@ class SongHandler:
                 else:
                     out = Path(path)
 
-                self._w._midi_exporter.export_to_file(cseq, out, i, options)
+                self._w._services.resolve("midi_exporter").export_to_file(cseq, out, i, options)
 
             self._w._notify(f"Exported song {index} as MIDI")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"MIDI export failed:\n{e}")
 
     def export_sequence_as_midi(self, song_index: int, seq_index: int):
-        if not self._w.hwl or not self._w._midi_exporter:
+        if not self._w.hwl or not self._w._services.resolve("midi_exporter"):
             return
 
         options = self._prompt_midi_options()
@@ -120,8 +120,8 @@ class SongHandler:
             return
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
-            self._w._midi_exporter.export_to_file(cseq, path, seq_index, options)
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
+            self._w._services.resolve("midi_exporter").export_to_file(cseq, path, seq_index, options)
             self._w._notify(f"Exported sequence {seq_index} as MIDI")
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"MIDI export failed:\n{e}")
@@ -131,11 +131,11 @@ class SongHandler:
         Lets a music maker load the song's sound palette into any
         SFZ-compatible DAW / sampler instead of treating the data as opaque
         CSEQ bytes."""
-        if not self._w.hwl or self._w._sfz_exporter is None:
+        if not self._w.hwl or self._w._services.resolve("sfz_exporter") is None:
             return
 
-        song_name = self._w._cseq_reader.get_name(index) or f"song_{index}"
-        default_name = f"{self._w._sfz_exporter.safe_filename_stem(song_name)}{FileFormatRegistry.SFZ.extension}"
+        song_name = self._w._services.resolve("cseq_reader").get_name(index) or f"song_{index}"
+        default_name = f"{self._w._services.resolve("sfz_exporter").safe_filename_stem(song_name)}{FileFormatRegistry.SFZ.extension}"
 
         path, _ = QFileDialog.getSaveFileName(
             self._w, f"Export Song {index} as SFZ",
@@ -146,8 +146,8 @@ class SongHandler:
             return
 
         try:
-            written = self._w._sfz_exporter.export(
-                self._w.hwl, index, Path(path), self._w._vag_rate.rate,
+            written = self._w._services.resolve("sfz_exporter").export(
+                self._w.hwl, index, Path(path), self._w._services.resolve("vag_rate_provider").rate,
             )
             self._w._notify(
                 f"Exported song {index} as SFZ ({written} samples)",
@@ -207,7 +207,7 @@ class SongHandler:
             if source_seq is None:
                 return
 
-            new_blob = self._w._cseq_editor.replace_sequence(
+            new_blob = self._w._services.resolve("cseq_editor").replace_sequence(
                 self._w.hwl.songs[song_index], seq_index, source_seq,
             )
             if not self._cseq_within_limit(new_blob):
@@ -230,7 +230,7 @@ class SongHandler:
 
             return cseq.songs[0]
 
-        source_cseq = self._w._cseq_reader.read(Path(path).read_bytes())
+        source_cseq = self._w._services.resolve("cseq_reader").read(Path(path).read_bytes())
         if not source_cseq.songs:
             raise ValueError("Source CSEQ has no sequences")
 
@@ -250,10 +250,10 @@ class SongHandler:
         return source_cseq.songs[source_seq_index]
 
     def _paired_bank(self, song_index: int) -> int | None:
-        if self._w._stock_layout is None:
+        if self._w._services.resolve("stock_layout") is None:
             return None
 
-        return self._w._stock_layout.paired_bank(song_index)
+        return self._w._services.resolve("stock_layout").paired_bank(song_index)
 
     def import_midi_as_cseq(self, path: str, bank_index: int | None):
         """Public entry for MIDI → whole-CSEQ import. Returns the converted
@@ -262,12 +262,12 @@ class SongHandler:
         return self._import_midi_as_cseq(path, bank_index)
 
     def _import_midi_as_cseq(self, path: str, bank_index: int | None):
-        if not HAS_MIDO or self._w._midi_converter is None:
+        if not HAS_MIDO or self._w._services.resolve("midi_converter") is None:
             self._w._notify_warning("MIDI support requires the 'mido' package")
             return None
 
         try:
-            info = self._w._midi_converter.get_midi_info(path)
+            info = self._w._services.resolve("midi_converter").get_midi_info(path)
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Cannot read MIDI:\n{e}")
             return None
@@ -276,26 +276,26 @@ class SongHandler:
         bank_order = None
         spu_pitches = None
 
-        if self._w._sample_lookup is not None and self._w.hwl is not None:
+        if self._w._services.resolve("sample_lookup") is not None and self._w.hwl is not None:
             # Base pitches for every referenced sample — so both the initial
             # prefill and any later SPU change in the dialog resolve a pitch,
             # not just the paired bank's samples.
-            spu_pitches = self._w._sample_lookup.sample_pitch_map(self._w.hwl) or None
+            spu_pitches = self._w._services.resolve("sample_lookup").sample_pitch_map(self._w.hwl) or None
             if bank_index is not None:
-                bank_order = self._w._sample_lookup.bank_spu_order(self._w.hwl, bank_index) or None
+                bank_order = self._w._services.resolve("sample_lookup").bank_spu_order(self._w.hwl, bank_index) or None
 
         dialog = ConvertMidiDialog(
-            self._w, info, max_spu, self._w._drum_names, bank_order, spu_pitches,
-            free_spu_indices=self._w._spu_slot_usage.free_slots(self._w.hwl) if self._w.hwl else None,
-            pitch_headroom=self._w._pitch_headroom,
-            pitch_stepper=self._w._pitch_stepper,
+            self._w, info, max_spu, self._w._services.resolve("gm_drum_names"), bank_order, spu_pitches,
+            free_spu_indices=self._w._services.resolve("spu_slot_usage").free_slots(self._w.hwl) if self._w.hwl else None,
+            pitch_headroom=self._w._services.resolve("pitch_headroom_inspector"),
+            pitch_stepper=self._w._services.resolve("pitch_stepper"),
         )
 
         if dialog.exec() != QDialog.Accepted:
             return None
 
         try:
-            return self._w._midi_converter.convert_to_model(path, dialog.get_settings())
+            return self._w._services.resolve("midi_converter").convert_to_model(path, dialog.get_settings())
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Conversion failed:\n{e}")
             return None
@@ -304,14 +304,14 @@ class SongHandler:
         """Move one instrument's base pitch by whole octaves, no dialog."""
         self._shift_octaves(
             song_index, octaves,
-            lambda blob: self._w._pitch_shifter.shift_instrument(blob, inst_index, octaves),
+            lambda blob: self._w._services.resolve("pitch_shifter").shift_instrument(blob, inst_index, octaves),
             f"instrument {inst_index}",
         )
 
     def shift_percussion_octaves(self, song_index: int, perc_index: int, octaves: int):
         self._shift_octaves(
             song_index, octaves,
-            lambda blob: self._w._pitch_shifter.shift_percussion(blob, perc_index, octaves),
+            lambda blob: self._w._services.resolve("pitch_shifter").shift_percussion(blob, perc_index, octaves),
             f"percussion {perc_index}",
         )
 
@@ -324,8 +324,8 @@ class SongHandler:
 
         kind = "percussion" if percussion else "instruments"
         shift = (
-            self._w._pitch_shifter.shift_percussions if percussion
-            else self._w._pitch_shifter.shift_instruments
+            self._w._services.resolve("pitch_shifter").shift_percussions if percussion
+            else self._w._services.resolve("pitch_shifter").shift_instruments
         )
 
         self._shift_octaves(
@@ -351,8 +351,8 @@ class SongHandler:
 
         try:
             set_volumes = (
-                self._w._cseq_editor.set_percussion_volumes if percussion
-                else self._w._cseq_editor.set_instrument_volumes
+                self._w._services.resolve("cseq_editor").set_percussion_volumes if percussion
+                else self._w._services.resolve("cseq_editor").set_instrument_volumes
             )
             new_blob = set_volumes(self._w.hwl.songs[song_index], list(indices), volume)
 
@@ -408,7 +408,7 @@ class SongHandler:
             return
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
             if inst_index >= len(cseq.instruments):
                 return
 
@@ -420,14 +420,14 @@ class SongHandler:
                 initial_volume=inst.volume,
                 initial_frequency=inst.frequency,
                 initial_adsr=inst.adsr,
-                pitch_stepper=self._w._pitch_stepper,
+                pitch_stepper=self._w._services.resolve("pitch_stepper"),
             )
 
             if dialog.exec() != QDialog.Accepted:
                 return
 
             result = dialog.chosen()
-            new_blob = self._w._cseq_editor.update_instrument(
+            new_blob = self._w._services.resolve("cseq_editor").update_instrument(
                 self._w.hwl.songs[song_index], inst_index,
                 result.volume, result.frequency, result.adsr,
             )
@@ -446,7 +446,7 @@ class SongHandler:
             return
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
             if perc_index >= len(cseq.percussions):
                 return
 
@@ -457,14 +457,14 @@ class SongHandler:
                 subject_label=f"Editing percussion {perc_index} (SPU #{perc.sample_id})",
                 initial_volume=perc.volume,
                 initial_frequency=perc.frequency,
-                pitch_stepper=self._w._pitch_stepper,
+                pitch_stepper=self._w._services.resolve("pitch_stepper"),
             )
 
             if dialog.exec() != QDialog.Accepted:
                 return
 
             result = dialog.chosen()
-            new_blob = self._w._cseq_editor.update_percussion(
+            new_blob = self._w._services.resolve("cseq_editor").update_percussion(
                 self._w.hwl.songs[song_index], perc_index,
                 result.volume, result.frequency,
             )
@@ -480,7 +480,7 @@ class SongHandler:
         """Pick a MIDI file (and a track inside it if there are multiple),
         convert just that track's messages, and swap them into the named
         CSEQ track. Track flags / instrument binding stay put."""
-        if not self._w.hwl or not self._w._midi_converter:
+        if not self._w.hwl or not self._w._services.resolve("midi_converter"):
             return
 
         path, _ = QFileDialog.getOpenFileName(
@@ -492,7 +492,7 @@ class SongHandler:
             return
 
         try:
-            info = self._w._midi_converter.get_midi_info(path)
+            info = self._w._services.resolve("midi_converter").get_midi_info(path)
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Cannot read MIDI:\n{e}")
             return
@@ -521,16 +521,16 @@ class SongHandler:
             midi_track_index = note_tracks[labels.index(label)].index
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
             if seq_index >= len(cseq.songs) or track_index >= len(cseq.songs[seq_index].tracks):
                 return
 
             instrument_index = cseq.songs[seq_index].tracks[track_index].instrument
-            new_events = self._w._midi_converter.extract_track_events(
+            new_events = self._w._services.resolve("midi_converter").extract_track_events(
                 path, midi_track_index, instrument_index,
             )
 
-            new_blob = self._w._cseq_editor.replace_track_events(
+            new_blob = self._w._services.resolve("cseq_editor").replace_track_events(
                 self._w.hwl.songs[song_index], seq_index, track_index, new_events,
             )
             self._w._undo_stack.push(SwapBlobCommand(
@@ -556,7 +556,7 @@ class SongHandler:
             return
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
             table = cseq.percussions if percussion else cseq.instruments
 
             if entry_index >= len(table):
@@ -584,10 +584,10 @@ class SongHandler:
             song_blob = self._w.hwl.songs[song_index]
 
             if percussion:
-                new_blob = self._w._cseq_editor.retarget_percussion(song_blob, entry_index, new_id)
+                new_blob = self._w._services.resolve("cseq_editor").retarget_percussion(song_blob, entry_index, new_id)
                 description = f"Retarget percussion {entry_index} → SPU #{new_id}"
             else:
-                new_blob = self._w._cseq_editor.retarget_instrument(song_blob, entry_index, new_id)
+                new_blob = self._w._services.resolve("cseq_editor").retarget_instrument(song_blob, entry_index, new_id)
                 description = f"Retarget instrument {entry_index} → SPU #{new_id}"
 
             self._w._undo_stack.push(SwapBlobCommand(
@@ -605,7 +605,7 @@ class SongHandler:
         events dialog can refresh in place, or None if the edit failed."""
         return self._mutate_event(
             song_index, seq_index,
-            lambda blob: self._w._cseq_editor.update_event(
+            lambda blob: self._w._services.resolve("cseq_editor").update_event(
                 blob, seq_index, track_index, event_index, pitch, velocity, delta,
             ),
             f"Edit event {event_index} on track {track_index}",
@@ -618,7 +618,7 @@ class SongHandler:
     ) -> CseqSong | None:
         return self._mutate_event(
             song_index, seq_index,
-            lambda blob: self._w._cseq_editor.insert_event(
+            lambda blob: self._w._services.resolve("cseq_editor").insert_event(
                 blob, seq_index, track_index, event_index, event_type,
                 pitch, velocity, delta,
             ),
@@ -630,7 +630,7 @@ class SongHandler:
     ) -> CseqSong | None:
         return self._mutate_event(
             song_index, seq_index,
-            lambda blob: self._w._cseq_editor.delete_event(
+            lambda blob: self._w._services.resolve("cseq_editor").delete_event(
                 blob, seq_index, track_index, event_index,
             ),
             f"Delete event {event_index} on track {track_index}",
@@ -655,7 +655,7 @@ class SongHandler:
             ))
             self._w._notify(description)
 
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
             return cseq.songs[seq_index] if seq_index < len(cseq.songs) else None
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Event edit failed:\n{e}")
@@ -682,7 +682,7 @@ class SongHandler:
         kind = "percussion" if percussion else "instrument"
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
             table = cseq.percussions if percussion else cseq.instruments
 
             picker = SelectSampleDialog(
@@ -717,7 +717,7 @@ class SongHandler:
                 initial_volume=cseq_fmt.MAX_VOLUME,
                 initial_frequency=self._seed_pitch_for(table, sample_id),
                 initial_adsr=None if percussion else CseqInstrument().adsr,
-                pitch_stepper=self._w._pitch_stepper,
+                pitch_stepper=self._w._services.resolve("pitch_stepper"),
             )
 
             if dialog.exec() != QDialog.Accepted:
@@ -727,11 +727,11 @@ class SongHandler:
             song_blob = self._w.hwl.songs[song_index]
 
             if percussion:
-                new_blob = self._w._cseq_editor.append_percussion(
+                new_blob = self._w._services.resolve("cseq_editor").append_percussion(
                     song_blob, sample_id, result.volume, result.frequency,
                 )
             else:
-                new_blob = self._w._cseq_editor.append_instrument(
+                new_blob = self._w._services.resolve("cseq_editor").append_instrument(
                     song_blob, sample_id, result.volume, result.frequency, result.adsr,
                 )
 
@@ -783,12 +783,12 @@ class SongHandler:
         if not self._w.hwl:
             return
 
-        rate_hz = self._w._sample_lookup.lookup_sample_rate(self._w.hwl, spu_index)
+        rate_hz = self._w._services.resolve("sample_lookup").lookup_sample_rate(self._w.hwl, spu_index)
         pitch = int(rate_hz * spu.FREQUENCY_UNIT / spu.SAMPLE_RATE)
         self._w._playback.play_spu_sample(spu_index, pitch, "Preview")
 
     def _build_sample_choices(self) -> list[SampleChoice]:
-        return self._w._spu_slot_choices.sample_targets(self._w.hwl)
+        return self._w._services.resolve("spu_slot_choices").sample_targets(self._w.hwl)
 
     def add_sequence(self, song_index: int):
         """Append a sequence (from an external .cseq) onto an existing song."""
@@ -802,7 +802,7 @@ class SongHandler:
             return
 
         try:
-            source_cseq = self._w._cseq_reader.read(Path(path).read_bytes())
+            source_cseq = self._w._services.resolve("cseq_reader").read(Path(path).read_bytes())
             source_seq_index = 0
 
             if len(source_cseq.songs) > 1:
@@ -817,7 +817,7 @@ class SongHandler:
 
                 source_seq_index = labels.index(label)
 
-            new_blob = self._w._cseq_editor.append_sequence(
+            new_blob = self._w._services.resolve("cseq_editor").append_sequence(
                 self._w.hwl.songs[song_index], source_cseq.songs[source_seq_index],
             )
             if not self._cseq_within_limit(new_blob):
@@ -837,7 +837,7 @@ class SongHandler:
             return
 
         try:
-            src_cseq = self._w._cseq_reader.read(self._w.hwl.songs[src_song])
+            src_cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[src_song])
 
             if src_seq >= len(src_cseq.songs):
                 return
@@ -876,7 +876,7 @@ class SongHandler:
 
         for i, blob in enumerate(self._w.hwl.songs):
             try:
-                cseq = self._w._cseq_reader.read(blob)
+                cseq = self._w._services.resolve("cseq_reader").read(blob)
                 child_labels = tuple(
                     f"Sequence {slot} — BPM={s.bpm}, {len(s.tracks)} tracks"
                     for slot, s in enumerate(cseq.songs)
@@ -891,18 +891,18 @@ class SongHandler:
         return out
 
     def _song_display(self, index: int) -> str:
-        name = self._w._cseq_reader.get_name(index)
+        name = self._w._services.resolve("cseq_reader").get_name(index)
         return f"Song {index} — {name}" if name else f"Song {index}"
 
     def _apply_sequence_copy(self, src_song_data, target_song: int, target_seq: int | None) -> None:
         if target_seq is None:
-            new_blob = self._w._cseq_editor.append_sequence(
+            new_blob = self._w._services.resolve("cseq_editor").append_sequence(
                 self._w.hwl.songs[target_song], src_song_data,
             )
             description = f"Copy sequence into Song {target_song}"
             message = f"Copied sequence as new entry in song {target_song}"
         else:
-            new_blob = self._w._cseq_editor.replace_sequence(
+            new_blob = self._w._services.resolve("cseq_editor").replace_sequence(
                 self._w.hwl.songs[target_song], target_seq, src_song_data,
             )
             description = f"Copy sequence over Song {target_song} sequence {target_seq}"
@@ -926,7 +926,7 @@ class SongHandler:
             return
 
         try:
-            new_blob = self._w._cseq_editor.remove_sequence(self._w.hwl.songs[song_index], seq_index)
+            new_blob = self._w._services.resolve("cseq_editor").remove_sequence(self._w.hwl.songs[song_index], seq_index)
             self._w._undo_stack.push(
                 SwapBlobCommand(self._w, f"Remove Sequence {seq_index} from Song {song_index}", HowlCollection.SONGS, song_index, new_blob),
             )

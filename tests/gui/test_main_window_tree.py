@@ -17,23 +17,15 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QStatusBar
 
+from types import SimpleNamespace
+
 from howl_editor.ctr.formats.cseq.models import CseqInstrument
 from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
 from howl_editor.gui.main_window import MainWindow
 from howl_editor.gui.widget.notification_bar import DANGER, INFO, SUCCESS, WARNING
+from howl_editor.core import Container
 from howl_editor.services import container
 from tests.conftest import build_bank_blob, build_cseq_bytes
-
-_ALIASES = {"howl_editor_svc": "howl_editor", "drum_names": "gm_drum_names"}
-
-_PARAMS = [
-    "howl_reader", "cseq_reader", "cseq_parses", "bank_reader", "sample_lookup",
-    "sample_classifier", "detail_formatter", "stylesheet_loader", "drum_names",
-    "size_formatter", "severity_presenter", "entry_badge_resolver", "stock_layout",
-    "semantic_entry_builder", "entry_leaves_builder", "category_icon_resolver",
-    "leaf_info_formatter", "howl_stats_calculator", "adventure_hub_mask_table_query",
-]
-
 
 @pytest.fixture(scope="module")
 def app():
@@ -42,8 +34,7 @@ def app():
 
 @pytest.fixture
 def window(app):
-    kwargs = {p: container.resolve(_ALIASES.get(p, p)) for p in _PARAMS}
-    window = MainWindow(**kwargs)
+    window = MainWindow(container)
     window.hwl = HowlFile(
         spu_addrs=[SpuAddrEntry(0, 2) for _ in range(4)],
         banks=[build_bank_blob([0, 3], [b"\x00" * 16, b"\x00" * 16])],
@@ -58,7 +49,8 @@ def _node(window, label_prefix: str):
 
     for i in range(root.childCount()):
         group = root.child(i)
-        if group.text(0).startswith(label_prefix):
+        # The row may carry a diagnosis badge ("❌ Banks").
+        if label_prefix in group.text(0):
             return group.child(0)
 
     raise AssertionError(f"no {label_prefix} node")
@@ -146,3 +138,54 @@ class TestNotifying:
     def test_the_window_has_no_status_bar(self, window):
         # statusBar() would create one on demand, so ask without conjuring it.
         assert window.findChild(QStatusBar) is None
+
+
+class TestLazyAudioPlayer:
+    """Building the player pulls in Qt's multimedia stack (~6 MB measured), so
+    it waits for the first sound rather than loading with the window.
+    """
+
+    def _window_with_fake_player(self, app, calls):
+        # media_player None stands for "QtMultimedia missing", so the window
+        # skips connecting the transport widgets to it.
+        player = SimpleNamespace(media_player=None, available=False)
+        services = Container()
+
+        for name, factory in container._factories.items():
+            services.register(name, factory)
+
+        services.register("audio_player", lambda c: calls.append(1) or player)
+
+        return MainWindow(services), player
+
+    def test_the_player_is_not_built_with_the_window(self, app):
+        calls = []
+
+        self._window_with_fake_player(app, calls)
+
+        assert calls == []
+
+    def test_the_first_request_builds_it(self, app):
+        calls = []
+        window, player = self._window_with_fake_player(app, calls)
+
+        assert window.ensure_audio_player() is player
+        assert calls == [1]
+
+    def test_later_requests_reuse_it(self, app):
+        calls = []
+        window, _player = self._window_with_fake_player(app, calls)
+
+        window.ensure_audio_player()
+        window.ensure_audio_player()
+
+        assert calls == [1]
+
+    def test_playback_is_offered_before_the_player_exists(self, app):
+        # can_play() is asked on every play; it must not be what builds it.
+        calls = []
+        window, _player = self._window_with_fake_player(app, calls)
+
+        window._playback.can_play()
+
+        assert calls == []

@@ -1,7 +1,7 @@
 # coding: utf-8
 
-from howl_editor.gui.entries.semantic_entry import EntryKind
 from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.gui.entries.semantic_entry import EntryKind
 
 
 class TestEmptyHowl:

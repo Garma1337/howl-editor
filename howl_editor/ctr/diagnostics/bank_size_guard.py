@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from howl_editor.ctr import constants
 from howl_editor.ctr import stock_layout as layout
-from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
+from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
 from howl_editor.ctr.formats.howl.models import HowlFile
 
 

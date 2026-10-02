@@ -17,33 +17,13 @@ from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
 from howl_editor.services import container
 from tests.conftest import build_cseq_bytes
 
-# Constructor param name -> container service name (only where they differ).
-_ALIASES = {"howl_editor_svc": "howl_editor", "drum_names": "gm_drum_names"}
-
-_PARAMS = [
-    "howl_reader", "howl_writer", "howl_editor_svc", "cseq_reader", "cseq_writer",
-    "cseq_editor", "vag_reader", "vag_writer", "bank_reader", "bank_builder",
-    "midi_converter", "midi_exporter", "vag_decoder", "cseq_renderer", "audio_player",
-    "resampler", "wav_writer", "vag_rate_provider", "audio_cache", "sample_lookup",
-    "version_detector", "sample_classifier", "validator", "batch_exporter",
-    "sfz_exporter", "detail_formatter", "sca_reader", "sca_writer",
-    "sample_sizes_extractor", "semantic_entry_builder", "entry_leaves_builder",
-    "blob_snapshot", "entry_drop_router", "stylesheet_loader",
-    "adventure_hub_mask_table_query", "category_icon_resolver", "cseq_size_validator",
-    "cseq_size_guard", "bank_size_guard", "howl_size_guard", "howl_diagnostics",
-    "diagnostics_status_provider", "entry_badge_resolver", "severity_presenter",
-    "diagnosis_banner_formatter", "drum_names", "stock_layout", "leaf_info_formatter",
-    "howl_stats_calculator", "size_formatter",
-]
-
 from howl_editor.gui.main_window import MainWindow, NODE_SONG, NODE_ROOT
 
 
 @pytest.fixture(scope="module")
 def window():
     app = QApplication.instance() or QApplication([])
-    kwargs = {p: container.resolve(_ALIASES.get(p, p)) for p in _PARAMS}
-    return MainWindow(**kwargs)
+    return MainWindow(container)
 
 
 def _oversized_song() -> bytes:

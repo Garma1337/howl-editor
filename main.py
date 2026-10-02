@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import multiprocessing
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -8,76 +9,14 @@ from howl_editor.gui.main_window import MainWindow
 from howl_editor.services import container
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
+
     app = QApplication(sys.argv)
 
     stylesheet_loader = container.resolve("stylesheet_loader")
     app.setStyleSheet(stylesheet_loader.load("app.qss"))
 
-    window = MainWindow(
-        howl_reader=container.resolve("howl_reader"),
-        howl_writer=container.resolve("howl_writer"),
-        howl_editor_svc=container.resolve("howl_editor"),
-        cseq_reader=container.resolve("cseq_reader"),
-        cseq_writer=container.resolve("cseq_writer"),
-        cseq_editor=container.resolve("cseq_editor"),
-        vag_reader=container.resolve("vag_reader"),
-        vag_writer=container.resolve("vag_writer"),
-        bank_reader=container.resolve("bank_reader"),
-        bank_builder=container.resolve("bank_builder"),
-        midi_converter=container.resolve("midi_converter"),
-        midi_exporter=container.resolve("midi_exporter"),
-        vag_decoder=container.resolve("vag_decoder"),
-        cseq_renderer=container.resolve("cseq_renderer"),
-        audio_player=container.resolve("audio_player"),
-        resampler=container.resolve("resampler"),
-        wav_writer=container.resolve("wav_writer"),
-        vag_rate_provider=container.resolve("vag_rate_provider"),
-        audio_cache=container.resolve("audio_cache"),
-        sample_lookup=container.resolve("sample_lookup"),
-        version_detector=container.resolve("version_detector"),
-        sample_classifier=container.resolve("sample_classifier"),
-        validator=container.resolve("validator"),
-        batch_exporter=container.resolve("batch_exporter"),
-        sfz_exporter=container.resolve("sfz_exporter"),
-        detail_formatter=container.resolve("detail_formatter"),
-        sca_reader=container.resolve("sca_reader"),
-        sca_writer=container.resolve("sca_writer"),
-        sample_sizes_extractor=container.resolve("sample_sizes_extractor"),
-        sca_spu_slot_validator=container.resolve("sca_spu_slot_validator"),
-        spu_slot_usage=container.resolve("spu_slot_usage"),
-        spu_slot_allocator=container.resolve("spu_slot_allocator"),
-        spu_slot_choices=container.resolve("spu_slot_choices"),
-        pitch_stepper=container.resolve("pitch_stepper"),
-        pitch_shifter=container.resolve("pitch_shifter"),
-        sample_replacement_planner=container.resolve("sample_replacement_planner"),
-        cseq_parses=container.resolve("cseq_parses"),
-        pitch_headroom=container.resolve("pitch_headroom_inspector"),
-        semantic_entry_builder=container.resolve("semantic_entry_builder"),
-        entry_leaves_builder=container.resolve("entry_leaves_builder"),
-        blob_snapshot=container.resolve("blob_snapshot"),
-        entry_drop_router=container.resolve("entry_drop_router"),
-        stylesheet_loader=stylesheet_loader,
-        adventure_hub_mask_table_query=container.resolve("adventure_hub_mask_table_query"),
-        category_icon_resolver=container.resolve("category_icon_resolver"),
-        cseq_size_validator=container.resolve("cseq_size_validator"),
-        cseq_size_guard=container.resolve("cseq_size_guard"),
-        bank_size_guard=container.resolve("bank_size_guard"),
-        howl_size_guard=container.resolve("howl_size_guard"),
-        shared_sample_guard=container.resolve("shared_sample_guard"),
-        shared_sample_propagator=container.resolve("shared_sample_propagator"),
-        howl_diagnostics=container.resolve("howl_diagnostics"),
-        diagnostics_status_provider=container.resolve("diagnostics_status_provider"),
-        entry_badge_resolver=container.resolve("entry_badge_resolver"),
-        severity_presenter=container.resolve("severity_presenter"),
-        diagnosis_banner_formatter=container.resolve("diagnosis_banner_formatter"),
-        drum_names=container.resolve("gm_drum_names"),
-        stock_layout=container.resolve("stock_layout"),
-        leaf_info_formatter=container.resolve("leaf_info_formatter"),
-        howl_stats_calculator=container.resolve("howl_stats_calculator"),
-        size_formatter=container.resolve("size_formatter"),
-        tasks=container.resolve("tasks"),
-        process_tasks=container.resolve("process_tasks"),
-    )
+    window = MainWindow(container)
 
     window.show()
     sys.exit(app.exec())

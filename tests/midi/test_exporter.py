@@ -4,10 +4,10 @@ import io
 
 import pytest
 
+from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.formats.cseq.models import (
     CseqFile, CseqSong, CseqTrack, CseqEvent, CseqEventType, CseqInstrument,
 )
-from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.formats.cseq.writer import CseqWriter
 from howl_editor.midi import format as midi_fmt
 from howl_editor.midi.converter import MidiConverter

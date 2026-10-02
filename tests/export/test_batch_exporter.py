@@ -2,8 +2,8 @@
 
 import pytest
 
-from howl_editor.core.progress import Cancelled, ProgressReporter
 from howl_editor.audio.wav_writer import WavWriter
+from howl_editor.core.progress import Cancelled, ProgressReporter
 from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver

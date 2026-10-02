@@ -1,10 +1,10 @@
 # coding: utf-8
 
-from howl_editor.ps1 import spu
 from howl_editor.ctr.formats.bank.reader import BankReader
-from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.models import CseqFile
+from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.howl.models import HowlFile
+from howl_editor.ps1 import spu
 
 _DEFAULT_SAMPLE_RATE = 11025
 

@@ -1,10 +1,9 @@
 # coding: utf-8
 
-import pytest
-
 from struct import pack
-
 from struct import unpack_from
+
+import pytest
 
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.core.progress import Cancelled, ProgressReporter

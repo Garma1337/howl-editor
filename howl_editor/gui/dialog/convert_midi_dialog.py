@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
 
 from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
-from howl_editor.ctr.voice.pitch_stepper import PitchStepper
 from howl_editor.ctr.voice.pitch_headroom import PitchHeadroomInspector
+from howl_editor.ctr.voice.pitch_stepper import PitchStepper
 from howl_editor.gui.layout import WindowSize
 from howl_editor.gui.widget.pitch_spin_box import PitchSpinBox
 from howl_editor.midi.drum_name_resolver import DrumNameResolver

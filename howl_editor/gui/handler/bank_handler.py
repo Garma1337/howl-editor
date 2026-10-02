@@ -19,7 +19,7 @@ class BankHandler:
     def _bank_within_limit(self, index: int, blob) -> bool:
         """Gate a prospective bank blob through the SPU-residency guard, warning
         (with override) if the bank's worst-case race no longer fits SPU RAM."""
-        guard = self._window._bank_size_guard
+        guard = self._window._services.resolve("bank_size_guard")
         return guard is None or self._window.confirm_within_limit(
             guard.check(self._window.hwl, index, blob),
         )
@@ -36,7 +36,7 @@ class BankHandler:
         if not self._bank_within_limit(len(self._window.hwl.banks), data):
             return
 
-        self._window._editor.add_bank(self._window.hwl, data)
+        self._window._services.resolve("howl_editor").add_bank(self._window.hwl, data)
         self._window._mark_modified()
         self._window._rebuild_tree()
         self._window._notify(f"Added bank from {Path(path).name}")
@@ -53,10 +53,10 @@ class BankHandler:
             return
 
         try:
-            samples = self._window._bank_reader.parse(self._window.hwl.banks[index], self._window.hwl.spu_addrs)
+            samples = self._window._services.resolve("bank_reader").parse(self._window.hwl.banks[index], self._window.hwl.spu_addrs)
 
             for sample in samples:
-                self._window._vag_writer.write_file(
+                self._window._services.resolve("vag_writer").write_file(
                     VagSample(data=sample.data),
                     Path(folder) / f"sample_{sample.spu_index}.vag",
                 )
@@ -74,11 +74,11 @@ class BankHandler:
             return
 
         try:
-            samples = self._window._bank_reader.parse(self._window.hwl.banks[index], self._window.hwl.spu_addrs)
-            rate = self._window._vag_rate.rate
+            samples = self._window._services.resolve("bank_reader").parse(self._window.hwl.banks[index], self._window.hwl.spu_addrs)
+            rate = self._window._services.resolve("vag_rate_provider").rate
 
             for sample in samples:
-                wav = self._window._vag_decoder.decode_to_wav(sample.data, rate)
+                wav = self._window._services.resolve("vag_decoder").decode_to_wav(sample.data, rate)
                 (Path(folder) / f"sample_{sample.spu_index}.wav").write_bytes(wav)
 
             self._window._notify(f"Exported {len(samples)} WAVs from bank {index}")
@@ -91,7 +91,7 @@ class BankHandler:
             return
 
         bank_indices = [i for i in range(len(self._window.hwl.banks)) if i != index]
-        bank_labels = [self._window._get_item_label("Bank", i, self._window._bank_reader.get_name(i)) for i in bank_indices]
+        bank_labels = [self._window._get_item_label("Bank", i, self._window._services.resolve("bank_reader").get_name(i)) for i in bank_indices]
 
         label, ok = QInputDialog.getItem(
             self._window, "Select Source Bank", f"Merge into Bank {index} from:", bank_labels, 0, False,
@@ -103,8 +103,8 @@ class BankHandler:
         source_index = bank_indices[bank_labels.index(label)]
 
         try:
-            target_samples = self._window._bank_reader.parse(self._window.hwl.banks[index], self._window.hwl.spu_addrs)
-            source_samples = self._window._bank_reader.parse(self._window.hwl.banks[source_index], self._window.hwl.spu_addrs)
+            target_samples = self._window._services.resolve("bank_reader").parse(self._window.hwl.banks[index], self._window.hwl.spu_addrs)
+            source_samples = self._window._services.resolve("bank_reader").parse(self._window.hwl.banks[source_index], self._window.hwl.spu_addrs)
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Failed to parse banks:\n{e}")
             return
@@ -118,7 +118,7 @@ class BankHandler:
             return
 
         result = dialog.get_result()
-        new_blob = self._window._bank_builder.merge(result)
+        new_blob = self._window._services.resolve("bank_builder").merge(result)
 
         if not self._bank_within_limit(index, new_blob):
             return

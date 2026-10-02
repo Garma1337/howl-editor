@@ -1,14 +1,14 @@
 # coding: utf-8
 
 import io
-from dataclasses import dataclass
 from pathlib import Path
 
 from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.ctr.formats.cseq.models import (
-    CseqFile, CseqInstrument, CseqSong, CseqTrack, CseqEventType,
+    CseqFile, CseqInstrument, CseqTrack, CseqEventType,
 )
 from howl_editor.midi import format as midi_fmt
+from howl_editor.midi.export_options import MidiExportOptions
 from howl_editor.midi.mido_message_type import MidoMessageType
 
 try:
@@ -16,20 +16,6 @@ try:
     HAS_MIDO = True
 except ImportError:
     HAS_MIDO = False
-
-
-@dataclass(frozen=True)
-class MidiExportOptions:
-    """Toggles that adjust what the MIDI exporter writes.
-
-    `include_volume_events` — emit mid-song VELOCITY changes as CC #7 volume
-    changes so the DAW reproduces CTR's volume curves.
-
-    `apply_instrument_volume` — give each track a CC #7 volume at tick 0 from
-    the volume field of the instrument it's bound to.
-    """
-    include_volume_events: bool = True
-    apply_instrument_volume: bool = False
 
 
 _DEFAULT_OPTIONS = MidiExportOptions()

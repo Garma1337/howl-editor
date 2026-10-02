@@ -1,8 +1,7 @@
 # coding: utf-8
 
-from struct import pack, pack_into
-
 from pathlib import Path
+from struct import pack, pack_into
 
 import pytest
 

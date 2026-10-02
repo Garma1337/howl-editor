@@ -4,18 +4,18 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from howl_editor.ctr import constants
+from howl_editor.ctr import stock_layout as layout
+from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
+from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.diagnostics.bank_slice_validator import BankSliceValidator
 from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
 from howl_editor.ctr.diagnostics.pitch_ceiling_validator import PitchCeilingValidator
 from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
-from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
-from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.howl.models import HowlFile
-from howl_editor.ctr import stock_layout as layout
 from howl_editor.ps1 import spu
 
 

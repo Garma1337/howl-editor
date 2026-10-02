@@ -11,15 +11,15 @@ from howl_editor.ctr.diagnostics.howl_diagnostics import (
 from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
 from howl_editor.ctr.diagnostics.pitch_ceiling_validator import PitchCeilingValidator
 from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
-from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
-from howl_editor.ps1.formats.vag.structure_validator import VagStructureValidator
 from howl_editor.ctr.formats.cseq.models import (
     CseqEvent, CseqEventType, CseqInstrument, CseqSong, CseqTrack,
 )
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
+from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
 from howl_editor.ps1.constants import SECTOR_SIZE
 from howl_editor.ps1.formats.vag import format as fmt
+from howl_editor.ps1.formats.vag.structure_validator import VagStructureValidator
 from tests.conftest import build_bank_blob, build_cseq_bytes
 
 

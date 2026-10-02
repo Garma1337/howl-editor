@@ -14,12 +14,12 @@ class MoveSequenceCommand(QUndoCommand):
         self._to = to_index
 
     def redo(self):
-        self._window.hwl.songs[self._song_index] = self._window._cseq_editor.move_sequence(
+        self._window.hwl.songs[self._song_index] = self._window._services.resolve("cseq_editor").move_sequence(
             self._window.hwl.songs[self._song_index], self._from, self._to,
         )
 
         self._window._rebuild_tree()
 
     def undo(self):
-        self._window._editor.replace_song(self._window.hwl, self._song_index, self._old_song)
+        self._window._services.resolve("howl_editor").replace_song(self._window.hwl, self._song_index, self._old_song)
         self._window._rebuild_tree()

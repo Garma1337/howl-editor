@@ -38,7 +38,7 @@ class MusicWorkshopHandler:
             return
 
         try:
-            cseq = self._w._cseq_reader.read(self._w.hwl.songs[song_index])
+            cseq = self._w._services.resolve("cseq_reader").read(self._w.hwl.songs[song_index])
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Cannot read song:\n{e}")
             return
@@ -46,7 +46,7 @@ class MusicWorkshopHandler:
         if seq_index >= len(cseq.songs):
             return
 
-        song_name = self._w._cseq_reader.get_name(song_index)
+        song_name = self._w._services.resolve("cseq_reader").get_name(song_index)
         suffix = f" — {song_name}" if song_name else ""
         title = f"Song {song_index}{suffix} · Sequence {seq_index} events"
         TrackEventsDialog(

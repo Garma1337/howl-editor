@@ -1,6 +1,5 @@
 # coding: utf-8
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QListWidget,
     QListWidgetItem, QPushButton, QVBoxLayout,

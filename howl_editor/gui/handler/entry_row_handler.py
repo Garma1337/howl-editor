@@ -86,7 +86,7 @@ class EntryRowHandler:
             self._w._sample_handler.remove_sample(leaf.bank_index, leaf.sample_index or 0)
 
     def reset(self, row: EntryRow) -> None:
-        snapshot = self._w._snapshot
+        snapshot = self._w._services.resolve("blob_snapshot")
 
         if row.song_index is not None:
             original = snapshot.original_song(row.song_index)
@@ -216,7 +216,7 @@ class EntryRowHandler:
         exactly 20 tracks — the runtime per-hub mask (Cseq.hubTracksMask)
         is sized to that count, so a different number breaks per-hub layering."""
         try:
-            cseq = self._w._cseq_reader.read(blob)
+            cseq = self._w._services.resolve("cseq_reader").read(blob)
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Cannot read CSEQ:\n{e}")
             return False
@@ -265,7 +265,7 @@ class EntryRowHandler:
         if cseq is None:
             return
 
-        cseq_blob = self._w._cseq_writer.serialize(cseq)
+        cseq_blob = self._w._services.resolve("cseq_writer").serialize(cseq)
         self._w._undo_stack.push(SwapBlobCommand(
             self._w, f"Replace song {row.song_index} from MIDI", HowlCollection.SONGS,
             row.song_index, cseq_blob,
@@ -278,7 +278,7 @@ class EntryRowHandler:
             return
 
         try:
-            sca = self._w._sca_reader.parse(Path(file_path).read_bytes())
+            sca = self._w._services.resolve("sca_reader").parse(Path(file_path).read_bytes())
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Failed to parse .sca file:\n{e}")
             return

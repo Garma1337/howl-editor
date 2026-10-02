@@ -3,13 +3,14 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.core.progress import ProgressReporter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier, SampleType
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile
-from howl_editor.midi.exporter import CseqMidiExporter, HAS_MIDO
+from howl_editor.midi.availability import HAS_MIDO
+from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.ps1.formats.vag.decoder import VagDecoder
 from howl_editor.ps1.formats.vag.models import VagSample
 from howl_editor.ps1.formats.vag.writer import VagWriter

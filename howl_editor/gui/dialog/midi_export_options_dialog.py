@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 
 from howl_editor.gui.layout import WindowSize
-from howl_editor.midi.exporter import MidiExportOptions
+from howl_editor.midi.export_options import MidiExportOptions
 
 
 class MidiExportOptionsDialog(QDialog):

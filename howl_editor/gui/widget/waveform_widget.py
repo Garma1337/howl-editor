@@ -6,7 +6,6 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPainter, QColor, QPen
 from PySide6.QtWidgets import QWidget
 
-
 _WAVEFORM_COLOR = QColor(76, 175, 80)
 _CENTER_LINE_COLOR = QColor(100, 100, 100)
 _LOOP_MARKER_COLOR = QColor(255, 152, 0)

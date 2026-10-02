@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QDialog
 from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.file_format_registry import FileFormat, FileFormatRegistry
 from howl_editor.gui.dialog.export_dialog import ExportDialog
-from howl_editor.midi.converter import HAS_MIDO
+from howl_editor.midi.availability import HAS_MIDO
 
 _OPTIONS: dict[ExportableKind, list[FileFormat]] = {
     ExportableKind.BANK: [FileFormatRegistry.BANK],

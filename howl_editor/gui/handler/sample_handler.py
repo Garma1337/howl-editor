@@ -26,7 +26,7 @@ class SampleHandler:
 
     def _bank_within_limit(self, index: int, blob) -> bool:
         """See BankHandler._bank_within_limit."""
-        guard = self._window._bank_size_guard
+        guard = self._window._services.resolve("bank_size_guard")
         return guard is None or self._window.confirm_within_limit(
             guard.check(self._window.hwl, index, blob),
         )
@@ -36,7 +36,7 @@ class SampleHandler:
             return
 
         try:
-            samples = self._window._bank_reader.parse(self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs)
+            samples = self._window._services.resolve("bank_reader").parse(self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs)
             if sample_index >= len(samples):
                 return
 
@@ -47,7 +47,7 @@ class SampleHandler:
             )
 
             if path:
-                self._window._vag_writer.write_file(VagSample(data=sample.data), path)
+                self._window._services.resolve("vag_writer").write_file(VagSample(data=sample.data), path)
                 self._window._notify(f"Exported SPU {sample.spu_index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Export failed:\n{e}")
@@ -57,7 +57,7 @@ class SampleHandler:
             return
 
         try:
-            samples = self._window._bank_reader.parse(self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs)
+            samples = self._window._services.resolve("bank_reader").parse(self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs)
             if sample_index >= len(samples):
                 return
 
@@ -68,8 +68,8 @@ class SampleHandler:
             )
 
             if path:
-                wav = self._window._vag_decoder.decode_to_wav(
-                    sample.data, self._window._vag_rate.rate,
+                wav = self._window._services.resolve("vag_decoder").decode_to_wav(
+                    sample.data, self._window._services.resolve("vag_rate_provider").rate,
                 )
                 Path(path).write_bytes(wav)
                 self._window._notify(f"Exported SPU {sample.spu_index} as WAV")
@@ -93,7 +93,7 @@ class SampleHandler:
             return
 
         try:
-            vag = self._window._vag_reader.read_file(path)
+            vag = self._window._services.resolve("vag_reader").read_file(path)
             spu_index = self._pick_new_slot(f"Add {Path(path).name} to {self._bank_display(bank_index)}")
 
             if spu_index is None:
@@ -102,9 +102,9 @@ class SampleHandler:
             # add_sample writes the SPU entry in place; keep a restore point so
             # declining the residency guard leaves no dangling entry behind.
             spu_before = list(self._window.hwl.spu_addrs)
-            new_blob = self._window._bank_builder.add_sample(
+            new_blob = self._window._services.resolve("bank_builder").add_sample(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
-                vag.data, self._window._bank_reader, spu_index=spu_index,
+                vag.data, self._window._services.resolve("bank_reader"), spu_index=spu_index,
             )
 
             if not self._bank_within_limit(bank_index, new_blob):
@@ -115,14 +115,14 @@ class SampleHandler:
                 SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, old_spu=spu_before),
             )
 
-            self._window._editor.attach_sample_rate(self._window.hwl, spu_index, vag.sample_rate)
+            self._window._services.resolve("howl_editor").attach_sample_rate(self._window.hwl, spu_index, vag.sample_rate)
             self._window._notify(f"Added sample SPU {spu_index} to bank {bank_index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Add sample failed:\n{e}")
 
     def _pick_new_slot(self, subject: str, share_spu: int | None = None) -> int | None:
         """Ask which SPU slot a new sample goes into. None when cancelled."""
-        choices = self._window._spu_slot_choices
+        choices = self._window._services.resolve("spu_slot_choices")
         hwl = self._window.hwl
         default = choices.default_new_slot(hwl, share_spu)
 
@@ -162,8 +162,8 @@ class SampleHandler:
             return
 
         try:
-            vag = self._window._vag_reader.read_file(path)
-            plan = self._window._replacement_planner.plan(
+            vag = self._window._services.resolve("vag_reader").read_file(path)
+            plan = self._window._services.resolve("sample_replacement_planner").plan(
                 self._window.hwl, bank_index, sample_index, vag.data,
             )
 
@@ -199,15 +199,15 @@ class SampleHandler:
         replace_sample moves the size entry."""
         spu_before = list(self._window.hwl.spu_addrs)
         companions = (
-            self._window._shared_sample_propagator.rebuild_owners(
+            self._window._services.resolve("shared_sample_propagator").rebuild_owners(
                 self._window.hwl, spu_before, plan.spu_index, new_data, plan.bank_index,
             )
             if update_shared and plan.spu_index is not None else {}
         )
 
-        new_blob = self._window._bank_builder.replace_sample(
+        new_blob = self._window._services.resolve("bank_builder").replace_sample(
             self._window.hwl.banks[plan.bank_index], self._window.hwl.spu_addrs,
-            plan.sample_index, new_data, self._window._bank_reader,
+            plan.sample_index, new_data, self._window._services.resolve("bank_reader"),
         )
 
         self._push_replacement(plan.bank_index, new_blob, companions, spu_before)
@@ -258,7 +258,7 @@ class SampleHandler:
 
     def _find_spu_index(self, bank_index: int, sample_index: int) -> int | None:
         try:
-            samples = self._window._bank_reader.parse(
+            samples = self._window._services.resolve("bank_reader").parse(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
             )
 
@@ -296,7 +296,7 @@ class SampleHandler:
             return
 
         try:
-            src_samples = self._window._bank_reader.parse(
+            src_samples = self._window._services.resolve("bank_reader").parse(
                 self._window.hwl.banks[src_bank], self._window.hwl.spu_addrs,
             )
 
@@ -305,7 +305,7 @@ class SampleHandler:
 
             src = src_samples[src_sample]
             banks = self._build_copy_bank_summaries()
-            size_text = self._window._size_formatter.format_bytes(len(src.data))
+            size_text = self._window._services.resolve("size_formatter").format_bytes(len(src.data))
             source_display = self._bank_display(src_bank)
             summary = (
                 f"Copy sample {src_sample} from {source_display} "
@@ -338,7 +338,7 @@ class SampleHandler:
 
         for i, blob in enumerate(self._window.hwl.banks):
             try:
-                samples = self._window._bank_reader.parse(blob, self._window.hwl.spu_addrs)
+                samples = self._window._services.resolve("bank_reader").parse(blob, self._window.hwl.spu_addrs)
                 child_labels = tuple(
                     f"Sample {slot} — SPU #{s.spu_index}"
                     for slot, s in enumerate(samples)
@@ -353,7 +353,7 @@ class SampleHandler:
         return out
 
     def _bank_display(self, index: int) -> str:
-        name = self._window._bank_reader.get_name(index)
+        name = self._window._services.resolve("bank_reader").get_name(index)
         return f"Bank {index} — {name}" if name else f"Bank {index}"
 
     def _apply_copy(
@@ -366,7 +366,7 @@ class SampleHandler:
         target_blob = self._window.hwl.banks[target_bank]
         # Identical audio can share the source's slot — unless the target
         # bank already holds that slot, where sharing would list it twice.
-        already_there = src.spu_index in self._window._bank_reader.sample_ids(target_blob)
+        already_there = src.spu_index in self._window._services.resolve("bank_reader").sample_ids(target_blob)
         spu_index = self._pick_new_slot(
             f"Copy SPU #{src.spu_index} into {self._bank_display(target_bank)}",
             share_spu=None if already_there else src.spu_index,
@@ -376,9 +376,9 @@ class SampleHandler:
             return
 
         spu_before = list(self._window.hwl.spu_addrs)
-        new_blob = self._window._bank_builder.add_sample(
+        new_blob = self._window._services.resolve("bank_builder").add_sample(
             target_blob, self._window.hwl.spu_addrs,
-            src.data, self._window._bank_reader, spu_index=spu_index,
+            src.data, self._window._services.resolve("bank_reader"), spu_index=spu_index,
         )
 
         if not self._bank_within_limit(target_bank, new_blob):
@@ -397,7 +397,7 @@ class SampleHandler:
     def _copy_over_sample(self, src: BankSample, target_bank: int, target_sample: int) -> None:
         """Copying onto an existing sample overwrites a slot exactly as a file
         replacement does, so it takes the same plan and prompt."""
-        plan = self._window._replacement_planner.plan(
+        plan = self._window._services.resolve("sample_replacement_planner").plan(
             self._window.hwl, target_bank, target_sample, src.data,
         )
         update_shared = self._confirm_replacement(
@@ -419,9 +419,9 @@ class SampleHandler:
             return
 
         try:
-            new_blob = self._window._bank_builder.remove_sample(
+            new_blob = self._window._services.resolve("bank_builder").remove_sample(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
-                sample_index, self._window._bank_reader,
+                sample_index, self._window._services.resolve("bank_reader"),
             )
             self._window._undo_stack.push(
                 SwapBlobCommand(self._window, f"Remove Sample {sample_index} from Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),

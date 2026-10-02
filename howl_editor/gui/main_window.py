@@ -17,43 +17,15 @@ try:
 except ImportError:
     HAS_MULTIMEDIA = False
 
-from howl_editor.audio.audio_cache import AudioCache
 from howl_editor.audio.audio_player import AudioPlayer
-from howl_editor.audio.linear_interpolation_resampler import LinearInterpolationResampler
+from howl_editor.core import Container
 from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
-from howl_editor.audio.wav_writer import WavWriter
-from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
-from howl_editor.ctr.analysis.sample_replacement_planner import SampleReplacementPlanner
-from howl_editor.ctr.analysis.spu_slot_allocator import SpuSlotAllocator
-from howl_editor.ctr.analysis.spu_slot_usage import SpuSlotUsageResolver
-from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
-from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.diagnostics.howl_diagnostics import Severity, Target, TargetKind
-from howl_editor.ctr.cseq_renderer import CseqRenderer
-from howl_editor.ctr.formats.bank import BankReader, BankBuilder
-from howl_editor.ctr.formats.cseq import CseqReader, CseqWriter
-from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
-from howl_editor.ctr.formats.cseq.editor import CseqEditor
-from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
-from howl_editor.ctr.formats.cseq.pitch_shifter import CseqPitchShifter
-from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
-from howl_editor.ctr.formats.howl import HowlReader, HowlWriter, HowlEditor
-from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
 from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile
-from howl_editor.ctr.formats.howl.version import HowlVersionDetector
-from howl_editor.ctr.sample_lookup import SampleLookup
-from howl_editor.ctr.voice.pitch_headroom import PitchHeadroomInspector
-from howl_editor.ctr.voice.pitch_stepper import PitchStepper
-from howl_editor.export import BatchExporter, SfzExporter
 from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.file_format_registry import FileFormatRegistry
-from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.command import MoveItemCommand, MoveSequenceCommand
-from howl_editor.gui.detail.detail_formatter import DetailFormatter
-from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
-from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
-from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.handler.bank_handler import BankHandler
 from howl_editor.gui.handler.entry_row_handler import EntryRowHandler
 from howl_editor.gui.handler.export_handler import ExportHandler
@@ -63,20 +35,11 @@ from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
 from howl_editor.gui.handler.tools_handler import ToolsHandler
 from howl_editor.gui.layout import WindowSize
-from howl_editor.gui.spu_slot_choice_builder import SpuSlotChoiceBuilder
-from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.gui.widget.main_tab_widget import MainTabWidget
 from howl_editor.gui.widget.music_workshop_widget import MusicWorkshopWidget
-from howl_editor.gui.background.process_runner import ProcessTaskRunner
-from howl_editor.gui.background.task_runner import TaskRunner
 from howl_editor.gui.widget.notification_bar import NotificationBar
-from howl_editor.midi.converter import MidiConverter, HAS_MIDO
-from howl_editor.midi.drum_name_resolver import DrumNameResolver
-from howl_editor.midi.exporter import CseqMidiExporter
-from howl_editor.ps1.formats.vag import VagReader, VagWriter
-from howl_editor.ps1.formats.vag.decoder import VagDecoder
-from howl_editor.saphi import SampleSizesExtractor, ScaReader, ScaSpuSlotValidator, ScaWriter
+from howl_editor.midi.availability import HAS_MIDO
 
 NODE_ROOT = 0
 NODE_SPU_TABLE = 1
@@ -98,141 +61,14 @@ NODE_ENGINE_FX_ENTRY = 11
 
 class MainWindow(QMainWindow):
 
-    def __init__(
-        self,
-        howl_reader: HowlReader | None = None,
-        howl_writer: HowlWriter | None = None,
-        howl_editor_svc: HowlEditor | None = None,
-        cseq_reader: CseqReader | None = None,
-        cseq_writer: CseqWriter | None = None,
-        cseq_editor: CseqEditor | None = None,
-        vag_reader: VagReader | None = None,
-        vag_writer: VagWriter | None = None,
-        bank_reader: BankReader | None = None,
-        bank_builder: BankBuilder | None = None,
-        midi_converter: MidiConverter | None = None,
-        midi_exporter: CseqMidiExporter | None = None,
-        vag_decoder: VagDecoder | None = None,
-        cseq_renderer: CseqRenderer | None = None,
-        audio_player: AudioPlayer | None = None,
-        resampler: LinearInterpolationResampler | None = None,
-        wav_writer: WavWriter | None = None,
-        vag_rate_provider: VagSampleRateProvider | None = None,
-        audio_cache: AudioCache | None = None,
-        sample_lookup: SampleLookup | None = None,
-        version_detector: HowlVersionDetector | None = None,
-        sample_classifier: SampleClassifier | None = None,
-        validator: BankCseqValidator | None = None,
-        batch_exporter: BatchExporter | None = None,
-        sfz_exporter: SfzExporter | None = None,
-        detail_formatter: DetailFormatter | None = None,
-        sca_reader: ScaReader | None = None,
-        sca_writer: ScaWriter | None = None,
-        sample_sizes_extractor: SampleSizesExtractor | None = None,
-        sca_spu_slot_validator: ScaSpuSlotValidator | None = None,
-        spu_slot_usage: SpuSlotUsageResolver | None = None,
-        spu_slot_allocator: SpuSlotAllocator | None = None,
-        spu_slot_choices: SpuSlotChoiceBuilder | None = None,
-        pitch_stepper: PitchStepper | None = None,
-        pitch_shifter: CseqPitchShifter | None = None,
-        sample_replacement_planner: SampleReplacementPlanner | None = None,
-        cseq_parses: CseqParseCache | None = None,
-        pitch_headroom: PitchHeadroomInspector | None = None,
-        semantic_entry_builder: SemanticEntryBuilder | None = None,
-        entry_leaves_builder: EntryLeavesBuilder | None = None,
-        blob_snapshot: BlobSnapshot | None = None,
-        entry_drop_router: EntryDropRouter | None = None,
-        stylesheet_loader: StylesheetLoader | None = None,
-        adventure_hub_mask_table_query: AdventureHubMaskTableQuery | None = None,
-        category_icon_resolver: CategoryIconResolver | None = None,
-        cseq_size_validator: CseqSizeValidator | None = None,
-        cseq_size_guard=None,
-        bank_size_guard=None,
-        howl_size_guard=None,
-        shared_sample_guard=None,
-        shared_sample_propagator=None,
-        howl_diagnostics=None,
-        diagnostics_status_provider=None,
-        entry_badge_resolver=None,
-        severity_presenter=None,
-        diagnosis_banner_formatter=None,
-        drum_names: DrumNameResolver | None = None,
-        stock_layout: StockLayoutResolver | None = None,
-        leaf_info_formatter=None,
-        howl_stats_calculator=None,
-        size_formatter=None,
-        tasks: TaskRunner | None = None,
-        process_tasks: ProcessTaskRunner | None = None,
-    ):
+    def __init__(self, container: Container):
         super().__init__()
+        self._services = container
         self.setWindowTitle("HOWL Editor")
         self.resize(WindowSize.MAIN_WIDTH, WindowSize.MAIN_HEIGHT)
 
-        self._reader = howl_reader
-        self._writer = howl_writer
-        self._editor = howl_editor_svc
-        self._cseq_reader = cseq_reader
-        self._cseq_writer = cseq_writer
-        self._cseq_editor = cseq_editor
-        self._vag_reader = vag_reader
-        self._vag_writer = vag_writer
-        self._bank_reader = bank_reader
-        self._bank_builder = bank_builder
-        self._midi_converter = midi_converter
-        self._midi_exporter = midi_exporter
-        self._vag_decoder = vag_decoder
-        self._cseq_renderer = cseq_renderer
-        self._audio_player = audio_player
-        self._resampler = resampler
-        self._wav_writer = wav_writer
-        self._vag_rate = vag_rate_provider
-        self._audio_cache = audio_cache
-        self._sample_lookup = sample_lookup
-        self._version_detector = version_detector
-        self._sample_classifier = sample_classifier
-        self._validator = validator
-        self._batch_exporter = batch_exporter
-        self._sfz_exporter = sfz_exporter
-        self._detail_fmt = detail_formatter
-        self._sca_reader = sca_reader
-        self._sca_writer = sca_writer
-        self._sample_sizes_extractor = sample_sizes_extractor
-        self._sca_spu_slots = sca_spu_slot_validator
-        self._spu_slot_usage = spu_slot_usage
-        self._spu_slot_allocator = spu_slot_allocator
-        self._spu_slot_choices = spu_slot_choices
-        self._pitch_stepper = pitch_stepper
-        self._pitch_shifter = pitch_shifter
-        self._replacement_planner = sample_replacement_planner
-        self._cseq_parses = cseq_parses
-        self._pitch_headroom = pitch_headroom
-        self._entry_builder = semantic_entry_builder
-        self._leaves_builder = entry_leaves_builder
-        self._snapshot = blob_snapshot
-        self._drop_router = entry_drop_router
-        self._stylesheets = stylesheet_loader
-        self._hub_mask_table_query = adventure_hub_mask_table_query
-        self._icon_resolver = category_icon_resolver
-        self._cseq_size_validator = cseq_size_validator
-        self._cseq_size_guard = cseq_size_guard
-        self._bank_size_guard = bank_size_guard
-        self._howl_size_guard = howl_size_guard
-        self._shared_sample_guard = shared_sample_guard
-        self._shared_sample_propagator = shared_sample_propagator
-        self._howl_diagnostics = howl_diagnostics
-        self._diagnostics_status = diagnostics_status_provider
-        self._entry_badge_resolver = entry_badge_resolver
-        self._severity_presenter = severity_presenter
-        self._diagnosis_banner_formatter = diagnosis_banner_formatter
         self._original_howl_size: int | None = None
         self._diag_index = None
-        self._drum_names = drum_names
-        self._stock_layout = stock_layout
-        self._leaf_info_formatter = leaf_info_formatter
-        self._howl_stats_calculator = howl_stats_calculator
-        self._size_formatter = size_formatter
-        self._tasks = tasks
-        self._process_tasks = process_tasks
         self._sample_types: dict[int, set] = {}
 
         self.hwl: HowlFile | None = None
@@ -254,7 +90,7 @@ class MainWindow(QMainWindow):
         self._export_handler = ExportHandler(self)
         self._playback = PlaybackHandler(self)
         self._tools = ToolsHandler(self)
-        self._entry_row_handler = EntryRowHandler(self, self._drop_router) if self._drop_router else None
+        self._entry_row_handler = EntryRowHandler(self, self._services.resolve("entry_drop_router")) if self._services.resolve("entry_drop_router") else None
 
         self.setAcceptDrops(True)
 
@@ -269,17 +105,17 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
 
         if (
-            self._entry_builder and self._leaves_builder and self._snapshot
-            and self._stylesheets and self._hub_mask_table_query and self._icon_resolver
-            and self._leaf_info_formatter
+            self._services.resolve("semantic_entry_builder") and self._services.resolve("entry_leaves_builder") and self._services.resolve("blob_snapshot")
+            and self._services.resolve("stylesheet_loader") and self._services.resolve("adventure_hub_mask_table_query") and self._services.resolve("category_icon_resolver")
+            and self._services.resolve("leaf_info_formatter")
         ):
             self.main_tab = MainTabWidget(
-                self._entry_builder, self._leaves_builder, self._snapshot,
-                self._stylesheets, self._hub_mask_table_query, self._icon_resolver,
-                self._leaf_info_formatter,
-                self._howl_stats_calculator, self._size_formatter,
-                self._entry_badge_resolver,
-                self._diagnosis_banner_formatter,
+                self._services.resolve("semantic_entry_builder"), self._services.resolve("entry_leaves_builder"), self._services.resolve("blob_snapshot"),
+                self._services.resolve("stylesheet_loader"), self._services.resolve("adventure_hub_mask_table_query"), self._services.resolve("category_icon_resolver"),
+                self._services.resolve("leaf_info_formatter"),
+                self._services.resolve("howl_stats_calculator"), self._services.resolve("size_formatter"),
+                self._services.resolve("entry_badge_resolver"),
+                self._services.resolve("diagnosis_banner_formatter"),
             )
 
             self.tabs.addTab(self.main_tab, "Category Browser")
@@ -290,9 +126,9 @@ class MainWindow(QMainWindow):
             self.main_tab = None
 
         self.music_workshop = MusicWorkshopWidget(
-            self._cseq_reader, self._cseq_parses, self._sample_lookup, self._drum_names,
-            self._size_formatter, self._stylesheets,
-            self._severity_presenter,
+            self._services.resolve("cseq_reader"), self._services.resolve("cseq_parses"), self._services.resolve("sample_lookup"), self._services.resolve("gm_drum_names"),
+            self._services.resolve("size_formatter"), self._services.resolve("stylesheet_loader"),
+            self._services.resolve("severity_presenter"),
         )
         self._music_workshop_handler = MusicWorkshopHandler(self)
         self.tabs.addTab(self.music_workshop, "Music Workshop")
@@ -312,15 +148,39 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
     def _register_player_widget(self, widget) -> None:
-        if self._audio_player and self._audio_player.media_player:
-            widget.connect_player(
-                self._audio_player.media_player,
-                self._playback.stop,
-                self._audio_player.set_looping,
-            )
-
+        """Transport widgets are built with the tabs, long before anything is
+        played. They are connected to the player once it exists."""
+        self._connect_player_widget(widget)
         widget.sig_loop_toggled.connect(lambda checked: self._sync_loop_state(widget, checked))
         self.player_widgets.append(widget)
+
+    def _connect_player_widget(self, widget) -> None:
+        player = self.audio_player_if_built
+
+        if player and player.media_player:
+            widget.connect_player(player.media_player, self._playback.stop, player.set_looping)
+
+    @property
+    def audio_player_if_built(self):
+        """The player only if something has already asked for it. Checks like
+        'is anything playing?' run constantly and must not be what builds it —
+        it pulls in Qt's multimedia stack, ~6 MB."""
+        if not self._services.is_instantiated("audio_player"):
+            return None
+
+        return self._services.resolve("audio_player")
+
+    def ensure_audio_player(self) -> AudioPlayer | None:
+        """The audio player, built on first use and wired to the transport
+        widgets that were waiting for it."""
+        already_built = self._services.is_instantiated("audio_player")
+        player = self._services.resolve("audio_player")
+
+        if not already_built:
+            for widget in self.player_widgets:
+                self._connect_player_widget(widget)
+
+        return player
 
     def _sync_loop_state(self, source, checked: bool) -> None:
         for w in self.player_widgets:
@@ -482,14 +342,14 @@ class MainWindow(QMainWindow):
         self._build_vag_rate_submenu(settings_menu)
 
     def _load_vag_rate_setting(self) -> None:
-        if self._vag_rate is None:
+        if self._services.resolve("vag_rate_provider") is None:
             return
 
         saved = self._settings.value("vag_default_rate", VagSampleRateProvider.DEFAULT_RATE, type=int)
-        self._vag_rate.set(saved)
+        self._services.resolve("vag_rate_provider").set(saved)
 
     def _build_vag_rate_submenu(self, parent_menu) -> None:
-        if self._vag_rate is None:
+        if self._services.resolve("vag_rate_provider") is None:
             return
 
         submenu = parent_menu.addMenu("VAG export sample rate")
@@ -498,16 +358,16 @@ class MainWindow(QMainWindow):
 
         for preset in VagSampleRateProvider.PRESETS:
             action = QAction(f"{preset} Hz", self, checkable=True)
-            action.setChecked(preset == self._vag_rate.rate)
+            action.setChecked(preset == self._services.resolve("vag_rate_provider").rate)
             action.triggered.connect(lambda _checked=False, r=preset: self._set_vag_rate(r))
             group.addAction(action)
             submenu.addAction(action)
 
     def _set_vag_rate(self, rate: int) -> None:
-        if self._vag_rate is None:
+        if self._services.resolve("vag_rate_provider") is None:
             return
 
-        self._vag_rate.set(rate)
+        self._services.resolve("vag_rate_provider").set(rate)
         self._settings.setValue("vag_default_rate", rate)
         self._notify_info(f"VAG export sample rate set to {rate} Hz")
 
@@ -557,20 +417,26 @@ class MainWindow(QMainWindow):
             action.setEnabled(False)
 
     def _clear_audio_cache(self):
-        if self._audio_player:
-            self._audio_player.stop()
+        player = self.audio_player_if_built
+
+        if player:
+            player.stop()
 
         decoded = 0
         rendered = 0
 
-        if self._audio_player:
-            decoded = self._audio_player.clear_cache()
+        # Clearing is explicit, so this is a fair moment to build the player:
+        # its decoded-WAV cache is on disc whether or not anything played yet.
+        player = self.ensure_audio_player()
 
-        if self._audio_cache:
-            rendered = self._audio_cache.clear()
+        if player:
+            decoded = player.clear_cache()
 
-        if self._cseq_renderer:
-            self._cseq_renderer.clear_decode_cache()
+        if self._services.resolve("audio_cache"):
+            rendered = self._services.resolve("audio_cache").clear()
+
+        if self._services.resolve("cseq_renderer"):
+            self._services.resolve("cseq_renderer").clear_decode_cache()
 
         self._notify_info(
             f"Cleared {decoded} decoded WAV file(s) and {rendered} rendered song WAV(s)",
@@ -580,11 +446,13 @@ class MainWindow(QMainWindow):
         if not self._check_unsaved():
             return
 
-        if self._audio_player:
-            self._audio_player.stop()
+        player = self.audio_player_if_built
 
-        if self._cseq_renderer:
-            self._cseq_renderer.clear_decode_cache()
+        if player:
+            player.stop()
+
+        if self._services.resolve("cseq_renderer"):
+            self._services.resolve("cseq_renderer").clear_decode_cache()
 
         self._playback.clear_render_cache()
 
@@ -594,8 +462,8 @@ class MainWindow(QMainWindow):
         self._sample_types = {}
         self._undo_stack.clear()
 
-        if self._snapshot:
-            self._snapshot.clear()
+        if self._services.resolve("blob_snapshot"):
+            self._services.resolve("blob_snapshot").clear()
 
         self.tree.clear()
         self.details.clear()
@@ -620,8 +488,8 @@ class MainWindow(QMainWindow):
         self._original_howl_size = None   # new file has no ISO baseline yet
         self._undo_stack.clear()
 
-        if self._snapshot:
-            self._snapshot.clear()
+        if self._services.resolve("blob_snapshot"):
+            self._services.resolve("blob_snapshot").clear()
 
         self._rebuild_tree()
         self._set_file_actions_enabled(True)
@@ -645,15 +513,15 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            data = self._writer.serialize(self.hwl)
+            data = self._services.resolve("howl_writer").serialize(self.hwl)
 
             slot_baseline = (
                 os.path.getsize(self.file_path)
                 if os.path.exists(self.file_path) else None
             )
 
-            if self._howl_size_guard is not None and not self.confirm_within_limit(
-                self._howl_size_guard.check(len(data), slot_baseline),
+            if self._services.resolve("howl_size_guard") is not None and not self.confirm_within_limit(
+                self._services.resolve("howl_size_guard").check(len(data), slot_baseline),
             ):
                 return
 
@@ -800,14 +668,14 @@ class MainWindow(QMainWindow):
         if not self.hwl:
             return
 
-        if self._sample_classifier:
-            self._sample_types = self._sample_classifier.classify(self.hwl)
+        if self._services.resolve("sample_classifier"):
+            self._sample_types = self._services.resolve("sample_classifier").classify(self.hwl)
         else:
             self._sample_types = {}
 
         self._diag_index = (
-            self._diagnostics_status.index_for(self.hwl, self._original_howl_size)
-            if self._diagnostics_status and not self._custom_mode else None
+            self._services.resolve("diagnostics_status_provider").index_for(self.hwl, self._original_howl_size)
+            if self._services.resolve("diagnostics_status_provider") and not self._custom_mode else None
         )
 
         root = self._tree_item(None, f"HOWL (v{self.hwl.version})", f"{len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs", NODE_ROOT)
@@ -829,8 +697,8 @@ class MainWindow(QMainWindow):
         self._badge_target(banks_node, Target(TargetKind.BANK), rollup=self._worst_for_kind(TargetKind.BANK))
 
         for i, bank in enumerate(self.hwl.banks):
-            info = self._detail_fmt.bank.format_tree_info(bank)
-            label = self._get_item_label("Bank", i, self._bank_reader.get_name(i))
+            info = self._services.resolve("detail_formatter").bank.format_tree_info(bank)
+            label = self._get_item_label("Bank", i, self._services.resolve("bank_reader").get_name(i))
             bank_node = self._tree_item(banks_node, label, info, NODE_BANK, i)
             self._badge_target(bank_node, Target(TargetKind.BANK, i))
             self._defer_children(bank_node, LAZY_BANK_SAMPLES)
@@ -840,8 +708,8 @@ class MainWindow(QMainWindow):
         self._badge_target(songs_node, Target(TargetKind.SONG), rollup=self._worst_for_kind(TargetKind.SONG))
 
         for i, song in enumerate(self.hwl.songs):
-            info = self._detail_fmt.song.format_tree_info(song)
-            label = self._get_item_label("Song", i, self._cseq_reader.get_name(i))
+            info = self._services.resolve("detail_formatter").song.format_tree_info(song)
+            label = self._get_item_label("Song", i, self._services.resolve("cseq_reader").get_name(i))
             song_node = self._tree_item(songs_node, label, info, NODE_SONG, i)
             self._badge_target(song_node, Target(TargetKind.SONG, i))
             self._defer_children(song_node, LAZY_SONG_SEQUENCES)
@@ -895,8 +763,8 @@ class MainWindow(QMainWindow):
     def _severity_prefix(self, severity) -> str:
         # Only warnings/errors badge a tree row — an INFO (e.g. the file summary)
         # must not decorate the node.
-        if severity in (Severity.ERROR, Severity.WARNING) and self._severity_presenter:
-            return self._severity_presenter.emoji(severity) + " "
+        if severity in (Severity.ERROR, Severity.WARNING) and self._services.resolve("severity_presenter"):
+            return self._services.resolve("severity_presenter").emoji(severity) + " "
 
         return ""
 
@@ -931,11 +799,11 @@ class MainWindow(QMainWindow):
 
     def _populate_bank_samples(self, bank_node, bank_index: int) -> None:
         try:
-            samples = self._bank_reader.parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
+            samples = self._services.resolve("bank_reader").parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
 
             for j, sample in enumerate(samples):
                 types = self._sample_types.get(sample.spu_index, set())
-                type_label = self._sample_classifier.get_label(types) if self._sample_classifier and types else ""
+                type_label = self._services.resolve("sample_classifier").get_label(types) if self._services.resolve("sample_classifier") and types else ""
                 label = f"SPU {sample.spu_index}"
                 parts = [f"{len(sample.data):,} bytes"]
 
@@ -948,7 +816,7 @@ class MainWindow(QMainWindow):
 
     def _populate_song_sequences(self, song_node, song_index: int) -> None:
         try:
-            cseq = self._cseq_parses.read(self.hwl.songs[song_index])
+            cseq = self._services.resolve("cseq_parses").read(self.hwl.songs[song_index])
 
             for j, seq in enumerate(cseq.songs):
                 label = f"Sequence {j}"
@@ -969,16 +837,16 @@ class MainWindow(QMainWindow):
 
         banner = self._banner_html(node_type, index)
         formatters = {
-            NODE_ROOT: lambda: self._detail_fmt.howl.format_details(self.hwl, self.file_path, banner=banner),
-            NODE_SPU_TABLE: lambda: self._detail_fmt.howl.format_spu_table(self.hwl),
-            NODE_EFFECTS: lambda: self._detail_fmt.fx.format_effects_table(self.hwl),
-            NODE_ENGINE_FX: lambda: self._detail_fmt.fx.format_engine_fx_table(self.hwl),
-            NODE_OTHER_FX_ENTRY: lambda: self._detail_fmt.fx.format_other_fx_details(self.hwl, index),
-            NODE_ENGINE_FX_ENTRY: lambda: self._detail_fmt.fx.format_engine_fx_details(self.hwl, index),
-            NODE_BANKS: lambda: self._detail_fmt.bank.format_summary(self.hwl),
-            NODE_BANK: lambda: self._detail_fmt.bank.format_details(self.hwl, index, banner=banner),
-            NODE_SONGS: lambda: self._detail_fmt.song.format_summary(self.hwl),
-            NODE_SONG: lambda: self._detail_fmt.song.format_details(self.hwl, index, banner=banner),
+            NODE_ROOT: lambda: self._services.resolve("detail_formatter").howl.format_details(self.hwl, self.file_path, banner=banner),
+            NODE_SPU_TABLE: lambda: self._services.resolve("detail_formatter").howl.format_spu_table(self.hwl),
+            NODE_EFFECTS: lambda: self._services.resolve("detail_formatter").fx.format_effects_table(self.hwl),
+            NODE_ENGINE_FX: lambda: self._services.resolve("detail_formatter").fx.format_engine_fx_table(self.hwl),
+            NODE_OTHER_FX_ENTRY: lambda: self._services.resolve("detail_formatter").fx.format_other_fx_details(self.hwl, index),
+            NODE_ENGINE_FX_ENTRY: lambda: self._services.resolve("detail_formatter").fx.format_engine_fx_details(self.hwl, index),
+            NODE_BANKS: lambda: self._services.resolve("detail_formatter").bank.format_summary(self.hwl),
+            NODE_BANK: lambda: self._services.resolve("detail_formatter").bank.format_details(self.hwl, index, banner=banner),
+            NODE_SONGS: lambda: self._services.resolve("detail_formatter").song.format_summary(self.hwl),
+            NODE_SONG: lambda: self._services.resolve("detail_formatter").song.format_details(self.hwl, index, banner=banner),
         }
 
         # Waveform on selection: samples and FX entries (instant decode)
@@ -999,14 +867,14 @@ class MainWindow(QMainWindow):
         """The diagnosis banner fragment for the selected file / bank / song,
         rendered by the banner formatter (template + style.css) and embedded in
         the detail document. Empty when the item is clean or has no target."""
-        if self._diag_index is None or self._diagnosis_banner_formatter is None:
+        if self._diag_index is None or self._services.resolve("diagnosis_banner_formatter") is None:
             return ""
 
         target = self._detail_target(node_type, index)
         if target is None:
             return ""
 
-        return self._diagnosis_banner_formatter.render(
+        return self._services.resolve("diagnosis_banner_formatter").render(
             self._diag_index.findings_for(target),
         )
 
@@ -1023,16 +891,16 @@ class MainWindow(QMainWindow):
         return None
 
     def _show_sample_waveform(self, bank_index: int, sample_index: int) -> None:
-        type_labeler = self._sample_classifier.get_label if self._sample_classifier else None
-        self.details.setHtml(self._detail_fmt.bank.format_sample_details(
+        type_labeler = self._services.resolve("sample_classifier").get_label if self._services.resolve("sample_classifier") else None
+        self.details.setHtml(self._services.resolve("detail_formatter").bank.format_sample_details(
             self.hwl, bank_index, sample_index, self._sample_types, type_labeler,
         ))
 
         try:
-            samples = self._bank_reader.parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
+            samples = self._services.resolve("bank_reader").parse(self.hwl.banks[bank_index], self.hwl.spu_addrs)
 
             if sample_index < len(samples):
-                pcm, loop_start = self._vag_decoder.decode_with_loop(samples[sample_index].data)
+                pcm, loop_start = self._services.resolve("vag_decoder").decode_with_loop(samples[sample_index].data)
                 self.waveform.set_samples(pcm, loop_start)
                 self.waveform.setVisible(True)
                 return
@@ -1043,10 +911,10 @@ class MainWindow(QMainWindow):
 
     def _show_fx_waveform(self, spu_index: int) -> None:
         try:
-            data = self._sample_lookup.find_sample_data(self.hwl, spu_index)
+            data = self._services.resolve("sample_lookup").find_sample_data(self.hwl, spu_index)
 
             if data:
-                pcm, loop_start = self._vag_decoder.decode_with_loop(data)
+                pcm, loop_start = self._services.resolve("vag_decoder").decode_with_loop(data)
                 self.waveform.set_samples(pcm, loop_start)
                 self.waveform.setVisible(True)
                 return
@@ -1118,7 +986,7 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
 
             try:
-                cseq = self._cseq_reader.read(self.hwl.songs[index])
+                cseq = self._services.resolve("cseq_reader").read(self.hwl.songs[index])
                 seq_count = len(cseq.songs)
             except Exception:
                 seq_count = 0
@@ -1205,13 +1073,13 @@ class MainWindow(QMainWindow):
 
         try:
             if parent_type == NODE_BANKS:
-                self._editor.move_bank(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
+                self._services.resolve("howl_editor").move_bank(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
                 self._mark_modified()
                 self._rebuild_tree()
                 self._notify(f"Moved bank {start} to position {dest_row}")
 
             elif parent_type == NODE_SONGS:
-                self._editor.move_song(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
+                self._services.resolve("howl_editor").move_song(self.hwl, start, dest_row if dest_row <= start else dest_row - 1)
                 self._mark_modified()
                 self._rebuild_tree()
                 self._notify(f"Moved song {start} to position {dest_row}")
@@ -1221,7 +1089,7 @@ class MainWindow(QMainWindow):
                 if song_index is not None:
                     to_idx = dest_row if dest_row <= start else dest_row - 1
 
-                    self.hwl.songs[song_index] = self._cseq_editor.move_sequence(
+                    self.hwl.songs[song_index] = self._services.resolve("cseq_editor").move_sequence(
                         self.hwl.songs[song_index], start, to_idx,
                     )
 
@@ -1242,9 +1110,10 @@ class MainWindow(QMainWindow):
         if not self.hwl:
             return
 
-        if (HAS_MULTIMEDIA and self._audio_player
-                and self._audio_player.media_player
-                and self._audio_player.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState):
+        player = self.audio_player_if_built
+
+        if (HAS_MULTIMEDIA and player and player.media_player
+                and player.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState):
             self._playback.stop()
         else:
             self._play_selected()
@@ -1319,14 +1188,14 @@ class MainWindow(QMainWindow):
 
     def _load_file(self, path: str):
         try:
-            self.hwl = self._reader.read_file(path)
+            self.hwl = self._services.resolve("howl_reader").read_file(path)
             self.file_path = path
             self.modified = False
             self._undo_stack.clear()
             self._original_howl_size = os.path.getsize(path)
 
-            if self._snapshot:
-                self._snapshot.capture(self.hwl)
+            if self._services.resolve("blob_snapshot"):
+                self._services.resolve("blob_snapshot").capture(self.hwl)
 
             self._rebuild_tree()
             self._set_file_actions_enabled(True)
@@ -1355,13 +1224,13 @@ class MainWindow(QMainWindow):
                     self._load_file(path)
 
             elif ext == FileFormatRegistry.BANK.extension and self.hwl:
-                self._editor.add_bank(self.hwl, Path(path).read_bytes())
+                self._services.resolve("howl_editor").add_bank(self.hwl, Path(path).read_bytes())
                 self._mark_modified()
                 self._rebuild_tree()
                 self._notify(f"Added bank from {Path(path).name}")
 
             elif ext == FileFormatRegistry.CSEQ.extension and self.hwl:
-                self._editor.add_song(self.hwl, Path(path).read_bytes())
+                self._services.resolve("howl_editor").add_song(self.hwl, Path(path).read_bytes())
                 self._mark_modified()
                 self._rebuild_tree()
                 self._notify(f"Added song from {Path(path).name}")

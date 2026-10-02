@@ -51,13 +51,20 @@ def qt_app():
 
 @pytest.fixture
 def window(qt_app):
+    """A stand-in for MainWindow: the handler reaches services through the
+    container, so the fake serves the render runner from there."""
+    runner = FakeRunner()
+    services = SimpleNamespace(
+        resolve=lambda name: runner if name == "process_tasks" else None,
+        is_instantiated=lambda name: False,
+    )
+
     return SimpleNamespace(
         hwl=SimpleNamespace(banks=[]),
+        audio_player_if_built=None,
+        _services=services,
+        _render_runner=runner,
         notifications=NotificationBar(dismiss_ms=10_000),
-        _process_tasks=FakeRunner(),
-        _audio_cache=None,
-        _audio_player=SimpleNamespace(available=True, stop=lambda: None),
-        status=SimpleNamespace(showMessage=lambda _message: None),
         player_widgets=[],
         waveforms=[],
     )
@@ -86,7 +93,7 @@ class TestSupersededRenders:
     def test_the_result_plays_when_it_is_still_the_current_render(self, handler, window, played):
         _start(handler, "Song A")
 
-        window._process_tasks.jobs[0].deliver(b"wav")
+        window._render_runner.jobs[0].deliver(b"wav")
 
         assert played == ["Song A"]
 
@@ -94,14 +101,14 @@ class TestSupersededRenders:
         _start(handler, "Song A")
         _start(handler, "Song B")
 
-        assert window._process_tasks.jobs[0].handle.cancelled is True
+        assert window._render_runner.jobs[0].handle.cancelled is True
 
     def test_a_superseded_result_does_not_play_over_the_new_one(self, handler, window, played):
         _start(handler, "Song A")
         _start(handler, "Song B")
 
-        window._process_tasks.jobs[1].deliver(b"wav-b")
-        window._process_tasks.jobs[0].deliver(b"wav-a")   # the old mix lands late
+        window._render_runner.jobs[1].deliver(b"wav-b")
+        window._render_runner.jobs[0].deliver(b"wav-a")   # the old mix lands late
 
         assert played == ["Song B"]
 
@@ -113,12 +120,12 @@ class TestStopping:
 
         handler.stop()
 
-        assert window._process_tasks.jobs[0].handle.cancelled is True
+        assert window._render_runner.jobs[0].handle.cancelled is True
 
     def test_a_render_abandoned_by_stop_never_plays(self, handler, window, played):
         _start(handler, "Song A")
         handler.stop()
 
-        window._process_tasks.jobs[0].deliver(b"wav")
+        window._render_runner.jobs[0].deliver(b"wav")
 
         assert played == []

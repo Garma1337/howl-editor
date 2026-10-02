@@ -1,5 +1,6 @@
 # coding: utf-8
 
+from howl_editor.audio.audio_player import HAS_MULTIMEDIA
 from howl_editor.ctr import render_job
 from howl_editor.ps1 import spu
 
@@ -16,13 +17,19 @@ class PlaybackHandler:
         self._render = None
 
     def can_play(self) -> bool:
-        return self._window._audio_player is not None and self._window._audio_player.available
+        """Whether sound is possible at all — asked before anything is played,
+        so it must not be what builds the player."""
+        player = self._window.audio_player_if_built
+
+        return player.available if player is not None else HAS_MULTIMEDIA
 
     def stop(self) -> None:
         self._abandon_render()
 
-        if self._window._audio_player:
-            self._window._audio_player.stop()
+        player = self._window.audio_player_if_built
+
+        if player:
+            player.stop()
 
         for widget in self._collect("player_widgets"):
             widget.clear()
@@ -33,8 +40,8 @@ class PlaybackHandler:
             return
 
         try:
-            lookup = self._window._sample_lookup
-            samples = self._window._bank_reader.parse(
+            lookup = self._window._services.resolve("sample_lookup")
+            samples = self._window._services.resolve("bank_reader").parse(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
             )
             if sample_index >= len(samples):
@@ -62,7 +69,7 @@ class PlaybackHandler:
             label = f"Song {song_index} Seq {seq_index}"
 
             def render_args():
-                cseq = self._window._cseq_parses.read(song_blob)
+                cseq = self._window._services.resolve("cseq_parses").read(song_blob)
                 if seq_index >= len(cseq.songs):
                     return None
 
@@ -99,7 +106,7 @@ class PlaybackHandler:
             track_key = tuple(active_tracks)
 
             def render_args():
-                cseq = self._window._cseq_parses.read(song_blob)
+                cseq = self._window._services.resolve("cseq_parses").read(song_blob)
 
                 return (
                     cseq, sub_song_index, self._collect_samples(cseq),
@@ -136,7 +143,7 @@ class PlaybackHandler:
             return
 
         try:
-            lookup = self._window._sample_lookup
+            lookup = self._window._services.resolve("sample_lookup")
             data = lookup.find_sample_data(self._window.hwl, spu_index)
             if data is None:
                 self._window._notify_warning(f"SPU {spu_index} not found in any bank")
@@ -160,12 +167,12 @@ class PlaybackHandler:
         backend-playable rate when the original falls outside the window
         QMediaPlayer accepts. Audible pitch is preserved across the bump."""
         if _MIN_PLAYBACK_RATE <= raw_rate <= _MAX_PLAYBACK_RATE:
-            return self._window._vag_decoder.decode_to_wav(vag_data, raw_rate), ""
+            return self._window._services.resolve("vag_decoder").decode_to_wav(vag_data, raw_rate), ""
 
         target_rate = _DEFAULT_SAMPLE_RATE
-        pcm = self._window._vag_decoder.decode(vag_data)
-        resampled = self._window._resampler.resample(pcm, raw_rate, target_rate)
-        wav = self._window._wav_writer.write(resampled, target_rate, channels=1)
+        pcm = self._window._services.resolve("vag_decoder").decode(vag_data)
+        resampled = self._window._services.resolve("resampler").resample(pcm, raw_rate, target_rate)
+        wav = self._window._services.resolve("wav_writer").write(resampled, target_rate, channels=1)
 
         return wav, f" — resampled {raw_rate}→{target_rate} Hz"
 
@@ -175,7 +182,12 @@ class PlaybackHandler:
         """Common path: play WAV, update all player bars, optionally update
         all waveforms. Each tab owns its own widgets but they all observe the
         same QMediaPlayer, so transport state stays consistent."""
-        self._window._audio_player.play_wav(wav)
+        player = self._window.ensure_audio_player()
+
+        if player is None:
+            return
+
+        player.play_wav(wav)
 
         for widget in self._collect("player_widgets"):
             widget.set_now_playing(label, replay_callback)
@@ -224,7 +236,7 @@ class PlaybackHandler:
             busy.dismiss()
             self._play_wav(wav, label, replay_callback)
 
-        handle = self._window._process_tasks.run(
+        handle = self._window._services.resolve("process_tasks").run(
             render_job.render_song_wav, render_args,
             on_success=done,
             on_error=lambda message: busy.failed(f"Rendering {label} failed: {message}"),
@@ -243,12 +255,12 @@ class PlaybackHandler:
             self._render = None
 
     def _collect_samples(self, cseq) -> dict[int, bytes]:
-        return self._window._sample_lookup.collect_song_samples(self._window.hwl, cseq)
+        return self._window._services.resolve("sample_lookup").collect_song_samples(self._window.hwl, cseq)
 
     def _cached_wav(
         self, song_blob: bytes, sub_song_index: int, active_tracks: tuple[int, ...] | None,
     ) -> bytes | None:
-        cache = self._window._audio_cache
+        cache = self._window._services.resolve("audio_cache")
 
         if cache is None:
             return None
@@ -259,7 +271,7 @@ class PlaybackHandler:
         self, song_blob: bytes, sub_song_index: int,
         active_tracks: tuple[int, ...] | None, wav: bytes,
     ) -> None:
-        cache = self._window._audio_cache
+        cache = self._window._services.resolve("audio_cache")
 
         if cache is not None:
             cache.put(self._cache_key(cache, song_blob, sub_song_index, active_tracks), wav)
@@ -272,8 +284,8 @@ class PlaybackHandler:
         return cache.make_key(song_blob, sub_song_index, banks, active_tracks)
 
     def clear_render_cache(self) -> None:
-        if self._window._audio_cache is not None:
-            self._window._audio_cache.clear_memory()
+        if self._window._services.resolve("audio_cache") is not None:
+            self._window._services.resolve("audio_cache").clear_memory()
 
     def _collect(self, attr: str) -> list:
         """Pull a list-of-widgets attribute off the main window, defaulting to

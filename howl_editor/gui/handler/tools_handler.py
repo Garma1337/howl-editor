@@ -12,7 +12,7 @@ from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.dialog.diagnosis_report_dialog import DiagnosisReportDialog
 from howl_editor.gui.dialog.saphi_export_dialog import SaphiExportDialog
-from howl_editor.midi.converter import HAS_MIDO
+from howl_editor.midi.availability import HAS_MIDO
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
 from howl_editor.saphi.formats.sca.models import ScaFile, ScaMetadata
 
@@ -30,18 +30,18 @@ class ToolsHandler:
         try:
             if self._window.hwl:
                 spu_addrs = self._window.hwl.spu_addrs
-                indices = self._window._spu_slot_allocator.allocate(self._window.hwl, len(files))
+                indices = self._window._services.resolve("spu_slot_allocator").allocate(self._window.hwl, len(files))
             else:
                 spu_addrs, indices = [], None
 
             spu_before = list(spu_addrs)
-            result = self._window._bank_builder.build_from_files(files, spu_addrs, indices)
+            result = self._window._services.resolve("bank_builder").build_from_files(files, spu_addrs, indices)
 
             if self._window.hwl and self._ask_store_in_hwl("bank"):
-                self._window._editor.add_bank(self._window.hwl, result.bank_data)
+                self._window._services.resolve("howl_editor").add_bank(self._window.hwl, result.bank_data)
 
                 for spu_index, sample_rate in zip(result.new_spu_indices, result.sample_rates):
-                    self._window._editor.attach_sample_rate(self._window.hwl, spu_index, sample_rate)
+                    self._window._services.resolve("howl_editor").attach_sample_rate(self._window.hwl, spu_index, sample_rate)
 
                 self._window._mark_modified()
                 self._window._rebuild_tree()
@@ -71,30 +71,30 @@ class ToolsHandler:
             return
 
         try:
-            info = self._window._midi_converter.get_midi_info(path)
+            info = self._window._services.resolve("midi_converter").get_midi_info(path)
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Cannot read MIDI:\n{e}")
             return
 
         max_spu = len(self._window.hwl.spu_addrs) if self._window.hwl else 0
-        free = self._window._spu_slot_usage.free_slots(self._window.hwl) if self._window.hwl else None
+        free = self._window._services.resolve("spu_slot_usage").free_slots(self._window.hwl) if self._window.hwl else None
         dialog = ConvertMidiDialog(
-            self._window, info, max_spu, self._window._drum_names, free_spu_indices=free,
-            pitch_headroom=self._window._pitch_headroom,
-            pitch_stepper=self._window._pitch_stepper,
+            self._window, info, max_spu, self._window._services.resolve("gm_drum_names"), free_spu_indices=free,
+            pitch_headroom=self._window._services.resolve("pitch_headroom_inspector"),
+            pitch_stepper=self._window._services.resolve("pitch_stepper"),
         )
         if dialog.exec() != QDialog.Accepted:
             return
 
         try:
-            cseq_data = self._window._midi_converter.convert(path, dialog.get_settings())
+            cseq_data = self._window._services.resolve("midi_converter").convert(path, dialog.get_settings())
 
-            guard = self._window._cseq_size_guard
+            guard = self._window._services.resolve("cseq_size_guard")
             if guard is not None and not self._window.confirm_within_limit(guard.check(cseq_data)):
                 return
 
             if self._window.hwl and self._ask_store_in_hwl("song"):
-                self._window._editor.add_song(self._window.hwl, cseq_data)
+                self._window._services.resolve("howl_editor").add_song(self._window.hwl, cseq_data)
                 self._window._mark_modified()
                 self._window._rebuild_tree()
                 self._window._notify(f"Added song {len(self._window.hwl.songs) - 1}")
@@ -108,18 +108,18 @@ class ToolsHandler:
             QMessageBox.critical(self._window, "Error", f"Conversion failed:\n{e}")
 
     def validate_bank_song(self):
-        if not self._window.hwl or not self._window._validator:
+        if not self._window.hwl or not self._window._services.resolve("validator"):
             return
 
         bank_indices = list(range(len(self._window.hwl.banks)))
-        bank_labels = [self._window._get_item_label("Bank", i, self._window._bank_reader.get_name(i)) for i in bank_indices]
+        bank_labels = [self._window._get_item_label("Bank", i, self._window._services.resolve("bank_reader").get_name(i)) for i in bank_indices]
         bank_label, ok = QInputDialog.getItem(self._window, "Validate", "Select bank:", bank_labels, 0, False)
 
         if not ok:
             return
 
         song_indices = list(range(len(self._window.hwl.songs)))
-        song_labels = [self._window._get_item_label("Song", i, self._window._cseq_reader.get_name(i)) for i in song_indices]
+        song_labels = [self._window._get_item_label("Song", i, self._window._services.resolve("cseq_reader").get_name(i)) for i in song_indices]
         song_label, ok = QInputDialog.getItem(self._window, "Validate", "Select song:", song_labels, 0, False)
 
         if not ok:
@@ -129,7 +129,7 @@ class ToolsHandler:
         song_idx = song_indices[song_labels.index(song_label)]
 
         try:
-            result = self._window._validator.validate(
+            result = self._window._services.resolve("validator").validate(
                 self._window.hwl.banks[bank_idx], self._window.hwl.songs[song_idx], self._window.hwl.spu_addrs,
             )
             self._show_validation_result(result)
@@ -154,8 +154,8 @@ class ToolsHandler:
             self._window._notify_warning("The current HWL has no banks or songs to export.")
             return
 
-        bank_labels = [self._window._get_item_label("Bank", i, self._window._bank_reader.get_name(i)) for i in range(len(self._window.hwl.banks))]
-        song_labels = [self._window._get_item_label("Song", i, self._window._cseq_reader.get_name(i)) for i in range(len(self._window.hwl.songs))]
+        bank_labels = [self._window._get_item_label("Bank", i, self._window._services.resolve("bank_reader").get_name(i)) for i in range(len(self._window.hwl.banks))]
+        song_labels = [self._window._get_item_label("Song", i, self._window._services.resolve("cseq_reader").get_name(i)) for i in range(len(self._window.hwl.songs))]
         bank_sizes = [len(b) for b in self._window.hwl.banks]
 
         dialog = SaphiExportDialog(self._window, bank_labels, song_labels, bank_sizes, SAPHI_BANK_MAX_SIZE)
@@ -177,7 +177,7 @@ class ToolsHandler:
         try:
             bank = self._window.hwl.banks[selection.bank_index]
             cseq = self._window.hwl.songs[selection.song_index]
-            sample_sizes = self._window._sample_sizes_extractor.extract(bank, self._window.hwl.spu_addrs)
+            sample_sizes = self._window._services.resolve("sample_sizes_extractor").extract(bank, self._window.hwl.spu_addrs)
 
             sca = ScaFile(
                 bank=bank,
@@ -186,7 +186,7 @@ class ToolsHandler:
                 metadata=ScaMetadata(name=selection.name, author=selection.author),
             )
 
-            blob = self._window._sca_writer.serialize(sca)
+            blob = self._window._services.resolve("sca_writer").serialize(sca)
             Path(path).write_bytes(blob)
             self._window._notify(f"Exported {Path(path).name}")
         except Exception as e:
@@ -204,23 +204,23 @@ class ToolsHandler:
             return
 
         try:
-            sca = self._window._sca_reader.parse(Path(path).read_bytes())
+            sca = self._window._services.resolve("sca_reader").parse(Path(path).read_bytes())
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Failed to parse .sca file:\n{e}")
             return
 
-        song_guard = self._window._cseq_size_guard
+        song_guard = self._window._services.resolve("cseq_size_guard")
         if song_guard is not None and not self._window.confirm_within_limit(song_guard.check(sca.cseq)):
             return
 
-        bank_guard = self._window._bank_size_guard
+        bank_guard = self._window._services.resolve("bank_size_guard")
         if bank_guard is not None and not self._window.confirm_within_limit(
             bank_guard.check(self._window.hwl, len(self._window.hwl.banks), sca.bank),
         ):
             return
 
-        bank_index = self._window._editor.add_bank(self._window.hwl, sca.bank)
-        song_index = self._window._editor.add_song(self._window.hwl, sca.cseq)
+        bank_index = self._window._services.resolve("howl_editor").add_bank(self._window.hwl, sca.bank)
+        song_index = self._window._services.resolve("howl_editor").add_song(self._window.hwl, sca.cseq)
         self._window._mark_modified()
         self._window._rebuild_tree()
         self._window._notify(
@@ -229,7 +229,7 @@ class ToolsHandler:
         )
 
     def batch_export(self):
-        if not self._window.hwl or not self._window._batch_exporter:
+        if not self._window.hwl or not self._window._services.resolve("batch_exporter"):
             return
 
         folder = QFileDialog.getExistingDirectory(self._window, "Batch Export - Select Output Folder")
@@ -245,12 +245,12 @@ class ToolsHandler:
             songs=list(self._window.hwl.songs),
             spu_addrs=list(self._window.hwl.spu_addrs),
         )
-        rate = self._window._vag_rate.rate
+        rate = self._window._services.resolve("vag_rate_provider").rate
         busy = self._window.notifications.push_busy(
             f"Exporting everything to {Path(folder).name}…",
         )
-        handle = self._window._tasks.run(
-            lambda progress: self._window._batch_exporter.export(
+        handle = self._window._services.resolve("tasks").run(
+            lambda progress: self._window._services.resolve("batch_exporter").export(
                 hwl, Path(folder), rate, progress=progress,
             ),
             lambda result: busy.succeeded(
@@ -265,12 +265,12 @@ class ToolsHandler:
 
     def diagnose_howl(self):
         """Run the whole-file engine-limit sweep and show the report."""
-        if not self._window.hwl or self._window._howl_diagnostics is None:
+        if not self._window.hwl or self._window._services.resolve("howl_diagnostics") is None:
             return
 
         try:
-            data = self._window._writer.serialize(self._window.hwl)
-            report = self._window._howl_diagnostics.diagnose(
+            data = self._window._services.resolve("howl_writer").serialize(self._window.hwl)
+            report = self._window._services.resolve("howl_diagnostics").diagnose(
                 self._window.hwl,
                 howl_file_size=len(data),
                 iso_budget_bytes=self._window._original_howl_size,
@@ -280,7 +280,7 @@ class ToolsHandler:
             return
 
         DiagnosisReportDialog(
-            self._window, report, self._window._severity_presenter,
+            self._window, report, self._window._services.resolve("severity_presenter"),
         ).exec()
 
     def _export_slots_within_stock_table(self, selection) -> bool:
@@ -289,7 +289,7 @@ class ToolsHandler:
         cseq = self._window.hwl.songs[selection.song_index]
 
         try:
-            blocked = self._window._sca_spu_slots.out_of_range_slots(bank, cseq)
+            blocked = self._window._services.resolve("sca_spu_slot_validator").out_of_range_slots(bank, cseq)
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Saphi export failed:\n{e}")
             return False
