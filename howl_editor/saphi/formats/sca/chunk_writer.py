@@ -6,7 +6,7 @@ from howl_editor.saphi.formats.sca.models import ScaFormat
 
 
 class ScaChunkWriter:
-    """Appends a single SCA chunk: [tag | bodySize | body | zero-pad to alignment]."""
+    """Appends a single SCA chunk (layout: see ScaFormat)."""
 
     def write(self, out: bytearray, tag: bytes, body: bytes) -> None:
         if len(tag) != ScaFormat.CHUNK_TAG_SIZE:

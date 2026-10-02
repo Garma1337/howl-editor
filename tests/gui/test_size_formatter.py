@@ -28,7 +28,7 @@ class TestFormatBytes:
 
     def test_thousands_separators_in_kb(self, size_formatter):
         # Just under 1 MB so we stay in the KB branch with a 4-digit number.
-        result = size_formatter.format_bytes(1000 * 1024)  # 1000.0 KB
+        result = size_formatter.format_bytes(1000 * 1024)
 
         assert "1,000.0 KB" == result
 

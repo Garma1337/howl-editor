@@ -159,6 +159,5 @@ class TestClear:
         cache.clear()
 
         assert cache.memory_size == 0
-        # A fresh instance should not see 'a' either.
         fresh = AudioCache(tmp_path)
         assert fresh.get("a") is None

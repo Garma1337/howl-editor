@@ -22,7 +22,6 @@ class TestDecode:
 
         # 28 samples, each 2 bytes
         assert len(pcm) == 28 * 2
-        # All silence
         assert pcm == b"\x00\x00" * 28
 
     def test_end_flag_stops_decoding(self, decoder):
@@ -39,7 +38,6 @@ class TestDecode:
         pcm = decoder.decode(frame)
         assert len(pcm) == 28 * 2
 
-        # At least some samples should be non-zero
         samples = [int.from_bytes(pcm[i:i + 2], "little", signed=True) for i in range(0, len(pcm), 2)]
         assert any(s != 0 for s in samples)
 

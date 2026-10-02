@@ -70,6 +70,15 @@ class MusicWorkshopHandler:
     def add_percussion(self, song_index: int) -> None:
         self._w._song_handler.add_percussion(song_index)
 
+    def shift_instrument_octaves(self, song_index: int, inst_index: int, octaves: int) -> None:
+        self._w._song_handler.shift_instrument_octaves(song_index, inst_index, octaves)
+
+    def shift_percussion_octaves(self, song_index: int, perc_index: int, octaves: int) -> None:
+        self._w._song_handler.shift_percussion_octaves(song_index, perc_index, octaves)
+
+    def shift_song_octaves(self, song_index: int, octaves: int) -> None:
+        self._w._song_handler.shift_song_octaves(song_index, octaves)
+
     def retarget_instrument(self, song_index: int, inst_index: int) -> None:
         self._w._song_handler.retarget_instrument(song_index, inst_index)
 

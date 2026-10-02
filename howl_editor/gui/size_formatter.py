@@ -3,8 +3,7 @@
 
 class SizeFormatter:
     """Formats byte counts as human-readable strings (KB, MB) with thousands
-    separators. Used in detail panels and bank/sample rows where raw byte counts
-    were previously shown."""
+    separators."""
 
     _KB = 1024
     _MB = 1024 * 1024

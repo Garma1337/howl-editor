@@ -3,6 +3,7 @@
 from pathlib import Path
 from struct import pack
 
+from howl_editor.ctr.diagnostics.spu_slot_guard import SpuSlotGuard
 from howl_editor.ctr.formats.bank.models import BankSample, BankBuildResult
 from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 from howl_editor.ps1.constants import SECTOR_SIZE, bytes_to_sectors
@@ -12,24 +13,25 @@ from howl_editor.ps1.formats.vag.reader import VagReader
 
 class BankBuilder:
 
-    def __init__(self, vag_reader: VagReader):
+    def __init__(self, vag_reader: VagReader, slot_guard: SpuSlotGuard):
         self._vag_reader = vag_reader
+        self._slot_guard = slot_guard
 
     def build_from_files(
         self,
         vag_paths: list[str | Path],
         spu_addrs: list[SpuAddrEntry],
-        start_index: int | None = None,
+        indices: list[int] | None = None,
     ) -> BankBuildResult:
-        """
-        Build a bank blob from VAG files on disk.
-        Extends spu_addrs with new entries.
-        """
-        if start_index is None:
-            start_index = len(spu_addrs)
-
+        """Build a bank blob from VAG files on disk, one sample per slot in
+        `indices` (default: appended after the current table). Extends
+        spu_addrs with new entries."""
         samples = [self._vag_reader.read_file(p) for p in vag_paths]
-        return self.build_from_samples(samples, spu_addrs, start_index)
+
+        if indices is None:
+            return self.build_from_samples(samples, spu_addrs, len(spu_addrs))
+
+        return self.build_at(samples, spu_addrs, indices)
 
     def build_from_samples(
         self,
@@ -37,18 +39,31 @@ class BankBuilder:
         spu_addrs: list[SpuAddrEntry],
         start_index: int,
     ) -> BankBuildResult:
-        """Build a bank from VagSample objects. Extends spu_addrs in place."""
-        new_indices = []
-        for i, sample in enumerate(samples):
-            idx = start_index + i
-            new_indices.append(idx)
+        """Build a bank from VagSample objects into consecutive slots from
+        start_index. Extends spu_addrs in place."""
+        return self.build_at(samples, spu_addrs, list(range(start_index, start_index + len(samples))))
+
+    def build_at(
+        self,
+        samples: list[VagSample],
+        spu_addrs: list[SpuAddrEntry],
+        indices: list[int],
+    ) -> BankBuildResult:
+        """Build a bank from VagSample objects, sample i going into slot
+        indices[i]. Existing slots are resized; missing ones are appended."""
+        if len(indices) != len(samples):
+            raise ValueError(f"{len(samples)} samples but {len(indices)} slots")
+
+        self._slot_guard.ensure_creatable(spu_addrs, indices)
+
+        for idx, sample in zip(indices, samples):
             self._ensure_spu_addr(spu_addrs, idx, len(sample.data))
 
-        blob = self._assemble_blob(new_indices, [s.data for s in samples])
+        blob = self._assemble_blob(list(indices), [s.data for s in samples])
 
         return BankBuildResult(
             bank_data=blob,
-            new_spu_indices=new_indices,
+            new_spu_indices=list(indices),
             sample_rates=[s.sample_rate for s in samples],
         )
 
@@ -59,7 +74,6 @@ class BankBuilder:
         return self._assemble_blob(indices, datas)
 
     def merge(self, samples: list[BankSample]) -> bytes:
-        """Build a bank blob from an ordered list of BankSamples."""
         return self._assemble_blob(
             [s.spu_index for s in samples],
             [s.data for s in samples],
@@ -72,7 +86,6 @@ class BankBuilder:
         sample_index: int,
         bank_reader: 'BankReader',
     ) -> bytes:
-        """Remove a sample from a bank by index and rebuild the blob."""
         samples = bank_reader.parse(bank_data, spu_addrs)
         if sample_index < 0 or sample_index >= len(samples):
             raise IndexError(f"Sample index {sample_index} out of range (0..{len(samples) - 1})")
@@ -88,13 +101,13 @@ class BankBuilder:
         bank_reader: 'BankReader',
         spu_index: int | None = None,
     ) -> bytes:
-        """Add a sample to an existing bank and rebuild the blob.
-        If spu_index is None, appends a new SPU entry. Returns the new bank blob."""
+        """If spu_index is None, the new sample appends an SPU table entry."""
         samples = bank_reader.parse(bank_data, spu_addrs)
 
         if spu_index is None:
             spu_index = len(spu_addrs)
 
+        self._slot_guard.ensure_creatable(spu_addrs, [spu_index])
         self._ensure_spu_addr(spu_addrs, spu_index, len(new_data))
         samples.append(BankSample(spu_index=spu_index, data=new_data))
         return self.merge(samples)
@@ -107,8 +120,7 @@ class BankBuilder:
         new_data: bytes,
         bank_reader: 'BankReader',
     ) -> bytes:
-        """Replace a single sample in a bank and rebuild the blob.
-        Also updates the SPU address table entry with the new size."""
+        """Also updates the SPU address table entry with the new size."""
         samples = bank_reader.parse(bank_data, spu_addrs)
         if sample_index < 0 or sample_index >= len(samples):
             raise IndexError(f"Sample index {sample_index} out of range (0..{len(samples) - 1})")

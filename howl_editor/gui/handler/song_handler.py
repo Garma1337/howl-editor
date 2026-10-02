@@ -286,6 +286,9 @@ class SongHandler:
 
         dialog = ConvertMidiDialog(
             self._w, info, max_spu, self._w._drum_names, bank_order, spu_pitches,
+            free_spu_indices=self._w._spu_slot_usage.free_slots(self._w.hwl) if self._w.hwl else None,
+            pitch_headroom=self._w._pitch_headroom,
+            pitch_stepper=self._w._pitch_stepper,
         )
 
         if dialog.exec() != QDialog.Accepted:
@@ -296,6 +299,63 @@ class SongHandler:
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Conversion failed:\n{e}")
             return None
+
+    def shift_instrument_octaves(self, song_index: int, inst_index: int, octaves: int):
+        """Move one instrument's base pitch by whole octaves, no dialog."""
+        self._shift_octaves(
+            song_index, octaves,
+            lambda blob: self._w._pitch_shifter.shift_instrument(blob, inst_index, octaves),
+            f"instrument {inst_index}",
+        )
+
+    def shift_percussion_octaves(self, song_index: int, perc_index: int, octaves: int):
+        self._shift_octaves(
+            song_index, octaves,
+            lambda blob: self._w._pitch_shifter.shift_percussion(blob, perc_index, octaves),
+            f"percussion {perc_index}",
+        )
+
+    def shift_song_octaves(self, song_index: int, octaves: int):
+        self._shift_octaves(
+            song_index, octaves,
+            lambda blob: self._w._pitch_shifter.shift_song(blob, octaves),
+            "every instrument and percussion",
+        )
+
+    def _shift_octaves(self, song_index: int, octaves: int, shift, subject: str):
+        if not self._w.hwl:
+            return
+
+        direction = "up" if octaves > 0 else "down"
+
+        try:
+            result = shift(self._w.hwl.songs[song_index])
+
+            if result.shifted == 0:
+                self._w._notify(f"Nothing to shift {direction} in song {song_index}")
+                return
+
+            self._w._undo_stack.push(SwapBlobCommand(
+                self._w, f"Shift {subject} {direction} an octave in Song {song_index}",
+                HowlCollection.SONGS, song_index, result.blob,
+            ))
+
+            self._w._notify(self._shift_message(result, direction, song_index))
+        except Exception as e:
+            QMessageBox.critical(self._w, "Error", f"Octave shift failed:\n{e}")
+
+    def _shift_message(self, result, direction: str, song_index: int) -> str:
+        message = f"Shifted {result.shifted} pitch(es) {direction} an octave in song {song_index}"
+
+        if result.clamped:
+            message += f" — {result.clamped} could not move that far"
+
+        if result.above_ceiling:
+            message += (
+                f" — {result.above_ceiling} now above the SPU's 4.0× ceiling and will play flat"
+            )
+
+        return message
 
     def edit_instrument(self, song_index: int, inst_index: int):
         """Open a small dialog to tweak volume / pitch on one CSEQ
@@ -316,6 +376,7 @@ class SongHandler:
                 initial_volume=inst.volume,
                 initial_frequency=inst.frequency,
                 initial_adsr=inst.adsr,
+                pitch_stepper=self._w._pitch_stepper,
             )
 
             if dialog.exec() != QDialog.Accepted:
@@ -352,6 +413,7 @@ class SongHandler:
                 subject_label=f"Editing percussion {perc_index} (SPU #{perc.sample_id})",
                 initial_volume=perc.volume,
                 initial_frequency=perc.frequency,
+                pitch_stepper=self._w._pitch_stepper,
             )
 
             if dialog.exec() != QDialog.Accepted:
@@ -443,7 +505,6 @@ class SongHandler:
         self._retarget(song_index, inst_index, percussion=False)
 
     def retarget_percussion(self, song_index: int, perc_index: int):
-        """Same as retarget_instrument but for the percussion table."""
         self._retarget(song_index, perc_index, percussion=True)
 
     def _retarget(self, song_index: int, entry_index: int, percussion: bool):
@@ -557,11 +618,9 @@ class SongHandler:
             return None
 
     def add_instrument(self, song_index: int):
-        """Append a melodic instrument descriptor to a song."""
         self._add_descriptor(song_index, percussion=False)
 
     def add_percussion(self, song_index: int):
-        """Append a percussion descriptor to a song."""
         self._add_descriptor(song_index, percussion=True)
 
     def _add_descriptor(self, song_index: int, percussion: bool):
@@ -614,6 +673,7 @@ class SongHandler:
                 initial_volume=cseq_fmt.MAX_VOLUME,
                 initial_frequency=self._seed_pitch_for(table, sample_id),
                 initial_adsr=None if percussion else CseqInstrument().adsr,
+                pitch_stepper=self._w._pitch_stepper,
             )
 
             if dialog.exec() != QDialog.Accepted:
@@ -684,30 +744,7 @@ class SongHandler:
         self._w._playback.play_spu_sample(spu_index, pitch, "Preview")
 
     def _build_sample_choices(self) -> list[SampleChoice]:
-        """One option per entry in the SPU address table. Each choice is
-        annotated with the source bank (if locatable) and byte size, so the
-        user can tell what sample they're picking even without per-sample
-        names."""
-        out: list[SampleChoice] = []
-        lookup = self._w._sample_lookup
-
-        for spu_index in range(len(self._w.hwl.spu_addrs)):
-            location = lookup.find_bank_and_sample_index(self._w.hwl, spu_index)
-            size = self._w.hwl.spu_addrs[spu_index].byte_size
-
-            if location is None:
-                bank_label = "—"
-            else:
-                bank_index, _ = location
-                name = self._w._bank_reader.get_name(bank_index)
-                bank_label = (
-                    f"Bank {bank_index} — {name}" if name else f"Bank {bank_index}"
-                )
-
-            display = f"SPU #{spu_index:>4} · {size:>6} B · {bank_label}"
-            out.append(SampleChoice(spu_index=spu_index, display=display))
-
-        return out
+        return self._w._spu_slot_choices.sample_targets(self._w.hwl)
 
     def add_sequence(self, song_index: int):
         """Append a sequence (from an external .cseq) onto an existing song."""

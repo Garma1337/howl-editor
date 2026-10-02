@@ -14,7 +14,6 @@ class VagWriter:
         return header + sample.data
 
     def write_file(self, sample: VagSample, path: str | Path) -> None:
-        """Write a VAG file to disk."""
         Path(path).write_bytes(self.serialize(sample))
 
     def _build_header(self, sample: VagSample) -> bytes:

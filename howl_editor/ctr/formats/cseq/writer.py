@@ -16,7 +16,6 @@ class CseqWriter:
         self._vlq = vlq_codec
 
     def serialize(self, cseq: CseqFile) -> bytes:
-        """Serialize a CseqFile to raw bytes."""
         out = bytearray()
         self._write_header_placeholder(out, cseq)
         self._write_instruments(out, cseq)

@@ -6,8 +6,7 @@ from howl_editor.ctr.diagnostics.howl_diagnostics import Severity
 class SeverityPresenter:
     """Single source of truth for how a diagnosis `Severity` is shown: the
     status emoji (tree rows, cards, the report list), the CSS class used by the
-    detail-pane banner, and the banner heading. Consolidates mappings that were
-    otherwise repeated across the tree, the badge resolver, and the dialog."""
+    detail-pane banner, and the banner heading."""
 
     _EMOJI = {
         Severity.ERROR: "❌",

@@ -20,7 +20,6 @@ class HowlLayout:
 class HowlWriter:
 
     def serialize(self, hwl: HowlFile) -> bytes:
-        """Serialize a HowlFile to raw bytes."""
         layout = self._calculate_layout(hwl)
         buf = self._allocate_buffer(layout)
 
@@ -37,7 +36,6 @@ class HowlWriter:
         return bytes(buf)
 
     def write_file(self, hwl: HowlFile, path: str | Path) -> None:
-        """Serialize and write to disk."""
         Path(path).write_bytes(self.serialize(hwl))
 
     def serialized_size(self, hwl: HowlFile) -> int:

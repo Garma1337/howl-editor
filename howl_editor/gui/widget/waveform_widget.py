@@ -26,7 +26,6 @@ class WaveformWidget(QWidget):
         self.setMaximumHeight(120)
 
     def set_wav(self, wav_data: bytes) -> None:
-        """Extract mono samples from WAV bytes and display the waveform."""
         if len(wav_data) < _WAV_HEADER_SIZE:
             self.clear()
             return
@@ -36,7 +35,6 @@ class WaveformWidget(QWidget):
         pcm = wav_data[data_start:]
 
         if channels == 2:
-            # Average stereo L+R to mono
             num_frames = len(pcm) // 4
             self._samples = [
                 (unpack_from("<hh", pcm, i * 4)[0] + unpack_from("<hh", pcm, i * 4)[1]) // 2
@@ -74,7 +72,6 @@ class WaveformWidget(QWidget):
 
         mid_y = h / 2
 
-        # Center line
         painter.setPen(QPen(_CENTER_LINE_COLOR, 1))
         painter.drawLine(0, int(mid_y), w, int(mid_y))
 
@@ -103,7 +100,6 @@ class WaveformWidget(QWidget):
             else:
                 painter.drawLine(x, y_top, x, y_bot)
 
-        # Loop start marker
         if 0 <= self._loop_start < num_samples:
             loop_x = int(self._loop_start * w / num_samples)
             painter.setPen(QPen(_LOOP_MARKER_COLOR, 1, Qt.DashLine))

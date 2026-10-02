@@ -17,6 +17,7 @@ pytest.importorskip("PySide6")
 
 from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.ctr.formats.cseq.models import CseqPercussion
+from howl_editor.ctr.formats.cseq.pitch_shifter import PitchShiftResult
 from howl_editor.gui.handler.song_handler import SongHandler
 
 
@@ -84,3 +85,27 @@ class TestNewDescriptorBlurb:
         blurb = handler._new_descriptor_blurb("instrument", 1, 5, [0])
 
         assert "already used by instrument 0" in blurb
+
+class TestShiftMessage:
+    """The report after an octave shift — the only feedback the user gets that
+    a transpose pushed something out of range."""
+
+    def _result(self, shifted=3, clamped=0, above_ceiling=0):
+        return PitchShiftResult(blob=b"", shifted=shifted, clamped=clamped, above_ceiling=above_ceiling)
+
+    def test_plain_count_when_everything_moved(self, handler):
+        message = handler._shift_message(self._result(), "up", 14)
+
+        assert "3 pitch(es) up an octave in song 14" in message
+        assert "ceiling" not in message
+
+    def test_mentions_pitches_that_could_not_move_that_far(self, handler):
+        message = handler._shift_message(self._result(clamped=2), "up", 0)
+
+        assert "2 could not move that far" in message
+
+    def test_warns_about_pitches_pushed_past_the_ceiling(self, handler):
+        message = handler._shift_message(self._result(above_ceiling=1), "up", 0)
+
+        assert "4.0" in message and "flat" in message
+

@@ -34,11 +34,9 @@ class SharedSampleCheck:
 class SharedSampleGuard:
     """Warns before a sample replacement silently mis-cuts other banks.
 
-    Sample sizes live in one global table keyed by SPU id, but each bank that
-    claims an id carries its own copy of the bytes. Writing a different-sized
-    sample updates the shared size entry while rebuilding only the edited
-    bank, so every other claiming bank is left being sliced with a size its
-    blob no longer matches — corrupting it from that sample onward, with no
+    Writing a different-sized sample updates the shared size entry while
+    rebuilding only the edited bank, leaving every other claiming bank sliced
+    with a size its blob no longer matches (see BankSliceValidator) — with no
     error at save time and no way to tell from the edited bank.
 
     Replacing a sample with one of exactly the same length is safe: the size

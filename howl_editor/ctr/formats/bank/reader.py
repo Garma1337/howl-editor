@@ -26,7 +26,6 @@ class BankReader:
         return self._read_sample_ids(bank_data, self._read_sample_count(bank_data))
 
     def parse(self, bank_data: bytes, spu_addrs: list[SpuAddrEntry]) -> list[BankSample]:
-        """Parse a bank blob into individual samples."""
         num_samples = self._read_sample_count(bank_data)
         if num_samples == 0:
             return []

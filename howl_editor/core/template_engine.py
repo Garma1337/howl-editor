@@ -30,7 +30,6 @@ _TOKEN_RE = re.compile(
 
 
 class TemplateEngine:
-    """Loads and renders HTML templates with variable substitution, loops, and conditionals."""
 
     def __init__(self, template_dir: str | Path):
         self._dir = Path(template_dir)
@@ -108,7 +107,6 @@ class TemplateEngine:
         list_expr = match.group(2)
         items = self._lookup(list_expr, context) or []
 
-        # Find the body tokens between for and endfor
         body_start = pos + 1
         parts: list[str] = []
 

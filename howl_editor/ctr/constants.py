@@ -16,3 +16,6 @@ MAX_RESIDENT_BANKS = 8
 SPU_SAMPLE_CEILING = 0x7E000                                    # end address must stay below this
 SPU_HEAP_START = 0x1010                                         # first byte samples upload to
 SPU_USABLE_SAMPLE_BYTES = SPU_SAMPLE_CEILING - SPU_HEAP_START   # 0x7CFF0 = 511984 bytes
+
+# The retail SPU address table has only 528 slots (0-527).
+MAX_SPU_SLOTS = 528

@@ -214,7 +214,6 @@ class TestVoiceInterpolation:
 
     def test_interpolates_between_samples(self):
         voice = _make_voice(samples=[0, 1000, 0], pitch_ratio=0.5)
-        # pos=0 → sample 0 (value 0)
         s0 = voice.read()  # reads at pos=0, advances to 0.5
         assert s0 == 0
 

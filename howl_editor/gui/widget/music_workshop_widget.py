@@ -57,6 +57,9 @@ class MusicWorkshopWidget(QWidget):
     sig_retarget_instrument = Signal(int, int)   # song_index, inst_index
     sig_retarget_percussion = Signal(int, int)   # song_index, perc_index
     sig_add_instrument = Signal(int)             # song_index
+    sig_shift_instrument_octaves = Signal(int, int, int)   # song_index, inst_index, octaves
+    sig_shift_percussion_octaves = Signal(int, int, int)   # song_index, perc_index, octaves
+    sig_shift_song_octaves = Signal(int, int)              # song_index, octaves
     sig_add_percussion = Signal(int)             # song_index
 
     def __init__(
@@ -232,6 +235,7 @@ class MusicWorkshopWidget(QWidget):
             self._detail_layout.addWidget(banner)
 
         self._detail_layout.addWidget(self._build_song_header(cseq))
+        self._detail_layout.addWidget(self._build_song_pitch_bar(song_index))
         self._detail_layout.addWidget(self._build_sequences_section(song_index, cseq))
         self._detail_layout.addWidget(self._build_instruments_section(song_index, cseq.instruments))
         self._detail_layout.addWidget(self._build_percussion_section(song_index, cseq.percussions))
@@ -307,6 +311,33 @@ class MusicWorkshopWidget(QWidget):
         for icon, label, value, hint in cards:
             layout.addWidget(self._build_stat_card(icon, label, value, hint), stretch=1)
 
+        return bar
+
+    def _build_song_pitch_bar(self, song_index: int) -> QWidget:
+        """Transpose the whole song in one click, rather than one descriptor
+        at a time."""
+        bar = QWidget()
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+
+        label = QLabel("Whole song pitch:")
+        label.setObjectName("workshopSectionLabel")
+        row.addWidget(label)
+
+        for text, octaves in (("⬇️  Octave down", -1), ("⬆️  Octave up", 1)):
+            button = QPushButton(text)
+            button.setToolTip(
+                f"{'Halve' if octaves < 0 else 'Double'} the base pitch of every instrument "
+                f"and percussion in this song — exactly one octave "
+                f"{'down' if octaves < 0 else 'up'}."
+            )
+            button.clicked.connect(
+                lambda _checked=False, s=song_index, o=octaves: self.sig_shift_song_octaves.emit(s, o),
+            )
+            row.addWidget(button)
+
+        row.addStretch(1)
         return bar
 
     def _tracks_hint(self, drum_indices: list[int]) -> str:
@@ -487,6 +518,7 @@ class MusicWorkshopWidget(QWidget):
                 target, inst.frequency,
                 edit_callback=lambda s=song_index, idx=i: self.sig_edit_instrument.emit(s, idx),
                 retarget_callback=lambda s=song_index, idx=i: self.sig_retarget_instrument.emit(s, idx),
+                shift_callback=lambda octaves, s=song_index, idx=i: self.sig_shift_instrument_octaves.emit(s, idx, octaves),
             ))
 
         self._size_table(table)
@@ -534,6 +566,7 @@ class MusicWorkshopWidget(QWidget):
                 target, perc.frequency,
                 edit_callback=lambda s=song_index, idx=i: self.sig_edit_percussion.emit(s, idx),
                 retarget_callback=lambda s=song_index, idx=i: self.sig_retarget_percussion.emit(s, idx),
+                shift_callback=lambda octaves, s=song_index, idx=i: self.sig_shift_percussion_octaves.emit(s, idx, octaves),
             ))
 
         self._size_table(table)
@@ -542,7 +575,7 @@ class MusicWorkshopWidget(QWidget):
 
     def _build_row_actions(
         self, target: SampleActionTarget, pitch: int,
-        edit_callback=None, retarget_callback=None,
+        edit_callback=None, retarget_callback=None, shift_callback=None,
     ) -> QWidget:
         wrap = QWidget()
         layout = QHBoxLayout(wrap)
@@ -564,6 +597,10 @@ class MusicWorkshopWidget(QWidget):
 
         if retarget_callback is not None:
             menu.addAction("🎯  Point at another sample…", retarget_callback)
+
+        if shift_callback is not None:
+            menu.addAction("⬆️  Pitch up an octave", lambda: shift_callback(1))
+            menu.addAction("⬇️  Pitch down an octave", lambda: shift_callback(-1))
 
         if target.bank_index is not None and target.sample_index is not None:
             if not menu.isEmpty():

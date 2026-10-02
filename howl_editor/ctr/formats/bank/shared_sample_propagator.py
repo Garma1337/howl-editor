@@ -10,10 +10,8 @@ from howl_editor.ctr.formats.howl.models import HowlFile, SpuAddrEntry
 class SharedSamplePropagator:
     """Rebuilds the other banks that claim a sample so a resize stays coherent.
 
-    A sample's size lives in one table shared by every bank claiming its id, so
-    changing it obliges every claiming bank to carry bytes of that new length.
-    Rebuilding them with the replacement keeps the file readable; leaving them
-    alone leaves them cut at offsets their blobs no longer match.
+    The shared size entry obliges every claiming bank to carry bytes of the new
+    length; rebuilding them with the replacement keeps the file readable.
 
     The engine only ever uploads one copy of a shared id anyway — whichever
     bank loads first wins — so the divergent copies this collapses were never

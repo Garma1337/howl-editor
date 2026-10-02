@@ -49,10 +49,6 @@ class EntryRowHandler:
             ExportableContext(bank_index=row.bank_index),
         )
 
-        # FX rows have no export of their own — every SPU sample they
-        # reference already lives inside a bank, so the user exports it
-        # from the bank entry (or its sample leaves) instead.
-
     def replace(self, row: EntryRow) -> None:
         if not self._w.hwl or not row.accepts:
             return
@@ -72,8 +68,7 @@ class EntryRowHandler:
         self._dispatch_drop(row, file_path)
 
     def remove(self, row: EntryRow) -> None:
-        # Only pure-song entries can be removed from the category view; the
-        # file-content view owns the destructive bank / track operations.
+        # Only pure-song entries are removable here (see EntryParentWidget).
         if not self._w.hwl or row.song_index is None:
             return
 

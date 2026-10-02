@@ -117,6 +117,5 @@ SONG_NAMES: dict[int, str] = {
     32: BANK_NAMES[37],
 }
 
-# Cutoff above which slots get the generic "Custom" label.
 FIRST_CUSTOM_BANK = 71
 FIRST_CUSTOM_SONG = 33

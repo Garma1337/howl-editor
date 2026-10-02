@@ -122,6 +122,60 @@ class TestOverCeiling:
         assert worst.slot == 1
 
 
+class TestGarbageVersusFlat:
+    """Over the ceiling, two hardware stages stack: the 16-bit register wraps,
+    then the SPU caps at 4.0×. A note plays *garbage* only when the wrap drops
+    it back under the cap; a wrap that lands above the cap is merely flat."""
+
+    def test_a_wrapping_note_is_flagged_as_garbage(self, validator):
+        # base 0x2000, note 96 -> true register 0x10000, which the SPU field
+        # wraps to 0x0000: below the cap, so it plays dramatically low.
+        cseq = _cseq([CseqInstrument(sample_id=4, frequency=0x2000)], [_melodic(0, [96])])
+        result = validator.validate(cseq)
+
+        assert not result.is_valid
+        item = result.exceedances[0]
+        assert item.note == 96
+        assert item.register == 0x10000
+        assert item.garbage is True
+
+    def test_the_wrap_was_invisible_after_truncation(self):
+        """Guards the exact blind spot: the value the console is handed is in
+        range, so a check reading it would report nothing."""
+        assert PitchCalculator().instrument_register(0x2000, 96, DEFAULT_DISTORT) <= spu.MAX_PITCH
+
+    def test_a_capped_note_is_not_marked_as_garbage(self, validator):
+        # base 4096, note 84 -> 0x4000: over the 4.0x ceiling but not wrapped.
+        cseq = _cseq([CseqInstrument(sample_id=0, frequency=4096)], [_melodic(0, [84])])
+        item = validator.validate(cseq).exceedances[0]
+
+        assert item.garbage is False
+
+    def test_a_wrap_that_lands_above_the_cap_is_flat_not_garbage(self, validator):
+        # base 0x2000, note 100 -> true 0x1428A wraps to 0x428A, which is still
+        # above the 4.0x cap, so the SPU caps it to flat. The old '> 0xFFFF'
+        # rule would have mislabeled this as garbage.
+        cseq = _cseq([CseqInstrument(sample_id=0, frequency=0x2000)], [_melodic(0, [100])])
+        item = validator.validate(cseq).exceedances[0]
+
+        assert item.register > 0xFFFF  # it did wrap the 16-bit field...
+        assert item.garbage is False   # ...but capped back to flat, not garbage
+
+    def test_slot_is_marked_garbage_even_when_the_reported_note_only_caps(self, validator):
+        """The reported note is the lowest offending one (the threshold to fix),
+        which only caps flat; a higher note in the same part wraps to garbage.
+        The finding must still warn about the garbage."""
+        cseq = _cseq(
+            [CseqInstrument(sample_id=0, frequency=0x2000)], [_melodic(0, [80, 96])],
+        )
+        result = validator.validate(cseq)
+
+        assert len(result.exceedances) == 1
+        item = result.exceedances[0]
+        assert item.note == 80
+        assert item.garbage is True
+
+
 class TestPercussion:
     """A drum's note number picks which percussion rather than transposing it,
     so its stored pitch is what reaches the register."""

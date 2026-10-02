@@ -185,9 +185,7 @@ class MainTabWidget(QWidget):
         return self._sidebar
 
     def _build_bottom_dock(self) -> QWidget:
-        """The fallback host for the player when the sidebar isn't visible.
-        Stays hidden unless something is actually playing — otherwise an
-        empty 'No audio' bar would just take up screen space."""
+        """The fallback host for the player when the sidebar isn't visible."""
         self._bottom_dock = QFrame()
         self._bottom_dock.setObjectName("mainTabBottomDock")
 

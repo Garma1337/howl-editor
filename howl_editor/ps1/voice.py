@@ -8,12 +8,7 @@ _SUSTAIN_DECAY_FACTOR = 0.0001
 
 
 class Voice:
-    """A single playing voice with sample playback, looping, and ADSR envelope.
-
-    Holds immutable note metadata (inst_vol, note_vel, base_pitch, note_index,
-    is_drum, output_rate) so that callers can recalculate gain or pitch for
-    mid-note updates without needing a side-channel lookup.
-    """
+    """A single playing voice with sample playback, looping, and ADSR envelope."""
 
     PHASE_ATTACK = 0
     PHASE_DECAY = 1
@@ -43,7 +38,8 @@ class Voice:
         self.gain_r = gain_r
         self.envelope = envelope
 
-        # Immutable note metadata — kept for mid-note recalculation
+        # Immutable note metadata — lets callers recalculate gain or pitch for
+        # mid-note updates without a side-channel lookup.
         self.inst_vol = inst_vol
         self.note_vel = note_vel
         self.base_pitch = base_pitch

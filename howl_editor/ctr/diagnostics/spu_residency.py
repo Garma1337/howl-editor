@@ -9,8 +9,7 @@ from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 
 @dataclass(frozen=True)
 class Residency:
-    """The SPU-RAM footprint of a set of banks resident together, modelling the
-    engine's deduplication: a sample shared by several banks is uploaded once."""
+    """The SPU-RAM footprint of a set of banks resident together."""
 
     sample_ids: frozenset[int]
     total_bytes: int            # sum of each unique sample's byte_size
@@ -25,10 +24,8 @@ class SpuResidencyCalculator:
     the same time.
 
     The CTR engine uploads each bank's samples once, skipping any whose
-    ``spuAddr`` is already set (dedup by sample index), and every resident
-    sample must end below ``SPU_SAMPLE_CEILING`` starting from ``SPU_HEAP_START``
-    (see `howl_editor.ps1.spu`). This mirrors that: it unions the sample IDs the
-    banks reference and sums each unique sample's ``byte_size`` once.
+    ``spuAddr`` is already set (dedup by sample index), so this unions the
+    sample IDs the banks reference and sums each unique ``byte_size`` once.
     """
 
     def __init__(self, bank_reader: BankReader):

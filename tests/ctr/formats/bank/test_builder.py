@@ -4,6 +4,8 @@ import struct
 
 import pytest
 
+from howl_editor.ctr import constants
+from howl_editor.ctr.diagnostics.spu_slot_guard import SpuSlotLimitError
 from howl_editor.ctr.formats.bank.models import BankSample, BankBuildResult
 from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 from howl_editor.ps1.constants import SECTOR_SIZE
@@ -41,6 +43,25 @@ class TestBuildFromSamples:
         assert result.new_spu_indices == [5]
         assert len(spu_addrs) == 6
         assert spu_addrs[5].size == 10
+
+    def test_refuses_batch_crossing_the_stock_table_without_touching_it(self, bank_builder):
+        samples = [VagSample(data=b"\x00" * 16), VagSample(data=b"\x00" * 16)]
+        spu_addrs = [SpuAddrEntry(0, 1) for _ in range(constants.MAX_SPU_SLOTS - 1)]
+
+        with pytest.raises(SpuSlotLimitError):
+            bank_builder.build_from_samples(samples, spu_addrs, start_index=constants.MAX_SPU_SLOTS - 1)
+
+        assert len(spu_addrs) == constants.MAX_SPU_SLOTS - 1
+
+    def test_build_at_reuses_existing_slots_out_of_order(self, bank_builder, bank_reader):
+        samples = [VagSample(data=b"\x01" * 16), VagSample(data=b"\x02" * 32)]
+        spu_addrs = [SpuAddrEntry(0, 9) for _ in range(10)]
+
+        result = bank_builder.build_at(samples, spu_addrs, [7, 2])
+
+        assert len(spu_addrs) == 10
+        assert (spu_addrs[7].byte_size, spu_addrs[2].byte_size) == (16, 32)
+        assert [s.spu_index for s in bank_reader.parse(result.bank_data, spu_addrs)] == [7, 2]
 
     def test_bank_data_structure(self, bank_builder):
         samples = [VagSample(data=b"\xFF" * 80)]
@@ -101,7 +122,6 @@ class TestBuildFromRaw:
 class TestBuildFromFiles:
 
     def test_builds_from_vag_files(self, bank_builder, tmp_path):
-        # Create temp VAG files
         vag_data = b"\xCC" * 32
         vag1 = tmp_path / "sample1.vag"
         vag1.write_bytes(build_vag_bytes(data=vag_data, name="s1"))
@@ -198,6 +218,14 @@ class TestAddSample:
 
         assert len(spu) == 1
         assert spu[0].byte_size == 24
+
+    def test_refuses_appending_past_the_stock_table(self, bank_builder, bank_reader):
+        spu = [SpuAddrEntry(0, 1) for _ in range(constants.MAX_SPU_SLOTS)]
+
+        with pytest.raises(SpuSlotLimitError):
+            bank_builder.add_sample(bank_builder.merge([]), spu, b"\x00" * 16, bank_reader)
+
+        assert len(spu) == constants.MAX_SPU_SLOTS
 
     def test_explicit_spu_index(self, bank_builder, bank_reader):
         spu = [SpuAddrEntry(0, 0)] * 10

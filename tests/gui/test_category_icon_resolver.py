@@ -80,7 +80,6 @@ class TestResolve:
         target = char_dir / "crash_bandicoot.png"
         target.write_bytes(b"")
 
-        # Direct resolve with sub_dir should find it.
         assert resolver.resolve("Crash Bandicoot", sub_dir="Characters") == target
 
     def test_sub_dir_missing_returns_none(self, resolver):

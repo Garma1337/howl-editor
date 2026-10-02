@@ -22,13 +22,11 @@ except ImportError:
 class MidiExportOptions:
     """Toggles that adjust what the MIDI exporter writes.
 
-    `include_volume_events` — when True (default), mid-song VELOCITY changes
-    are emitted as CC #7 volume changes so the DAW reproduces CTR's volume
-    curves.
+    `include_volume_events` — emit mid-song VELOCITY changes as CC #7 volume
+    changes so the DAW reproduces CTR's volume curves.
 
-    `apply_instrument_volume` — when True, each track gets a CC #7 volume
-    written at tick 0 based on the volume field of the instrument it's
-    bound to.
+    `apply_instrument_volume` — give each track a CC #7 volume at tick 0 from
+    the volume field of the instrument it's bound to.
     """
     include_volume_events: bool = True
     apply_instrument_volume: bool = False
@@ -216,15 +214,15 @@ class CseqMidiExporter:
         return int(instruments[idx].volume * midi_fmt.CC_MAX / cseq_fmt.CC_MAX)
 
     def _cseq_cc_to_midi(self, cseq_value: int) -> int:
-        """Scale a CSEQ control byte (0..255) down to a 7-bit MIDI CC value
-        (0..127) — the inverse of the importer's MIDI->CSEQ CC scaling."""
+        """Inverse of the importer's MIDI->CSEQ CC scaling: 0..255 down to
+        7-bit 0..127."""
         scaled = int(cseq_value * midi_fmt.CC_MAX / cseq_fmt.CC_MAX)
         return max(0, min(midi_fmt.CC_MAX, scaled))
 
     def _cseq_bend_to_midi(self, cseq_value: int) -> int:
-        """Inverse of MidiConverter._midi_bend_to_cseq. Divides by the 256-step
-        span so CSEQ's neutral 0x80 comes back as a centered wheel (0) instead
-        of the +33 that dividing by 255 produced."""
+        """Inverse of MidiConverter._midi_bend_to_cseq — dividing by the
+        256-step span is what brings CSEQ's neutral 0x80 back to a centered
+        wheel (0) rather than +33."""
         scaled = int(cseq_value / cseq_fmt.PITCH_BEND_STEPS * midi_fmt.PITCH_BEND_RANGE)
         centered = scaled - midi_fmt.PITCH_BEND_CENTER
         return max(-midi_fmt.PITCH_BEND_CENTER, min(midi_fmt.PITCH_BEND_CENTER - 1, centered))

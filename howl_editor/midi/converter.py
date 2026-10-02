@@ -68,7 +68,6 @@ class MidiConverter:
         return events
 
     def get_midi_info(self, midi_path: str | Path) -> MidiInfo:
-        """Extract structured info about a MIDI file."""
         self._check_mido()
         mid = mido.MidiFile(str(midi_path))
         tracks = []
@@ -95,12 +94,10 @@ class MidiConverter:
         )
 
     def convert(self, midi_path: str | Path, settings: MidiConvertSettings) -> bytes:
-        """Convert a MIDI file to CSEQ bytes."""
         cseq = self.convert_to_model(midi_path, settings)
         return self._cseq_writer.serialize(cseq)
 
     def convert_to_model(self, midi_path: str | Path, settings: MidiConvertSettings) -> CseqFile:
-        """Convert a MIDI file to a CseqFile model."""
         self._check_mido()
         mid = mido.MidiFile(str(midi_path))
         return self._build_cseq(mid, settings)

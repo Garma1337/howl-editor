@@ -252,7 +252,6 @@ class EntryParentWidget(QFrame):
         self._toggle_btn.setToolTip("Show / hide this entry's sequences and samples")
         self._toggle_btn.toggled.connect(self._on_toggle)
 
-        # No leaves to expand → hide the toggle entirely.
         if not self._leaves:
             self._toggle_btn.setVisible(False)
 
@@ -339,8 +338,6 @@ class EntryParentWidget(QFrame):
         return self._row.kind in (EntryKind.SHARED_SONG, EntryKind.CUSTOM_SONG)
 
     def _build_icon_label(self) -> QLabel:
-        """Prefer a custom per-entry image if registered; otherwise fall back
-        to the category-level emoji icon."""
         label = QLabel()
         label.setObjectName("entryParentIcon")
         label.setAlignment(Qt.AlignCenter)

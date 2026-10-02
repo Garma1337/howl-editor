@@ -25,7 +25,6 @@ class HowlStats:
 
 
 class HowlStatsCalculator:
-    """Builds a `HowlStats` from a HOWL file and an optional load-time snapshot."""
 
     def compute(self, hwl: HowlFile, snapshot: BlobSnapshot) -> HowlStats:
         return HowlStats(

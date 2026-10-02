@@ -193,9 +193,7 @@ class LeafInfoFormatter:
         return rows
 
     def _leaf_breakdown_rows(self, leaves: list[EntryLeaf] | None) -> list[dict]:
-        """Break the leaf list into a total count plus a kind breakdown.
-        Replaces the inline `61 items` chip that used to live in the entry
-        header — surfacing the same number plus what's underneath it."""
+        """Break the leaf list into a total count plus a kind breakdown."""
         if not leaves:
             return []
 

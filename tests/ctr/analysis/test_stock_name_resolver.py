@@ -62,17 +62,14 @@ class TestSongNames:
 class TestPairedNamesAgree:
 
     def test_race_tracks_share_names(self, stock_names):
-        # Each race-track song N (0-17) should match bank N+1.
         for song_idx in range(18):
             assert stock_names.song_name(song_idx) == stock_names.bank_name(song_idx + 1), \
                 f"Mismatch for song {song_idx}"
 
     def test_battle_arenas_share_names(self, stock_names):
-        # Battle-arena song N (18-24) should match bank N+1.
         for song_idx in range(18, 25):
             assert stock_names.song_name(song_idx) == stock_names.bank_name(song_idx + 1)
 
     def test_menu_songs_share_bank_names(self, stock_names):
-        # Menu / cinematic songs 27-32 should match banks 32-37.
         for song_idx in range(27, 33):
             assert stock_names.song_name(song_idx) == stock_names.bank_name(song_idx + 5)

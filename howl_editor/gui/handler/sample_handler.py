@@ -5,12 +5,15 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
+from howl_editor.ctr import constants
+from howl_editor.ctr.formats.bank.models import BankSample
 from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.command import SwapBlobCommand
 from howl_editor.gui.dialog.copy_target_dialog import (
     CopyTargetContainer, CopyTargetDialog,
 )
+from howl_editor.gui.dialog.select_sample_dialog import SelectSampleDialog
 from howl_editor.ps1 import spu
 from howl_editor.ps1.formats.vag.models import VagSample
 from howl_editor.saphi.constants import SAPHI_BANK_MAX_SIZE
@@ -30,8 +33,7 @@ class SampleHandler:
         self._window = window
 
     def _bank_within_limit(self, index: int, blob) -> bool:
-        """Gate a prospective bank blob through the SPU-residency guard, warning
-        (with override) if the bank's worst-case race no longer fits SPU RAM."""
+        """See BankHandler._bank_within_limit."""
         guard = self._window._bank_size_guard
         return guard is None or self._window.confirm_within_limit(
             guard.check(self._window.hwl, index, blob),
@@ -90,17 +92,27 @@ class SampleHandler:
             self._window, "Add Sample to Bank", "", f"{FileFormatRegistry.VAG.file_filter};;All Files (*)",
         )
 
-        if not path:
+        if path:
+            self.add_sample_from_file(bank_index, path)
+
+    def add_sample_from_file(self, bank_index: int, path: str):
+        """Add a VAG to a bank in the SPU slot the user picks."""
+        if not self._window.hwl:
             return
 
         try:
             vag = self._window._vag_reader.read_file(path)
-            # add_sample appends a new SPU entry in place; keep a restore point so
+            spu_index = self._pick_new_slot(f"Add {Path(path).name} to {self._bank_display(bank_index)}")
+
+            if spu_index is None:
+                return
+
+            # add_sample writes the SPU entry in place; keep a restore point so
             # declining the residency guard leaves no dangling entry behind.
             spu_before = list(self._window.hwl.spu_addrs)
             new_blob = self._window._bank_builder.add_sample(
                 self._window.hwl.banks[bank_index], self._window.hwl.spu_addrs,
-                vag.data, self._window._bank_reader,
+                vag.data, self._window._bank_reader, spu_index=spu_index,
             )
 
             if not self._bank_within_limit(bank_index, new_blob):
@@ -108,14 +120,44 @@ class SampleHandler:
                 return
 
             self._window._undo_stack.push(
-                SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True),
+                SwapBlobCommand(self._window, f"Add Sample to Bank {bank_index}", HowlCollection.BANKS, bank_index, new_blob, old_spu=spu_before),
             )
 
-            spu_index = len(self._window.hwl.spu_addrs) - 1
             self._window._editor.attach_sample_rate(self._window.hwl, spu_index, vag.sample_rate)
             self._window._notify(f"Added sample SPU {spu_index} to bank {bank_index}")
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Add sample failed:\n{e}")
+
+    def _pick_new_slot(self, subject: str, share_spu: int | None = None) -> int | None:
+        """Ask which SPU slot a new sample goes into. None when cancelled."""
+        choices = self._window._spu_slot_choices
+        hwl = self._window.hwl
+        default = choices.default_new_slot(hwl, share_spu)
+
+        if default is None:
+            QMessageBox.warning(
+                self._window, "No free SPU slot",
+                f"All {constants.MAX_SPU_SLOTS} SPU slots are in use, so the new sample has "
+                f"nowhere to go. Remove a sample from every bank that holds it to free its "
+                f"slot, or replace an existing sample instead.",
+            )
+            return None
+
+        dialog = SelectSampleDialog(
+            self._window,
+            title="Pick SPU slot",
+            prompt=(
+                f"{subject}\n\nPick the SPU slot for the new sample. Slots marked "
+                f"🆓 free are unused; greyed-out slots already belong to something else."
+            ),
+            choices=choices.new_sample_slots(hwl, share_spu),
+            current_spu_index=default,
+        )
+
+        if dialog.exec() != QDialog.Accepted:
+            return None
+
+        return dialog.chosen_spu_index()
 
     def replace_sample(self, bank_index: int, sample_index: int):
         if not self._window.hwl:
@@ -153,7 +195,7 @@ class SampleHandler:
                 self._window.hwl.spu_addrs[:] = spu_before
                 return
 
-            self._push_replacement(bank_index, new_blob, companions)
+            self._push_replacement(bank_index, new_blob, companions, spu_before)
 
             if spu_index is not None:
                 self._propagate_sample_rate_to_fx(spu_index, vag.sample_rate)
@@ -222,6 +264,7 @@ class SampleHandler:
 
     def _push_replacement(
         self, bank_index: int, new_blob: bytes, companions: dict[int, bytes],
+        spu_before: list,
     ) -> None:
         """One undo step covers the edit and every bank dragged along with it,
         so undoing can't leave the file half-propagated."""
@@ -232,7 +275,7 @@ class SampleHandler:
 
         stack.push(SwapBlobCommand(
             self._window, f"Replace Sample in Bank {bank_index}",
-            HowlCollection.BANKS, bank_index, new_blob, snapshot_spu=True,
+            HowlCollection.BANKS, bank_index, new_blob, old_spu=spu_before,
         ))
 
         for other_index, blob in companions.items():
@@ -358,7 +401,7 @@ class SampleHandler:
             if target is None:
                 return
 
-            self._apply_copy(src.data, target.container_index, target.child_index)
+            self._apply_copy(src, target.container_index, target.child_index)
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Copy failed:\n{e}")
 
@@ -386,18 +429,33 @@ class SampleHandler:
         return f"Bank {index} — {name}" if name else f"Bank {index}"
 
     def _apply_copy(
-        self, src_data: bytes, target_bank: int, target_sample: int | None,
+        self, src: BankSample, target_bank: int, target_sample: int | None,
     ) -> None:
-        spu_before = list(self._window.hwl.spu_addrs)
+        src_data = src.data
 
         if target_sample is None:
+            target_blob = self._window.hwl.banks[target_bank]
+            # Identical audio can share the source's slot — unless the target
+            # bank already holds that slot, where sharing would list it twice.
+            already_there = src.spu_index in self._window._bank_reader.sample_ids(target_blob)
+            spu_index = self._pick_new_slot(
+                f"Copy SPU #{src.spu_index} into {self._bank_display(target_bank)}",
+                share_spu=None if already_there else src.spu_index,
+            )
+
+            if spu_index is None:
+                return
+
+            spu_before = list(self._window.hwl.spu_addrs)
             new_blob = self._window._bank_builder.add_sample(
-                self._window.hwl.banks[target_bank], self._window.hwl.spu_addrs,
-                src_data, self._window._bank_reader,
+                target_blob, self._window.hwl.spu_addrs,
+                src_data, self._window._bank_reader, spu_index=spu_index,
             )
             description = f"Copy sample into Bank {target_bank}"
-            message = f"Copied sample as new entry in bank {target_bank}"
+            message = f"Copied sample into bank {target_bank} as SPU #{spu_index}"
         else:
+            spu_before = list(self._window.hwl.spu_addrs)
+
             if not self._confirm_size_change(target_bank, target_sample, len(src_data)):
                 return
 
@@ -414,7 +472,7 @@ class SampleHandler:
 
         self._window._undo_stack.push(SwapBlobCommand(
             self._window, description, HowlCollection.BANKS, target_bank, new_blob,
-            snapshot_spu=True,
+            old_spu=spu_before,
         ))
         self._window._notify(message)
         self._warn_if_bank_oversized(target_bank, len(new_blob))

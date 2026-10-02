@@ -168,6 +168,41 @@ class TestManualDrumToggle:
         assert dlg.get_settings().mappings[0].is_drum is False
 
 
+class TestPitchHeadroomWarning:
+    """As a music maker raises a melodic instrument's base pitch, the dialog
+    warns when it would push the track's top notes past what the SPU can play —
+    before the export, instead of leaving it to be found by ear in game."""
+
+    def test_wrapping_top_note_warns_about_garbage(self, qt_app):
+        dlg = ConvertMidiDialog(None, _melodic_track_with_pitches([96]), max_spu_index=10)
+
+        # Raise the base pitch until the top note overflows the pitch register.
+        dlg.table.cellWidget(0, 3).setValue(0x2000)
+
+        assert "wrap" in dlg._warning_label.text().lower()
+
+    def test_a_gentle_base_pitch_shows_no_warning(self, qt_app):
+        dlg = ConvertMidiDialog(
+            None, _melodic_track_with_pitches([60, 62, 64]), max_spu_index=10,
+        )
+
+        dlg.table.cellWidget(0, 3).setValue(0x400)
+
+        assert dlg._warning_label.text() == ""
+
+    def test_drum_rows_are_not_warned(self, qt_app):
+        # A drum's note picks the percussion slot; its pitch is never scaled up
+        # into the wrap, so even a high base pitch must not warn here.
+        dlg = ConvertMidiDialog(
+            None, _info_with_drum_pitches([[36, 38, 42]]), max_spu_index=10,
+        )
+
+        for row in range(dlg.table.rowCount()):
+            dlg.table.cellWidget(row, 3).setValue(cseq_fmt.MAX_PITCH_REGISTER)
+
+        assert dlg._warning_label.text() == ""
+
+
 class TestBankSpuPrefill:
     """When the song's paired bank is known, SPU IDs prefill from the bank's
     sample order so tracks laid out to mirror the bank map across untouched."""
@@ -319,3 +354,22 @@ class TestPitchPrefillRespectsUserEdits:
         _spu_widget(dlg, 0).setValue(6)
 
         assert _pitch_widget(dlg, 0).value() == 4096
+
+
+class TestFreeSpuMarking:
+
+    def test_free_prefill_is_marked(self, qt_app):
+        dlg = ConvertMidiDialog(None, _info(2), max_spu_index=10, free_spu_indices={1})
+
+        assert "free" not in dlg.table.cellWidget(0, 2).suffix()
+        assert "free" in dlg.table.cellWidget(1, 2).suffix()
+
+    def test_marking_follows_the_chosen_slot(self, qt_app):
+        dlg = ConvertMidiDialog(None, _info(1), max_spu_index=10, free_spu_indices={4})
+        spin = dlg.table.cellWidget(0, 2)
+
+        spin.setValue(4)
+        assert "free" in spin.suffix()
+
+        spin.setValue(5)
+        assert spin.suffix() == ""

@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class MidiTrackInfo:
-    """Info about a single MIDI track."""
     index: int = 0
     name: str = ""
     note_count: int = 0
@@ -16,7 +15,6 @@ class MidiTrackInfo:
 
 @dataclass
 class MidiInfo:
-    """Summary info about a MIDI file."""
     midi_type: int = 0
     ticks_per_beat: int = 480
     num_tracks: int = 0
@@ -25,12 +23,9 @@ class MidiInfo:
 
 @dataclass
 class DrumPitchMapping:
-    """Per-percussion mapping for a single MIDI drum pitch.
-
-    CSEQ drum tracks treat NOTE_ON.pitch as an index into Percussions[], so
-    each unique MIDI drum pitch needs its own CseqPercussion entry pointing
-    at a real SPU sample.
-    """
+    """Per-percussion mapping for a single MIDI drum pitch — each unique drum
+    pitch needs its own CseqPercussion entry pointing at a real SPU sample
+    (see DrumPitchRemapper)."""
     midi_pitch: int = 0
     sample_id: int = 0
     frequency: int = 0x1000
@@ -51,6 +46,5 @@ class InstrumentMapping:
 
 @dataclass
 class MidiConvertSettings:
-    """Configuration for MIDI to CSEQ conversion."""
     mappings: list[InstrumentMapping] = field(default_factory=list)
     default_bpm: int = 120

@@ -77,7 +77,6 @@ class CseqRenderer:
         output_rate: int = 22050,
         active_tracks: list[int] | None = None,
     ) -> bytes:
-        """Render a CSEQ song to a complete WAV file."""
         pcm = self.render_song(cseq, song_index, sample_data, output_rate, active_tracks)
         return self._wav_writer.write(pcm, output_rate, channels=2)
 
@@ -116,7 +115,6 @@ class CseqRenderer:
         sample_data: dict[int, bytes],
         output_rate: int = 22050,
     ) -> bytes:
-        """Render a layered set of CSEQ sequences to a complete WAV file."""
         pcm = self.render_layered(cseq, song_indices, sample_data, output_rate)
         return self._wav_writer.write(pcm, output_rate, channels=2)
 

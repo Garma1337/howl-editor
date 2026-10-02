@@ -50,13 +50,11 @@ class TestTrackIsActiveInHub:
 class TestHubsForTrack:
 
     def test_always_on_track_lists_all_hubs(self, adventure_hub_mask_table):
-        # Track 0 has mask 0x1F (all 5 hubs).
         hubs = adventure_hub_mask_table.hubs_for_track(0)
 
         assert hubs == [0, 1, 2, 3, 4]
 
     def test_single_hub_track(self, adventure_hub_mask_table):
-        # Track 2 has mask 0x08 (Glacier Park only).
         assert adventure_hub_mask_table.hubs_for_track(2) == [3]
 
     def test_out_of_range_returns_empty(self, adventure_hub_mask_table):

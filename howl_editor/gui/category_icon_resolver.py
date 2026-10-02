@@ -70,10 +70,7 @@ class CategoryIconResolver:
 
     def resolve_leaf(self, leaf_name: str) -> Path | None:
         """Find a per-leaf icon — used for shared leaf names like the Aku Aku
-        and Uka Uka mask sequences which appear under every song 0-27.
-
-        Lookup path: `<images>/leaves/<leaf_slug>.<ext>`.
-        """
+        and Uka Uka mask sequences which appear under every song 0-27."""
         return self.resolve(leaf_name, sub_dir="leaves")
 
     @classmethod

@@ -96,12 +96,12 @@ class HowlStatsWidget(QFrame):
     def _set_hint(self, label: QLabel, text: str, kind: str) -> None:
         label.setText(text)
         # Switching objectName re-applies the matching stylesheet selector so
-        # "Modified" / "growth" hints can pick up their accent colors.
+        # "Modified" / "growth" hints can pick up their accent colors — but Qt
+        # only re-reads it after an explicit unpolish / polish.
         label.setObjectName({
             "modified": "howlStatsHintModified",
             "growth":   "howlStatsHintGrowth",
         }.get(kind, "howlStatsHint"))
-        # Force a style re-polish after the objectName change.
         label.style().unpolish(label)
         label.style().polish(label)
 

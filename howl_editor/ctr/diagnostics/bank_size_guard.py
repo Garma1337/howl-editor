@@ -74,7 +74,6 @@ class BankSizeGuard:
         heaviest realistic context. Bank 0 (universal SFX) is normally resident,
         but the two isolated special levels destroy it, so they load alone."""
         if self._layout.loads_in_isolation(bank_index):
-            # Intro Race / Naughty Dog Crate load only this bank — nothing else.
             return {bank_index}
 
         base = {layout.SFX_UNIVERSAL_BANK, bank_index}

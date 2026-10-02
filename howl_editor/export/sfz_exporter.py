@@ -170,9 +170,8 @@ class SfzExporter:
         return block
 
     def _frequency_to_tune_cents(self, frequency: int) -> int:
-        """Translate a CSEQ pitch register value into SFZ's `tune` (cents).
-        spu.FREQUENCY_UNIT (4096) is the no-shift baseline; doubling that
-        value shifts up one octave (+1200 cents)."""
+        """Translate a CSEQ pitch register value into SFZ's `tune` (cents),
+        measured against spu.FREQUENCY_UNIT as the no-shift baseline."""
         if frequency <= 0:
             return 0
 

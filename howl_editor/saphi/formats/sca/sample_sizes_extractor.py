@@ -5,7 +5,7 @@ from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 
 
 class SampleSizesExtractor:
-    """Extracts the SCA `SIZE` chunk payload (per-sample SPU sizes) from a bank blob."""
+    """Extracts the SCA `SIZE` chunk payload from a bank blob."""
 
     def __init__(self, bank_reader: BankReader):
         self._bank_reader = bank_reader

@@ -23,6 +23,8 @@ from howl_editor.audio.linear_interpolation_resampler import LinearInterpolation
 from howl_editor.audio.vag_sample_rate_provider import VagSampleRateProvider
 from howl_editor.audio.wav_writer import WavWriter
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
+from howl_editor.ctr.analysis.spu_slot_allocator import SpuSlotAllocator
+from howl_editor.ctr.analysis.spu_slot_usage import SpuSlotUsageResolver
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
 from howl_editor.ctr.diagnostics.howl_diagnostics import Severity, Target, TargetKind
@@ -31,6 +33,7 @@ from howl_editor.ctr.formats.bank import BankReader, BankBuilder
 from howl_editor.ctr.formats.cseq import CseqReader, CseqWriter
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.editor import CseqEditor
+from howl_editor.ctr.formats.cseq.pitch_shifter import CseqPitchShifter
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.howl import HowlReader, HowlWriter, HowlEditor
 from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
@@ -38,6 +41,8 @@ from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr.formats.howl.version import HowlVersionDetector
 from howl_editor.ctr.sample_lookup import SampleLookup
+from howl_editor.ctr.voice.pitch_headroom import PitchHeadroomInspector
+from howl_editor.ctr.voice.pitch_stepper import PitchStepper
 from howl_editor.export import BatchExporter, SfzExporter
 from howl_editor.export.exportable import ExportableContext, ExportableKind
 from howl_editor.file_format_registry import FileFormatRegistry
@@ -56,6 +61,7 @@ from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
 from howl_editor.gui.handler.tools_handler import ToolsHandler
 from howl_editor.gui.layout import WindowSize
+from howl_editor.gui.spu_slot_choice_builder import SpuSlotChoiceBuilder
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget import FilterWidget, PlayerWidget, WaveformWidget
 from howl_editor.gui.widget.main_tab_widget import MainTabWidget
@@ -65,7 +71,7 @@ from howl_editor.midi.drum_name_resolver import DrumNameResolver
 from howl_editor.midi.exporter import CseqMidiExporter
 from howl_editor.ps1.formats.vag import VagReader, VagWriter
 from howl_editor.ps1.formats.vag.decoder import VagDecoder
-from howl_editor.saphi import SampleSizesExtractor, ScaReader, ScaWriter
+from howl_editor.saphi import SampleSizesExtractor, ScaReader, ScaSpuSlotValidator, ScaWriter
 
 NODE_ROOT = 0
 NODE_SPU_TABLE = 1
@@ -114,6 +120,13 @@ class MainWindow(QMainWindow):
         sca_reader: ScaReader | None = None,
         sca_writer: ScaWriter | None = None,
         sample_sizes_extractor: SampleSizesExtractor | None = None,
+        sca_spu_slot_validator: ScaSpuSlotValidator | None = None,
+        spu_slot_usage: SpuSlotUsageResolver | None = None,
+        spu_slot_allocator: SpuSlotAllocator | None = None,
+        spu_slot_choices: SpuSlotChoiceBuilder | None = None,
+        pitch_stepper: PitchStepper | None = None,
+        pitch_shifter: CseqPitchShifter | None = None,
+        pitch_headroom: PitchHeadroomInspector | None = None,
         semantic_entry_builder: SemanticEntryBuilder | None = None,
         entry_leaves_builder: EntryLeavesBuilder | None = None,
         blob_snapshot: BlobSnapshot | None = None,
@@ -171,6 +184,13 @@ class MainWindow(QMainWindow):
         self._sca_reader = sca_reader
         self._sca_writer = sca_writer
         self._sample_sizes_extractor = sample_sizes_extractor
+        self._sca_spu_slots = sca_spu_slot_validator
+        self._spu_slot_usage = spu_slot_usage
+        self._spu_slot_allocator = spu_slot_allocator
+        self._spu_slot_choices = spu_slot_choices
+        self._pitch_stepper = pitch_stepper
+        self._pitch_shifter = pitch_shifter
+        self._pitch_headroom = pitch_headroom
         self._entry_builder = semantic_entry_builder
         self._leaves_builder = entry_leaves_builder
         self._snapshot = blob_snapshot
@@ -323,6 +343,9 @@ class MainWindow(QMainWindow):
         self.music_workshop.sig_edit_instrument.connect(h.edit_instrument)
         self.music_workshop.sig_edit_percussion.connect(h.edit_percussion)
         self.music_workshop.sig_retarget_instrument.connect(h.retarget_instrument)
+        self.music_workshop.sig_shift_instrument_octaves.connect(h.shift_instrument_octaves)
+        self.music_workshop.sig_shift_percussion_octaves.connect(h.shift_percussion_octaves)
+        self.music_workshop.sig_shift_song_octaves.connect(h.shift_song_octaves)
         self.music_workshop.sig_retarget_percussion.connect(h.retarget_percussion)
         self.music_workshop.sig_add_instrument.connect(h.add_instrument)
         self.music_workshop.sig_add_percussion.connect(h.add_percussion)
@@ -1113,7 +1136,6 @@ class MainWindow(QMainWindow):
         if not self.hwl:
             return
 
-        # Determine what was moved by checking the parent node type
         if destination.isValid():
             parent_item = self.tree.itemFromIndex(destination)
         else:
@@ -1239,7 +1261,6 @@ class MainWindow(QMainWindow):
         self._load_file(path)
 
     def _load_file(self, path: str):
-        """Load a HWL file from path. Shared by _open_file and _open_recent."""
         try:
             self.hwl = self._reader.read_file(path)
             self.file_path = path
@@ -1315,22 +1336,7 @@ class MainWindow(QMainWindow):
             self.status.showMessage("No bank to add sample to")
             return
 
-        try:
-            vag = self._vag_reader.read_file(path)
-
-            new_blob = self._bank_builder.add_sample(
-                self.hwl.banks[bank_index], self.hwl.spu_addrs,
-                vag.data, self._bank_reader,
-            )
-
-            self._editor.replace_bank(self.hwl, bank_index, new_blob)
-            spu_index = len(self.hwl.spu_addrs) - 1
-            self._editor.attach_sample_rate(self.hwl, spu_index, vag.sample_rate)
-            self._mark_modified()
-            self._rebuild_tree()
-            self.status.showMessage(f"Added SPU {spu_index} to bank {bank_index} from {Path(path).name}")
-        except Exception as e:
-            self.status.showMessage(f"Failed to add sample: {e}")
+        self._sample_handler.add_sample_from_file(bank_index, path)
 
     def _on_clean_changed(self, clean: bool):
         self.modified = not clean

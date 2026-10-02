@@ -91,7 +91,6 @@ class TestSectorAlignment:
         data = howl_writer.serialize(hwl)
 
         # Bank takes 2 sectors, song should be at sector 3 or later
-        # Find song content
         assert song in data
 
 

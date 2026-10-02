@@ -16,7 +16,6 @@ class VagReader:
         return VagSample(data=data)
 
     def read_file(self, path: str | Path) -> VagSample:
-        """Read a VAG file from disk."""
         return self.read(Path(path).read_bytes())
 
     def _has_header(self, data: bytes) -> bool:

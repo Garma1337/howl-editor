@@ -1,6 +1,6 @@
 # coding: utf-8
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from howl_editor.ctr.audio_settings import DEFAULT_DISTORT
 from howl_editor.ctr.formats.cseq.models import CseqEventType, CseqFile, CseqSong
@@ -10,7 +10,12 @@ from howl_editor.ps1 import spu
 
 @dataclass(frozen=True)
 class PitchExceedance:
-    """One instrument or percussion that asks the SPU for more speed than it has."""
+    """One instrument or percussion that asks the SPU for more speed than it has.
+
+    `register` is the *un-truncated* value the note asks for, so an overflow is
+    visible. `garbage` says which failure mode this is — for a reduced
+    per-slot finding it is true when any note the slot plays wraps below the
+    cap, even if the lowest offending note only caps flat."""
 
     slot: int
     is_drum: bool
@@ -18,6 +23,7 @@ class PitchExceedance:
     base_pitch: int
     note: int | None
     register: int
+    garbage: bool = False
 
     @property
     def over_by(self) -> int:
@@ -43,16 +49,12 @@ class PitchCeilingResult:
 class PitchCeilingValidator:
     """Finds notes the console cannot play as high as the song asks.
 
-    An instrument's base pitch is scaled by the note being played, and the
-    product is written straight to the SPU's pitch register — which saturates
-    at 4.0x. Past that the voice stops getting faster, so the affected notes
-    play flat and every note above them collapses onto the same pitch, taking
-    the top of the melody out of tune. Nothing errors; it just sounds wrong.
-
-    Raising an instrument's base pitch is what brings this into range: doubling
-    it halves the headroom above the note it was tuned for. Only the notes a
-    song actually plays are judged, since an instrument is free to be tuned so
-    that notes it never reaches would overflow."""
+    Past the SPU's pitch ceiling the affected notes play flat and every note
+    above them collapses onto the same pitch, taking the top of the melody out
+    of tune, and nothing errors (see PitchCalculator for the register
+    arithmetic and the 16-bit wrap). Only the notes a song actually plays are
+    judged, since an instrument is free to be tuned so that notes it never
+    reaches would overflow."""
 
     def __init__(self, pitch_calculator: PitchCalculator):
         self._pitch = pitch_calculator
@@ -72,7 +74,9 @@ class PitchCeilingValidator:
                 continue
 
             inst = cseq.instruments[patch]
-            register = self._pitch.instrument_register(inst.frequency, note, distort)
+            register = self._pitch.instrument_register_untruncated(
+                inst.frequency, note, distort,
+            )
 
             if register <= spu.MAX_PITCH:
                 continue
@@ -84,6 +88,7 @@ class PitchCeilingValidator:
                 base_pitch=inst.frequency,
                 note=note,
                 register=register,
+                garbage=self._pitch.instrument_plays_garbage(inst.frequency, note, distort),
             ))
 
         return self._lowest_per_slot(out)
@@ -145,11 +150,15 @@ class PitchCeilingValidator:
         every note above it overflows too, so listing them all would bury the
         one number the user needs to bring back under the ceiling."""
         best: dict[int, PitchExceedance] = {}
+        slot_garbage: dict[int, bool] = {}
 
         for item in found:
+            slot_garbage[item.slot] = slot_garbage.get(item.slot, False) or item.garbage
             current = best.get(item.slot)
 
             if current is None or item.note < current.note:
                 best[item.slot] = item
 
-        return [best[k] for k in sorted(best)]
+        return [
+            replace(best[k], garbage=slot_garbage[k]) for k in sorted(best)
+        ]

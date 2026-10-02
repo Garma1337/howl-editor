@@ -138,6 +138,28 @@ class TestHowlDiagnostics:
         assert (Category.PITCH_CEILING, TargetKind.SONG, 0) in _categories(report, Severity.WARNING)
         assert (Category.PITCH_CEILING, TargetKind.SONG, 0) not in _categories(report, Severity.ERROR)
 
+    def test_a_wrapping_note_warns_about_garbage_not_flatness(self, diagnostics):
+        """A note whose register overflows the 16-bit field wraps to garbage."""
+        song = build_cseq_bytes(
+            instruments=[CseqInstrument(sample_id=0, frequency=0x2000)],
+            songs=[CseqSong(bpm=120, tpqn=480, tracks=[CseqTrack(flags=0, events=[
+                CseqEvent(event_type=CseqEventType.CHANGE_PATCH, pitch=0),
+                CseqEvent(event_type=CseqEventType.NOTE_ON, pitch=96, velocity=100),
+                CseqEvent(event_type=CseqEventType.END_TRACK),
+            ])])],
+        )
+        hwl = HowlFile()
+        hwl.spu_addrs = [SpuAddrEntry(0, 2)]
+        hwl.songs = [song]
+
+        report = diagnostics.diagnose(hwl, howl_file_size=len(song), iso_budget_bytes=None)
+        messages = [
+            f.message for f in report.findings if f.category is Category.PITCH_CEILING
+        ]
+
+        assert len(messages) == 1
+        assert "wrap" in messages[0].lower()
+
     def test_mis_sliced_bank_is_an_error(self, diagnostics):
         """A bank whose blob no longer matches the size it is cut with — what a
         shared sample being resized elsewhere leaves behind."""

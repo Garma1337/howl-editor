@@ -325,7 +325,6 @@ class TestConvert:
 
         cseq = reader.read(conv.convert(path, settings))
 
-        # One shared percussion table, one slot per distinct pitch.
         assert [p.sample_id for p in cseq.percussions] == [10, 11, 12]
 
         # Each track's single note points at its OWN global slot, not slot 0.
@@ -509,7 +508,6 @@ class TestMidiIntoMaskSequence:
         new_blob = editor.replace_sequence(blob, 0, imported.songs[0])
         parsed = reader.read(new_blob)
 
-        # Still three sequences, and the two masks are byte-for-byte intact.
         assert len(parsed.songs) == 3
         assert parsed.songs[0].bpm == 100
         assert [len(t.events) for t in parsed.songs[1].tracks] == [len(t.events) for t in original.songs[1].tracks]

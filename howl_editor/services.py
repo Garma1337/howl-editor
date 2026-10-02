@@ -13,6 +13,8 @@ from howl_editor.core.vlq import VlqCodec
 from howl_editor.ctr.analysis.howl_stats import HowlStatsCalculator
 from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.sample_ownership import SampleOwnershipResolver
+from howl_editor.ctr.analysis.spu_slot_allocator import SpuSlotAllocator
+from howl_editor.ctr.analysis.spu_slot_usage import SpuSlotUsageResolver
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
@@ -25,11 +27,13 @@ from howl_editor.ctr.diagnostics.howl_size_guard import HowlSizeGuard
 from howl_editor.ctr.diagnostics.pitch_ceiling_validator import PitchCeilingValidator
 from howl_editor.ctr.diagnostics.shared_sample_guard import SharedSampleGuard
 from howl_editor.ctr.diagnostics.spu_residency import SpuResidencyCalculator
+from howl_editor.ctr.diagnostics.spu_slot_guard import SpuSlotGuard
 from howl_editor.ctr.formats.bank.builder import BankBuilder
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.bank.shared_sample_propagator import SharedSamplePropagator
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.cseq.editor import CseqEditor
+from howl_editor.ctr.formats.cseq.pitch_shifter import CseqPitchShifter
 from howl_editor.ctr.formats.cseq.reader import CseqReader
 from howl_editor.ctr.formats.cseq.size_validator import CseqSizeValidator
 from howl_editor.ctr.formats.cseq.track_mask_layout import TrackMaskLayout
@@ -42,6 +46,8 @@ from howl_editor.ctr.formats.howl.writer import HowlWriter
 from howl_editor.ctr.sample_lookup import SampleLookup
 from howl_editor.ctr.voice.gain_calculator import GainCalculator
 from howl_editor.ctr.voice.pitch_calculator import PitchCalculator
+from howl_editor.ctr.voice.pitch_stepper import PitchStepper
+from howl_editor.ctr.voice.pitch_headroom import PitchHeadroomInspector
 from howl_editor.export.batch_exporter import BatchExporter
 from howl_editor.export.sfz_exporter import SfzExporter
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
@@ -60,6 +66,7 @@ from howl_editor.gui.entry_badge_resolver import EntryBadgeResolver
 from howl_editor.gui.entry_drop_router import EntryDropRouter
 from howl_editor.gui.severity_presenter import SeverityPresenter
 from howl_editor.gui.size_formatter import SizeFormatter
+from howl_editor.gui.spu_slot_choice_builder import SpuSlotChoiceBuilder
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.midi.converter import MidiConverter
 from howl_editor.midi.drum_name_resolver import DrumNameResolver
@@ -76,6 +83,7 @@ from howl_editor.saphi.formats.sca.chunk_writer import ScaChunkWriter
 from howl_editor.saphi.formats.sca.metadata_codec import ScaMetadataCodec
 from howl_editor.saphi.formats.sca.reader import ScaReader
 from howl_editor.saphi.formats.sca.sample_sizes_extractor import SampleSizesExtractor
+from howl_editor.saphi.formats.sca.spu_slot_validator import ScaSpuSlotValidator
 from howl_editor.saphi.formats.sca.writer import ScaWriter
 
 _TEMPLATE_DIR = Path(__file__).parent / "gui" / "templates"
@@ -100,7 +108,11 @@ container.register("cseq_editor", lambda c: CseqEditor(
     c.resolve("cseq_reader"),
     c.resolve("cseq_writer")
 ))
-container.register("bank_builder", lambda c: BankBuilder(c.resolve("vag_reader")))
+container.register("spu_slot_guard", lambda c: SpuSlotGuard())
+container.register("bank_builder", lambda c: BankBuilder(
+    c.resolve("vag_reader"),
+    c.resolve("spu_slot_guard"),
+))
 container.register("drum_pitch_remapper", lambda c: DrumPitchRemapper())
 container.register("gm_drum_names", lambda c: DrumNameResolver())
 container.register("midi_converter", lambda c: MidiConverter(
@@ -112,6 +124,12 @@ container.register("wav_writer", lambda c: WavWriter())
 container.register("vag_decoder", lambda c: VagDecoder(c.resolve("wav_writer")))
 container.register("adsr_decoder", lambda c: AdsrDecoder())
 container.register("pitch_calculator", lambda c: PitchCalculator())
+container.register("pitch_stepper", lambda c: PitchStepper())
+container.register("pitch_shifter", lambda c: CseqPitchShifter(
+    c.resolve("cseq_reader"),
+    c.resolve("cseq_writer"),
+    c.resolve("pitch_stepper"),
+))
 container.register("gain_calculator", lambda c: GainCalculator())
 container.register("cseq_renderer", lambda c: CseqRenderer(
     c.resolve("vag_decoder"),
@@ -144,9 +162,21 @@ container.register("howl_size_guard", lambda c: HowlSizeGuard())
 container.register("vag_structure_validator", lambda c: VagStructureValidator())
 container.register("pitch_ceiling_validator", lambda c: PitchCeilingValidator(
     c.resolve("pitch_calculator")))
+container.register("pitch_headroom_inspector", lambda c: PitchHeadroomInspector(
+    c.resolve("pitch_calculator")))
 container.register("bank_slice_validator", lambda c: BankSliceValidator(
     c.resolve("bank_reader"),
     c.resolve("vag_structure_validator")))
+container.register("spu_slot_usage", lambda c: SpuSlotUsageResolver(
+    c.resolve("bank_reader"),
+    c.resolve("cseq_reader"),
+))
+container.register("spu_slot_allocator", lambda c: SpuSlotAllocator(c.resolve("spu_slot_usage")))
+container.register("spu_slot_choices", lambda c: SpuSlotChoiceBuilder(
+    c.resolve("bank_reader"),
+    c.resolve("spu_slot_usage"),
+    c.resolve("spu_slot_allocator"),
+))
 container.register("sample_ownership", lambda c: SampleOwnershipResolver(
     c.resolve("bank_reader")))
 container.register("shared_sample_propagator", lambda c: SharedSamplePropagator(
@@ -234,6 +264,11 @@ container.register("sca_writer", lambda c: ScaWriter(
     c.resolve("sca_metadata_codec"),
 ))
 container.register("sample_sizes_extractor", lambda c: SampleSizesExtractor(c.resolve("bank_reader")))
+container.register("sca_spu_slot_validator", lambda c: ScaSpuSlotValidator(
+    c.resolve("bank_reader"),
+    c.resolve("cseq_reader"),
+    c.resolve("spu_slot_guard"),
+))
 container.register("adventure_hub_mask_table_query", lambda c: AdventureHubMaskTableQuery())
 container.register("track_mask_layout", lambda c: TrackMaskLayout())
 container.register("entry_leaves_builder", lambda c: EntryLeavesBuilder(

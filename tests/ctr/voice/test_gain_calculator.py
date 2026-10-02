@@ -63,7 +63,6 @@ class TestGainCompute:
         assert l_high > l_low
 
     def test_pan_clamps_to_valid_range(self):
-        # Should not crash with out-of-range values (clamped internally)
         l, r = self.calc.compute(inst_vol=255, note_vel=127, seq_vol=255, pan=-10)
         assert l >= 0 and r >= 0
 

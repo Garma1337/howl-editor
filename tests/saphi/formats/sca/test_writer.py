@@ -56,7 +56,6 @@ class TestSizeChunk:
         sca = _make_sca(sizes=[1, 2, 3])
         out = sca_writer.serialize(sca)
 
-        # Find SIZE chunk
         pos = _find_chunk(out, b"SIZE")
         body_size = unpack_from("<I", out, pos+4)[0]
 

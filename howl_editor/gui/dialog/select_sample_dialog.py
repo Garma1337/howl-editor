@@ -1,26 +1,22 @@
 # coding: utf-8
 
-from dataclasses import dataclass
 from typing import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QAbstractItemView, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QPushButton, QVBoxLayout,
 )
 
 from howl_editor.gui.layout import WindowSize
+from howl_editor.gui.sample_choice import SampleChoice
 
-
-@dataclass(frozen=True)
-class SampleChoice:
-    """One row in the picker. `display` is the user-visible label, `spu_index`
-    is what the caller wires back into the instrument/percussion entry."""
-    spu_index: int
-    display: str
+__all__ = ["SampleChoice", "SelectSampleDialog"]
 
 
 class SelectSampleDialog(QDialog):
+
+    FREE_MARK = "  ·  🆓 free"
 
     def __init__(
         self,
@@ -89,13 +85,27 @@ class SelectSampleDialog(QDialog):
     def _populate(self) -> None:
         self._list.clear()
 
+        selected = False
+
         for choice in self._choices:
-            item = QListWidgetItem(choice.display)
+            item = QListWidgetItem(self._label(choice))
             item.setData(Qt.UserRole, choice.spu_index)
+
+            if choice.tooltip:
+                item.setToolTip(choice.tooltip)
+
+            if not choice.enabled:
+                item.setFlags(item.flags() & ~(Qt.ItemIsEnabled | Qt.ItemIsSelectable))
+
             self._list.addItem(item)
 
-            if choice.spu_index == self._current:
+            if not selected and choice.enabled and choice.spu_index == self._current:
                 self._list.setCurrentItem(item)
+                self._list.scrollToItem(item, QAbstractItemView.PositionAtCenter)
+                selected = True
+
+    def _label(self, choice: SampleChoice) -> str:
+        return choice.display + self.FREE_MARK if choice.free else choice.display
 
     def _apply_filter(self, text: str) -> None:
         needle = text.strip().lower()

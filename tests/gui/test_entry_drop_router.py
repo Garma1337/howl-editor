@@ -97,7 +97,6 @@ class TestRejection:
     def test_case_insensitive_extension(self, router):
         row = _row(EntryKind.TRACK, (".mid", ".cseq"))
 
-        # Uppercase extension should still match.
         assert router.resolve(row, "X.CSEQ").action == DropAction.REPLACE_SONG
 
 

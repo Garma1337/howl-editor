@@ -104,7 +104,6 @@ class CseqEditor:
     def append_percussion(
         self, song_data: bytes, sample_id: int, volume: int, frequency: int,
     ) -> bytes:
-        """Add a percussion descriptor and return the new blob."""
         cseq = self._reader.read(song_data)
         cseq.percussions.append(CseqPercussion(
             flags=1,
@@ -241,13 +240,11 @@ class CseqEditor:
         return self._writer.serialize(cseq)
 
     def append_sequence(self, song_data: bytes, new_seq: CseqSong) -> bytes:
-        """Append a sequence to a CSEQ blob and return the new blob."""
         cseq = self._reader.read(song_data)
         cseq.songs.append(new_seq)
         return self._writer.serialize(cseq)
 
     def replace_sequence(self, song_data: bytes, seq_index: int, new_seq: CseqSong) -> bytes:
-        """Replace a single sequence in a CSEQ blob and return the new blob."""
         cseq = self._reader.read(song_data)
 
         if seq_index < 0 or seq_index >= len(cseq.songs):
@@ -257,7 +254,6 @@ class CseqEditor:
         return self._writer.serialize(cseq)
 
     def remove_sequence(self, song_data: bytes, seq_index: int) -> bytes:
-        """Remove a single sequence from a CSEQ blob and return the new blob."""
         cseq = self._reader.read(song_data)
 
         if seq_index < 0 or seq_index >= len(cseq.songs):
@@ -267,7 +263,6 @@ class CseqEditor:
         return self._writer.serialize(cseq)
 
     def move_sequence(self, song_data: bytes, from_index: int, to_index: int) -> bytes:
-        """Move a sequence from one position to another and return the new blob."""
         cseq = self._reader.read(song_data)
 
         if from_index < 0 or from_index >= len(cseq.songs):

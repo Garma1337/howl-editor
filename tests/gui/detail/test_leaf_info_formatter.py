@@ -146,8 +146,6 @@ class TestEntrySelection:
 
         html = formatter.format_entry(row, None, [])
 
-        # Items / Samples / Sequences rows shouldn't appear at all when
-        # there's nothing to break down.
         assert "Items" not in html
         assert ">Samples<" not in html
         assert ">Sequences<" not in html

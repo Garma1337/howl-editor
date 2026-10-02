@@ -18,9 +18,6 @@ class CseqSizeCheck:
 class CseqSizeGuard:
     """Checks a serialized CSEQ against the engine's fixed song buffer and
     produces the warning a mutation path shows before writing an oversized song.
-
-    The console reads a song into an 0x5800-byte buffer with no bounds check,
-    so an oversized song silently overruns adjacent memory.
     """
 
     def __init__(self, validator: CseqSizeValidator):

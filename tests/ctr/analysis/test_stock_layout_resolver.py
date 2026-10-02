@@ -15,7 +15,7 @@ class TestPairedBank:
         assert stock_layout.paired_bank(24) == 25
 
     def test_menu_songs_pair_with_bank_plus_five(self, stock_layout):
-        # Song 27 (Character Select) → bank 32
+        # Song 27 (Main Menu) → bank 32
         assert stock_layout.paired_bank(27) == 32
         assert stock_layout.paired_bank(32) == 37
 

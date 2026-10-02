@@ -150,22 +150,43 @@ class HowlDiagnostics:
         return out
 
     def _check_pitch_ceiling(self, song_index, cseq, name) -> list[Finding]:
-        """Notes whose pitch register saturates the SPU. They play flat rather
-        than failing, so this warns instead of erroring."""
+        """Notes whose pitch register the SPU can't reach. The console
+        still loads the song, so this warns instead of erroring."""
         result = self._pitch_ceiling.validate(cseq)
-        out: list[Finding] = []
 
-        for item in result.exceedances:
-            out.append(Finding(
-                Severity.WARNING, Category.PITCH_CEILING, Target(TargetKind.SONG, song_index),
-                f"{name}: {self._pitch_subject(item)} needs pitch {item.register} "
-                f"({item.over_by} over the SPU's {spu.MAX_PITCH} ceiling). The console "
-                f"cannot play faster than 4.0×, so this and every higher note collapse "
-                f"onto the same pitch and the part goes flat. Lower the base pitch "
-                f"(currently {item.base_pitch}) and speed the sample up to compensate.",
-            ))
+        return [
+            Finding(
+                Severity.WARNING, Category.PITCH_CEILING,
+                Target(TargetKind.SONG, song_index),
+                self._pitch_ceiling_message(name, item),
+            )
+            for item in result.exceedances
+        ]
 
-        return out
+    def _pitch_ceiling_message(self, name, item) -> str:
+        lead = (
+            f"{name}: {self._pitch_subject(item)} needs pitch {item.register} "
+            f"({item.over_by} over the SPU's {spu.MAX_PITCH} ceiling). "
+        )
+        fix = (
+            f"Lower the base pitch (currently {item.base_pitch}) and speed the "
+            f"sample up to compensate."
+        )
+
+        if item.garbage:
+            effect = (
+                f"The highest notes overflow the 16-bit pitch register and wrap "
+                f"back under the SPU's 4.0× cap, so they play dramatically low — "
+                f"garbage, not just flat. "
+            )
+        else:
+            effect = (
+                f"The console cannot play faster than 4.0×, so this and every "
+                f"higher note are capped onto the same pitch and the part goes "
+                f"flat. "
+            )
+
+        return lead + effect + fix
 
     def _pitch_subject(self, item) -> str:
         if item.is_drum:
@@ -222,10 +243,8 @@ class HowlDiagnostics:
         return out
 
     def _check_bank_slicing(self, hwl: HowlFile) -> list[Finding]:
-        """A bank's samples are delimited by the shared SPU size table, so a
-        sample resized on behalf of another bank leaves this one being cut at
-        offsets its bytes don't match. The slices stop being valid VAG, which
-        is what this reports."""
+        """Banks whose slices stopped being valid VAG — see BankSliceValidator
+        for how a shared resize causes it."""
         out: list[Finding] = []
 
         for i, blob in enumerate(hwl.banks):

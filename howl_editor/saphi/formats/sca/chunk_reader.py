@@ -13,7 +13,7 @@ class ScaChunk:
 
 
 class ScaChunkReader:
-    """Walks a .sca byte buffer one [tag | bodySize | body | zero-pad] chunk at a time."""
+    """Walks a .sca byte buffer one chunk at a time (layout: see ScaFormat)."""
 
     def iter_chunks(self, raw: bytes, start: int):
         pos = start

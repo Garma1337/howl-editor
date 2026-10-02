@@ -85,7 +85,6 @@ class PlayerWidget(QWidget):
             media_player.mediaStatusChanged.connect(self._on_media_status_changed)
 
     def set_now_playing(self, label: str, replay_callback=None) -> None:
-        """Show a track label and start the elapsed timer."""
         self._label.setText(label)
         self._replay_callback = replay_callback
         self._time_label.setText("0:00 / 0:00")
@@ -108,7 +107,6 @@ class PlayerWidget(QWidget):
         self._loop_check.setChecked(enabled)
 
     def clear(self) -> None:
-        """Reset the player bar to idle state."""
         self._label.setText("No audio")
         self._time_label.setText("0:00 / 0:00")
         self._seek_slider.setValue(0)

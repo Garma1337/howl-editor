@@ -21,7 +21,6 @@ class CseqReader:
         return self._name_resolver.song_name(index)
 
     def read(self, data: bytes) -> CseqFile:
-        """Parse raw CSEQ bytes into a CseqFile."""
         self._validate_min_size(data)
         file_size, num_inst, num_perc, num_songs = self._parse_header(data)
         pos = CseqInfo.HEADER_SIZE

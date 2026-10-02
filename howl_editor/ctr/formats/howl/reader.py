@@ -10,7 +10,6 @@ from howl_editor.ps1.constants import SECTOR_SIZE, bytes_to_sectors
 class HowlReader:
 
     def read(self, data: bytes) -> HowlFile:
-        """Parse raw HWL bytes into a HowlFile."""
         self._validate_min_size(data)
         header = self._parse_header(data)
         self._validate_magic(header)
@@ -40,7 +39,6 @@ class HowlReader:
         )
 
     def read_file(self, path: str | Path) -> HowlFile:
-        """Read a HWL file from disk."""
         return self.read(Path(path).read_bytes())
 
     def _validate_min_size(self, data: bytes) -> None:

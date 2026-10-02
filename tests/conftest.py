@@ -12,6 +12,7 @@ from howl_editor.ctr.analysis.sample_classifier import SampleClassifier
 from howl_editor.ctr.analysis.stock_layout_resolver import StockLayoutResolver
 from howl_editor.ctr.analysis.stock_name_resolver import StockNameResolver
 from howl_editor.ctr.analysis.validator import BankCseqValidator
+from howl_editor.ctr.diagnostics.spu_slot_guard import SpuSlotGuard
 from howl_editor.ctr.formats.bank.builder import BankBuilder
 from howl_editor.ctr.formats.bank.reader import BankReader
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
@@ -81,8 +82,12 @@ def bank_reader(stock_names):
     return BankReader(stock_names)
 
 @pytest.fixture
-def bank_builder(vag_reader):
-    return BankBuilder(vag_reader)
+def spu_slot_guard():
+    return SpuSlotGuard()
+
+@pytest.fixture
+def bank_builder(vag_reader, spu_slot_guard):
+    return BankBuilder(vag_reader, spu_slot_guard)
 
 @pytest.fixture
 def version_detector():
@@ -162,7 +167,6 @@ def empty_howl():
 
 @pytest.fixture
 def sample_howl():
-    """A HowlFile with some data for testing."""
     return HowlFile(
         spu_addrs=[SpuAddrEntry(0, 100), SpuAddrEntry(0, 200)],
         other_fx=[OtherFX(1, 128, 4096, 0, 100)],

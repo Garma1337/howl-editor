@@ -9,11 +9,8 @@ class VlqCodec:
     """Encodes and decodes variable-length quantities."""
 
     def read(self, data: bytes, pos: int) -> tuple[int, int]:
-        """Read a variable-length quantity from data at pos.
-
-        Returns (value, new_pos).
-        Raises ValueError if data ends before VLQ is complete.
-        """
+        """Returns (value, new_pos). Raises ValueError if the data ends before
+        the VLQ is complete."""
         result = 0
 
         while pos < len(data):
@@ -27,10 +24,7 @@ class VlqCodec:
         raise ValueError("Unterminated VLQ at end of data")
 
     def write(self, value: int) -> bytes:
-        """Encode an integer as a variable-length quantity.
-
-        Raises ValueError for negative values.
-        """
+        """Raises ValueError for negative values."""
         if value < 0:
             raise ValueError(f"VLQ value must be non-negative, got {value}")
 

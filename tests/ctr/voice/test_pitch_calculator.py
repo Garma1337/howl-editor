@@ -69,6 +69,79 @@ class TestInstrumentPitch:
         assert ratio > 0
 
 
+class TestUntruncatedRegister:
+    """The un-wrapped register is what makes an overflow visible: the plain
+    register comes back already truncated to 16 bits, so a note that overflows
+    looks small and in-range."""
+
+    def setup_method(self):
+        self.calc = PitchCalculator()
+
+    def test_matches_the_plain_register_below_the_wrap(self):
+        # base 4096, note 60 -> exactly the base pitch, nowhere near 0xFFFF.
+        assert (
+            self.calc.instrument_register_untruncated(0x1000, 60, DEFAULT_DISTORT)
+            == self.calc.instrument_register(0x1000, 60, DEFAULT_DISTORT)
+        )
+
+    def test_reveals_an_overflow_the_plain_register_hides(self):
+        # base 0x2000, note 96: NOTE_FREQUENCY[96]=0x8000, so the true register
+        # is (0x8000 * 0x2000) >> 12 = 0x10000 — one past the 16-bit field. The
+        # plain register wraps it to 0x0000 and looks harmless.
+        assert self.calc.instrument_register_untruncated(0x2000, 96, DEFAULT_DISTORT) == 0x10000
+        assert self.calc.instrument_register(0x2000, 96, DEFAULT_DISTORT) == 0x0000
+
+
+class TestPlaybackCap:
+    """The SPU will not decode a sample faster than 4.0×, so the playback ratio
+    saturates there — a note over the ceiling plays flat rather than ever
+    faster."""
+
+    def setup_method(self):
+        self.calc = PitchCalculator()
+
+    def test_ratio_never_exceeds_four_times(self):
+        # base 0x1000, note 96 -> register 0x8000 (8×) uncapped; the cap holds
+        # it to 4.0×.
+        ratio = self.calc.instrument(0x1000, 96, DEFAULT_DISTORT, 44100)
+
+        assert ratio <= 4.0
+
+    def test_two_notes_past_the_cap_collapse_onto_the_same_pitch(self):
+        # 0x4000 (note 84) and 0x8000 (note 96) both cap to 0x3FFF → one pitch.
+        ratio_84 = self.calc.instrument(0x1000, 84, DEFAULT_DISTORT, 44100)
+        ratio_96 = self.calc.instrument(0x1000, 96, DEFAULT_DISTORT, 44100)
+
+        assert ratio_84 == ratio_96
+
+    def test_a_note_wrapping_below_the_cap_plays_low(self):
+        # base 0x2000, note 96 -> register wraps to 0x0000, so the voice is
+        # frozen at ratio 0 — the audible 'garbage'.
+        ratio = self.calc.instrument(0x2000, 96, DEFAULT_DISTORT, 44100)
+
+        assert ratio == 0.0
+
+
+class TestPlaysGarbage:
+
+    def setup_method(self):
+        self.calc = PitchCalculator()
+
+    def test_in_tune_note_is_not_garbage(self):
+        assert self.calc.instrument_plays_garbage(0x1000, 60, DEFAULT_DISTORT) is False
+
+    def test_capped_note_is_not_garbage(self):
+        # Over the ceiling but no wrap -> flat, not garbage.
+        assert self.calc.instrument_plays_garbage(4096, 84, DEFAULT_DISTORT) is False
+
+    def test_note_wrapping_below_the_cap_is_garbage(self):
+        assert self.calc.instrument_plays_garbage(0x2000, 96, DEFAULT_DISTORT) is True
+
+    def test_note_wrapping_above_the_cap_is_not_garbage(self):
+        # true 0x1428A wraps to 0x428A, still above the cap -> flat.
+        assert self.calc.instrument_plays_garbage(0x2000, 100, DEFAULT_DISTORT) is False
+
+
 class TestDrumPitch:
 
     def setup_method(self):

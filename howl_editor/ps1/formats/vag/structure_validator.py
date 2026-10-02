@@ -7,13 +7,7 @@ from howl_editor.ps1.formats.vag import format as fmt
 
 @dataclass(frozen=True)
 class VagStructureResult:
-    """Structural verdict on a run of VAG bytes.
-
-    A sample carved out of a bank blob is only correctly delimited if it lands
-    on frame boundaries and ends where the encoder said it ends. When a slice
-    is offset — because the size it was cut with disagrees with the bytes that
-    are actually there — the flag byte lands on ADPCM payload instead of a
-    frame header, which this catches."""
+    """Structural verdict on a run of VAG bytes."""
 
     frame_aligned: bool
     frame_count: int
@@ -36,7 +30,9 @@ class VagStructureValidator:
     Only structure is judged, never audio content: every frame's flag byte
     must be a legal combination, and the final frame must carry an end
     marker. Both hold for every stock CTR sample, so a failure means the
-    bytes were cut at the wrong offset rather than that the audio is bad."""
+    bytes were cut at the wrong offset — a slice cut with a size that
+    disagrees with the bytes actually there puts the flag byte on ADPCM
+    payload instead of a frame header — rather than that the audio is bad."""
 
     def validate(self, data: bytes) -> VagStructureResult:
         aligned = len(data) > 0 and len(data) % fmt.FRAME_SIZE == 0

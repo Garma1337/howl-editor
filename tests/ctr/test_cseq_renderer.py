@@ -23,6 +23,12 @@ def _silent_vag_frame():
     return b"\x00\x07" + b"\x00" * 14
 
 
+def _channel_energy(pcm: bytes) -> tuple[int, int]:
+    """Summed amplitude per channel of interleaved 16-bit stereo."""
+    samples = unpack_from(f"<{len(pcm) // 2}h", pcm, 0)
+    return sum(abs(s) for s in samples[0::2]), sum(abs(s) for s in samples[1::2])
+
+
 def _tone_vag_frames():
     """Two VAG frames: one with data, one end marker. Produces audible samples."""
     frame1 = bytes([0x00, 0x00] + [0x77] * 14)
@@ -154,9 +160,10 @@ class TestRenderSong:
         )
 
         pcm = renderer.render_song(cseq, 0, {0: _tone_vag_frames()})
+        left, right = _channel_energy(pcm)
 
-        # Stereo: left should have signal, right should be near-silent
-        assert len(pcm) >= 4
+        assert left > 0
+        assert right == 0
 
     def test_percussion_out_of_range_skipped(self):
         renderer = _renderer()
@@ -195,13 +202,11 @@ class TestRenderSong:
 
         pcm = renderer.render_song(cseq, 0, {0: _tone_vag_frames()})
 
-        # No audible samples should be produced — every output sample must be zero.
         assert all(b == 0 for b in pcm)
 
     def test_mid_note_velocity_changes_gain(self):
         renderer = _renderer()
 
-        # Plays a note, then changes seq_vol mid-note via VELOCITY event
         track = CseqTrack(events=[
             CseqEvent(delta=0, event_type=CseqEventType.CHANGE_PATCH, pitch=0),
             CseqEvent(delta=0, event_type=CseqEventType.NOTE_ON, pitch=60, velocity=127),
@@ -424,7 +429,6 @@ class TestRenderLayered:
         renderer = _renderer()
         cseq = CseqFile(songs=[CseqSong(bpm=120, tpqn=480, tracks=[])])
 
-        # Both indices are out of range — should return empty without crashing.
         assert renderer.render_layered(cseq, [5, 99], {}) == b""
 
     def test_wav_format_correct(self):

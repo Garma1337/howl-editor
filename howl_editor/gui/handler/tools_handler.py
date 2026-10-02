@@ -5,6 +5,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox, QDialog, QInputDialog
 
+from howl_editor.ctr import constants
+from howl_editor.ctr.diagnostics.spu_slot_guard import SpuSlotLimitError
 from howl_editor.file_format_registry import FileFormatRegistry
 from howl_editor.gui.dialog.convert_midi_dialog import ConvertMidiDialog
 from howl_editor.gui.dialog.diagnosis_report_dialog import DiagnosisReportDialog
@@ -25,8 +27,14 @@ class ToolsHandler:
             return
 
         try:
-            spu_addrs = self._window.hwl.spu_addrs if self._window.hwl else []
-            result = self._window._bank_builder.build_from_files(files, spu_addrs)
+            if self._window.hwl:
+                spu_addrs = self._window.hwl.spu_addrs
+                indices = self._window._spu_slot_allocator.allocate(self._window.hwl, len(files))
+            else:
+                spu_addrs, indices = [], None
+
+            spu_before = list(spu_addrs)
+            result = self._window._bank_builder.build_from_files(files, spu_addrs, indices)
 
             if self._window.hwl and self._ask_store_in_hwl("bank"):
                 self._window._editor.add_bank(self._window.hwl, result.bank_data)
@@ -38,11 +46,18 @@ class ToolsHandler:
                 self._window._rebuild_tree()
                 self._window._notify(f"Added bank {len(self._window.hwl.banks) - 1} with {len(files)} samples")
             else:
+                # The builder wrote the new sizes straight into the live table;
+                # a bank that only goes to disc must leave the HWL untouched.
+                if self._window.hwl:
+                    self._window.hwl.spu_addrs[:] = spu_before
+
                 path, _ = QFileDialog.getSaveFileName(self._window, "Save Bank", f"bank{FileFormatRegistry.BANK.extension}", FileFormatRegistry.BANK.file_filter)
 
                 if path:
                     Path(path).write_bytes(result.bank_data)
                     self._window._notify(f"Saved bank to {Path(path).name}")
+        except SpuSlotLimitError as e:
+            QMessageBox.warning(self._window, "SPU Slot Limit", str(e))
         except Exception as e:
             QMessageBox.critical(self._window, "Error", f"Failed:\n{e}\n{traceback.format_exc()}")
 
@@ -61,7 +76,12 @@ class ToolsHandler:
             return
 
         max_spu = len(self._window.hwl.spu_addrs) if self._window.hwl else 0
-        dialog = ConvertMidiDialog(self._window, info, max_spu, self._window._drum_names)
+        free = self._window._spu_slot_usage.free_slots(self._window.hwl) if self._window.hwl else None
+        dialog = ConvertMidiDialog(
+            self._window, info, max_spu, self._window._drum_names, free_spu_indices=free,
+            pitch_headroom=self._window._pitch_headroom,
+            pitch_stepper=self._window._pitch_stepper,
+        )
         if dialog.exec() != QDialog.Accepted:
             return
 
@@ -132,6 +152,9 @@ class ToolsHandler:
             return
 
         selection = dialog.get_selection()
+        if not self._export_slots_within_stock_table(selection):
+            return
+
         path, _ = QFileDialog.getSaveFileName(
             self._window, "Save Saphi Export",
             f"{selection.name}{FileFormatRegistry.SCA.extension}", FileFormatRegistry.SCA.file_filter,
@@ -239,6 +262,31 @@ class ToolsHandler:
         DiagnosisReportDialog(
             self._window, report, self._window._severity_presenter,
         ).exec()
+
+    def _export_slots_within_stock_table(self, selection) -> bool:
+        """Refuse an export whose bank or song uses SPU slots Saphi cannot load."""
+        bank = self._window.hwl.banks[selection.bank_index]
+        cseq = self._window.hwl.songs[selection.song_index]
+
+        try:
+            blocked = self._window._sca_spu_slots.out_of_range_slots(bank, cseq)
+        except Exception as e:
+            QMessageBox.critical(self._window, "Error", f"Saphi export failed:\n{e}")
+            return False
+
+        if not blocked:
+            return True
+
+        QMessageBox.warning(
+            self._window, "Export for Saphi",
+            f"This export uses SPU slot(s) {', '.join(map(str, blocked))}, but Saphi only supports "
+            f"slots 0-{constants.MAX_SPU_SLOTS - 1}.\n\n"
+            f"Saphi loads custom music against the stock game's {constants.MAX_SPU_SLOTS}-slot table. "
+            f"Higher slots overwrite sound effects in memory (e.g. the pause menu sounds) and "
+            f"the instruments using them play silence.\n\n"
+            f"Move these samples onto existing slots below {constants.MAX_SPU_SLOTS} and export again.",
+        )
+        return False
 
     def _ask_store_in_hwl(self, item_type: str) -> bool:
         return QMessageBox.question(

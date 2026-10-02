@@ -59,7 +59,6 @@ class SampleLookup:
             return []
 
     def collect_song_samples(self, hwl: HowlFile, cseq: CseqFile) -> dict[int, bytes]:
-        """Collect all sample data needed by a CSEQ file from the HWL's banks."""
         needed_ids = set()
 
         for inst in cseq.instruments:
