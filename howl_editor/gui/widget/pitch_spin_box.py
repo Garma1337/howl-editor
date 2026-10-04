@@ -32,6 +32,12 @@ class PitchSpinBox(QSpinBox):
     def shift_octaves(self, octaves: int) -> None:
         self.setValue(self._stepper.octaves(self.value(), octaves))
 
+    def octave_up(self) -> None:
+        self.shift_octaves(1)
+
+    def octave_down(self) -> None:
+        self.shift_octaves(-1)
+
     def _semitones_for(self, steps: int) -> int:
         if abs(steps) == _PAGE_STEP:
             return SEMITONES_PER_OCTAVE * (1 if steps > 0 else -1)

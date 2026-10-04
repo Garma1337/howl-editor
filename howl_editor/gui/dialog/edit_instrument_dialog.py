@@ -113,14 +113,17 @@ class EditInstrumentDialog(QDialog):
         """The spin box already steps octaves on Page Up/Down, but the common
         case deserves something visible."""
         row = QHBoxLayout()
+        steps = (
+            ("⬇️ Octave down", self._frequency.octave_down, "Halve", "down"),
+            ("⬆️ Octave up", self._frequency.octave_up, "Double", "up"),
+        )
 
-        for label, octaves in (("⬇️ Octave down", -1), ("⬆️ Octave up", 1)):
+        for label, slot, verb, direction in steps:
             button = QPushButton(label)
             button.setToolTip(
-                f"{'Halve' if octaves < 0 else 'Double'} the pitch register — "
-                f"exactly one octave {'down' if octaves < 0 else 'up'}."
+                f"{verb} the pitch register — exactly one octave {direction}."
             )
-            button.clicked.connect(lambda _checked=False, o=octaves: self._frequency.shift_octaves(o))
+            button.clicked.connect(slot)
             row.addWidget(button)
 
         row.addStretch()

@@ -1,6 +1,8 @@
 # coding: utf-8
 
+import gc
 import os
+import weakref
 
 import pytest
 
@@ -8,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "minimal")
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from howl_editor.gui.dialog.edit_instrument_dialog import EditInstrumentDialog
 from howl_editor.ps1 import spu
@@ -26,6 +28,13 @@ def _dialog(frequency: int = UNITY, adsr: int | None = None) -> EditInstrumentDi
     return EditInstrumentDialog(
         None, title="t", subject_label="s",
         initial_volume=255, initial_frequency=frequency, initial_adsr=adsr,
+    )
+
+
+def _octave_button(dialog: EditInstrumentDialog, direction: str) -> QPushButton:
+    return next(
+        button for button in dialog.findChildren(QPushButton)
+        if "Octave" in button.text() and direction in button.text()
     )
 
 
@@ -52,6 +61,49 @@ class TestOctaveButtons:
         dlg._frequency.shift_octaves(-1)
 
         assert dlg.chosen().frequency == 1234
+
+
+class TestOctaveButtonClicks:
+    """The buttons carry the pitch edit a music maker actually makes, and they
+    are wired to the spin box's own slots rather than to the dialog."""
+
+    def test_clicking_up_doubles_the_pitch(self, qt_app):
+        dlg = _dialog()
+
+        _octave_button(dlg, "up").click()
+
+        assert dlg.chosen().frequency == 2 * UNITY
+
+    def test_clicking_down_halves_the_pitch(self, qt_app):
+        dlg = _dialog()
+
+        _octave_button(dlg, "down").click()
+
+        assert dlg.chosen().frequency == UNITY // 2
+
+    def test_clicks_accumulate(self, qt_app):
+        dlg = _dialog()
+
+        _octave_button(dlg, "up").click()
+        _octave_button(dlg, "up").click()
+
+        assert dlg.chosen().frequency == 4 * UNITY
+
+
+class TestLifetime:
+
+    def test_dropping_the_dialog_frees_it_without_the_cyclic_collector(self, qt_app):
+        """A parentless dialog must die by reference count alone."""
+        gc.collect()
+        dialog = _dialog()
+        ref = weakref.ref(dialog)
+
+        gc.disable()
+        try:
+            del dialog
+            assert ref() is None, "dialog outlived its last reference - it is in a cycle"
+        finally:
+            gc.enable()
 
 
 class TestCeilingWarning:
