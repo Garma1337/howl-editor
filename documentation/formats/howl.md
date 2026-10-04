@@ -92,6 +92,8 @@ packet-beta
 
 The table index serves as the **global sample ID** referenced by banks, instruments, and sound effects.
 
+The retail table has **528 entries (ids 0–527)**, and `numSpuAddrs` is what the file declares — but the ids a *consumer* can resolve are not always the ids a file declares. The game's own executable and the Saphi runtime both resolve custom music against the stock 528-entry table, so a sample given a higher id lands on memory holding sound effects and sounds as silence. Growing the table is therefore only meaningful for a build that ships its own larger one. Entries may be unused (`spuSize == 0`); the game skips those.
+
 ### SPU Memory at Runtime
 
 - Total SPU RAM: 512 KB (`0x7E000` bytes)

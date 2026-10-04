@@ -18,6 +18,7 @@ This guide covers internal behaviors and details that are not immediately obviou
   - [Drag-and-Drop File Import](#drag-and-drop-file-import)
   - [Search / Filter](#search--filter)
   - [Undo / Redo](#undo--redo)
+  - [Notifications and Background Work](#notifications-and-background-work)
 - [Listening and Inspecting](#listening-and-inspecting)
   - [Audio Playback](#audio-playback)
     - [Sample Playback](#sample-playback)
@@ -35,9 +36,12 @@ This guide covers internal behaviors and details that are not immediately obviou
   - [Bank Merging](#bank-merging)
 - [Music Production Workflows](#music-production-workflows)
   - [Music Workshop](#music-workshop)
+    - [Adding an Instrument or Percussion Entry](#adding-an-instrument-or-percussion-entry)
     - [Editing Instruments and Percussion](#editing-instruments-and-percussion)
+    - [Editing Several Rows at Once](#editing-several-rows-at-once)
     - [Retargeting a Sample](#retargeting-a-sample)
     - [Inspecting Track Events](#inspecting-track-events)
+    - [Editing Track Events](#editing-track-events)
     - [Replacing One Track from MIDI](#replacing-one-track-from-midi)
   - [MIDI to CSEQ Conversion](#midi-to-cseq-conversion)
     - [Standalone vs HWL](#standalone-vs-hwl)
@@ -118,12 +122,14 @@ The **index** of an entry in this table is the sample's global ID. All banks, in
 
 #### How SPU Indices Are Assigned
 
-When you add a new sample to a bank or build a bank from VAG files, the editor automatically assigns SPU indices:
+The retail table has **528 slots (0–527)**, and that is a hard ceiling for new samples. The game resolves every sample id against those 528 entries, so a sample placed above them overwrites sound effects in SPU memory and the instrument using it plays silence. The editor therefore never grows the table past 528. A file that already ships a larger table stays editable; it just can't gain new slots up there.
 
-- **Build bank from VAGs**: New entries are appended to the end of the SPU table. If the table currently has 528 entries, the first new sample gets index 528, the next 529, etc.
-- **Add sample to bank**: A new entry is appended to the end of the SPU table with the sample's size.
+- **Add sample to bank** / **Copy sample as a new sample**: a picker asks which slot the sample takes. Slots nothing references are marked **🆓 free** and can be reused; occupied slots are greyed out. Two extra rows sit at the top of the list: a fresh slot at the end of the table (offered while the table is still under 528) and, when copying, **share the source sample's slot** — both banks then point at the same slot the way the stock game's shared samples do, and no slot is consumed. The pre-selected row is a fresh slot when there's room, otherwise the lowest free one. If the table is full and nothing is free, the add is refused.
+- **Build bank from VAGs**: slots are allocated the same way, one per VAG — fresh slots while the table has room, then the lowest free ones. If there aren't enough for the whole selection, the build is refused and nothing is written.
 - **Replace sample**: The existing SPU index is kept, but the size entry is updated to match the new data. Because that entry is shared, replacing a sample other banks also claim needs care — see [Replacing a Shared Sample](#replacing-a-shared-sample).
-- **Remove sample**: The sample is removed from the bank, but the SPU table entry is **not** deleted (removing it would shift all subsequent indices and break references in other banks and CSEQ files).
+- **Remove sample**: The sample is removed from the bank, but the SPU table entry is **not** deleted (removing it would shift all subsequent indices and break references in other banks and CSEQ files). The slot does become reusable once nothing claims it any more.
+
+A slot counts as **free** only when no bank, no OtherFX or EngineFX entry and no instrument or percussion descriptor references it. Anything still pointing at a slot you reuse will sound the new sample in its place — which is also why a free slot is worth knowing about in the other direction: an instrument aimed at one plays silence.
 
 #### VAG Sample Rate Persistence
 
@@ -168,7 +174,20 @@ The filter bar matches against both tree columns (name and info text), case-inse
 
 ### Undo / Redo
 
-Most destructive operations can be undone with **Ctrl+Z** and redone with **Ctrl+Shift+Z** (or Ctrl+Y). This covers: removing/replacing banks, songs, samples, and sequences, as well as reordering via Move Up/Down and drag-and-drop. Adding a bank or song is not undoable (use remove to reverse it). The undo stack is cleared when you open, create, or close a file.
+Most destructive operations can be undone with **Ctrl+Z** and redone with **Ctrl+Shift+Z** (or Ctrl+Y). This covers: removing/replacing banks, songs, samples, and sequences, edits to instrument / percussion and event values, octave shifts, as well as reordering via Move Up/Down and drag-and-drop. Adding a bank or song is not undoable (use remove to reverse it). The undo stack is cleared when you open, create, or close a file.
+
+An edit that drags other banks along with it (see [Replacing a Shared Sample](#replacing-a-shared-sample)) and a bulk edit across several selected rows are each pushed as a single step, so undo can't leave the file half-changed.
+
+### Notifications and Background Work
+
+The outcome of an action appears as a message at the top of the window instead of a modal popup, so doing several edits in a row doesn't cost a click each. Plain confirmations fade after a few seconds; **warnings and errors stay until you dismiss them**, since those are worth reading. At most three messages stack at once — the oldest makes way for a fourth. Questions still use dialogs, because they need an answer: overwrite confirmations, engine-limit overrides, and the unsaved-changes check.
+
+Slow work runs off the GUI thread and reports into the same bar, with a progress bar and a **Cancel** button:
+
+- **Rendering a sequence** happens in a separate worker process, so the window stays usable while it mixes. Asking for another render abandons the one in flight — without that, the older mix would finish later and start playing over whatever you asked for in the meantime.
+- **Batch export** runs on a worker thread. Cancelling it keeps the files already written.
+
+Editing a large file stays responsive because a change re-serializes only the blob it touched, and derived data (parsed CSEQs, bank slices) is memoized per blob — an untouched bank or song keeps hitting that cache across tree rebuilds, while an edited one misses exactly once.
 
 ## Listening and Inspecting
 
@@ -192,7 +211,7 @@ When the editor detects that a sample's intended rate falls outside this playabl
 2. Linearly resamples the PCM to a backend-friendly rate (11025 Hz).
 3. Writes a WAV at the new rate.
 
-The audible pitch is preserved — only the encoding rate changes. The status bar shows a `— resampled <orig>→11025 Hz` suffix on the "Playing …" message so it's visible when this fallback kicks in. Exported WAVs are unaffected; they continue to be written at the decoder's default rate.
+The audible pitch is preserved — only the encoding rate changes. The notification carries a `— resampled <orig>→11025 Hz` suffix on the "Playing …" message so it's visible when this fallback kicks in. Exported WAVs are unaffected; they continue to be written at the decoder's default rate.
 
 #### Sequence Playback
 
@@ -208,7 +227,7 @@ Clicking a sequence renders the entire song offline before playing:
 8. Mid-note volume, pan, and pitch bend changes update already-playing voices in real time
 9. The result is rendered at 22050 Hz stereo
 
-Rendering can take a few seconds for complex songs.
+Rendering can take a few seconds for complex songs, so it runs in a worker process while the window stays usable — see [Notifications and Background Work](#notifications-and-background-work). The finished WAV is cached, so playing the same sequence again skips straight to playback.
 
 #### Playback Accuracy
 
@@ -253,13 +272,12 @@ Bank and song names are tied to index positions, not to the data (see [Bank Name
 
 Sample sizes live in one table keyed by SPU index and shared by every bank that claims that index, so replacing a sample with one of a **different length** rewrites a number the other banks are read with. They still hold their own, now-stale bytes, and get cut at the wrong offsets — see [Important Considerations](#important-considerations).
 
-When this would happen, the editor names the banks and how many of their samples would break, and offers three choices:
+Every sample overwrite — from a `.vag` file, or by copying another bank's sample onto this slot — opens **one** prompt that spells out what it will do, rather than a run of dialogs each answerable only in the dark. It states the size change, names the banks that carry their own copy of the slot, and warns if the bank would end up over the bank-size limit or over Saphi's 400 KB cap. When the slot is shared, two options appear:
 
-- **Update all owning banks** — the replacement is written into every bank claiming that index, so the whole file stays coherent. This changes those banks' audio: they all end up playing the new sample. That is closer to what the console does anyway, since a shared index is only ever uploaded once. This is the safe default.
-- **Only this bank** — writes just the bank you're editing and leaves the others mis-cut. Do this only if you intend to fix them yourself; they will be flagged with ❌ until you do.
-- **Cancel** — abandon the replacement.
+- **Update those banks as well (recommended)** — the replacement is written into every bank claiming that index, so the whole file stays coherent. This changes those banks' audio: they all end up playing the new sample. That is closer to what the console does anyway, since a shared index is only ever uploaded once. This is the default.
+- **Replace in this bank only** — writes just the bank you're editing and leaves the others mis-cut. Do this only if you intend to fix them yourself; they will be flagged with ❌ until you do.
 
-Either way it's one undo step: undoing puts every bank back.
+**Cancel** abandons the replacement. Either way it's one undo step: undoing puts every bank back.
 
 Replacing a sample with one of **exactly the same length** never triggers this — the size entry doesn't move, so the other banks keep slicing correctly (they simply keep their own audio for that index).
 
@@ -308,20 +326,41 @@ The detail panel is organized top-to-bottom as:
 1. **Title** — song index + stock name. When the song exceeds an engine limit, a warning banner appears directly under it (see [Engine Limits and Warning Icons](#engine-limits-and-warning-icons)).
 2. **Stats strip** — six cards: Tempo (BPM), Resolution (TPQN), Tracks (with drum-track indices as a hint), Sequences, Instruments, Percussion.
 3. **Sequences table** — one row per sub-sequence (Adventure Hub style multi-sequence songs have several; most songs have one). Each row shows # / BPM / track count / drum-track indices and exposes a ▶️ Play button plus a ⚙️ Actions menu with Replace · Copy to song · Export as MIDI · Inspect events · Remove. (Whole-song replace and export live in the File Browser.)
-4. **Instruments table** — one row per melodic instrument. Columns: index, sample SPU, source bank, pitch (Hz with note name + cents), volume, ADSR (read-only). Each row has ▶️ Play and ⚙️ Actions.
-5. **Percussion table** — one row per percussion slot. Columns: MIDI note, GM drum name (Kick / Snare / etc.), sample SPU, source bank, pitch. Same ▶️ + ⚙️ pattern.
+4. **Instruments table** — one row per melodic instrument. Columns: index, sample SPU, source bank, pitch (Hz with note name + cents), volume, ADSR (read-only). Each row has ▶️ Play and ⚙️ Actions; a **➕ Add instrument…** button sits in the section heading and a selection bar underneath acts on several rows at once.
+5. **Percussion table** — one row per percussion slot. Columns: MIDI note, GM drum name (Kick / Snare / etc.), sample SPU, source bank, pitch. Same ▶️ + ⚙️ pattern, same **➕ Add percussion…** button and selection bar.
 
 At the bottom of the tab a docked waveform + transport bar shows whatever's currently playing.
+
+#### Adding an Instrument or Percussion Entry
+
+**➕ Add instrument…** / **➕ Add percussion…** in each section's heading append a new descriptor to the song. Two steps: pick the SPU sample it should point at (filterable, with **▶️ Preview** to audition a candidate first), then set its volume and base pitch.
+
+Picking a sample another descriptor already uses is allowed and often the point — **the sample is referenced, not copied**, so only the 8/12-byte descriptor is added. That is how one sample sounds at several pitches, which matters most for percussion: a drum track's note byte indexes the percussion table directly and is never transposed, so a pitched variant of a drum hit needs a descriptor of its own. The new entry's pitch seeds from whatever pitch that sample is already played at elsewhere in the song.
+
+A new percussion descriptor is only reachable once something points at it — either a drum-track note byte carrying its index (see [Editing Track Events](#editing-track-events)) or a MIDI import mapped to it.
 
 #### Editing Instruments and Percussion
 
 The ⚙️ menu on each instrument or percussion row has an **Edit volume / pitch…** entry. The dialog lets you change:
 
 - **Volume** (0–255) — the per-entry mix level baked into the instrument / percussion table.
-- **Pitch register** (0–0xFFFF) — the raw frequency value the SPU uses; a live `≈ Hz` readout shows you what audible rate it maps to (0x1000 = 44100 Hz native rate).
+- **Pitch register** (0–0xFFFF) — the raw frequency value the SPU uses; a live `≈ Hz` readout shows you what audible rate it maps to (0x1000 = 4096 = 1.0×, i.e. 44100 Hz native rate). One raw count is a fraction of a cent, so the field steps **musically**: the arrows move one semitone, **Page Up / Page Down** move a whole octave, and the **⬆️ / ⬇️ Octave** buttons double or halve the register exactly. Typing a number still sets an exact register value. Going past the SPU's 4.0× ceiling is called out inline — the console plays it at 4.0× instead, so it comes out flat (see [Engine Limits](#engine-limits-and-warning-icons)).
 - **Attack/Decay (ADSR1)** and **Sustain/Release (ADSR2)** — *instruments only.* The two halves of the PS1 SPU's 32-bit ADSR register, shown as hex u16 values. ADSR1 packs attack mode/shift + decay shift + sustain level; ADSR2 packs sustain mode/direction/shift + release mode/shift. The fields are bit-packed and easy to break — when in doubt, copy the value from another instrument that envelopes the way you want, or keep the original. CTR percussion uses a fixed default envelope and has no per-entry ADSR slot, so those fields are not shown for percussion rows.
 
 Edits are undoable.
+
+The ⚙️ menu also carries **⬆️ Pitch up an octave** / **⬇️ Pitch down an octave** for the common case, which skip the dialog entirely.
+
+#### Editing Several Rows at Once
+
+Retuning or rebalancing a part means the same edit on a run of rows, so each table has a selection bar under it. Select rows (Ctrl / Shift click) and the bar reports the count and enables:
+
+- **⬇️ Octave down** / **⬆️ Octave up** — halve or double every selected base pitch. Whole octaves are exact, so up-then-down round-trips.
+- **🔊 Set volume…** — give every selected row the same volume.
+
+The whole selection is one undo step. An octave shift reports what it did: how many entries moved, how many hit the field's limits instead of landing exactly, and how many the shift pushed **past the SPU's pitch ceiling** — doubling a base pitch halves the headroom its top notes have, so a shift up is the usual way to break a part that was previously in range.
+
+This is also the fix for the converted MIDI that came out a uniform octave off: select every instrument and shift once.
 
 #### Retargeting a Sample
 
@@ -338,9 +377,29 @@ This is the fastest way to do things like "make Coco Park's lead synth use Crash
 The ⚙️ menu on each Sequences-table row has **Inspect events**, which opens a master-detail viewer:
 
 - Left list: every track in the sub-sequence, labeled `Track N · drum/melodic · K events`.
-- Right table: the selected track's raw `CseqEvent` stream — delta time, event type (NOTE_ON, NOTE_OFF, VELOCITY, PAN, CHANGE_PATCH, PITCH_BEND), and parameters annotated by event type.
+- Right table: the selected track's raw `CseqEvent` stream — delta time, event type (NOTE_ON, NOTE_OFF, VELOCITY, PAN, REVERB, CHANGE_PATCH, PITCH_BEND), and parameters annotated by event type, each with a plain-language reading of its parameter byte.
 
 This is useful when debugging an imported MIDI ("why is this track empty?") or just understanding what a CSEQ track actually looks like at the byte level.
+
+#### Editing Track Events
+
+The same viewer edits the stream. Select an event and use:
+
+- **✏️ Edit value…** — change the event's parameter byte(s) and its delta.
+- **➕ Insert before…** — build a new event and put it ahead of the selected one. The inserted event carries its own delta, so `delta = 0` places it on the same tick and nothing later in the track shifts.
+- **🗑️ Delete** — remove the event, folding its delta into the one that follows so nothing downstream moves earlier.
+
+Seven opcodes are editable: the four **modulation** events — Volume (0x06), Pan (0x07), Reverb (0x08), Pitch bend (0x0A) — plus **Note on (0x05)**, **Note off (0x01)** and **Change instrument (0x09)**. The modulation four are the ones the runtime re-applies to notes that are *already sounding*, not just to notes started after them. Everything else in a track defines its structure (track ends, terminators) and is left alone: Edit and Delete stay greyed out on those rows.
+
+The dialog labels the first parameter by what it actually means in context, which is where most of the value is:
+
+- On a **drum track**, a note's byte is a direct index into the percussion table — it picks which descriptor sounds and is never transposed. The dialog says how many percussion descriptors the song has, so pointing a hit at a descriptor you just added is a matter of typing its index.
+- On a **melodic track**, the note indexes the frequency table and scales the instrument's base pitch, so one sample covers the keyboard.
+- **Change instrument** selects which instrument descriptor the following notes on that track use, again with the song's instrument count shown.
+
+Two caveats. CTR has no ramp primitive, so a smooth fade or bend is a dense run of modulation events — inserted one at a time here. And an inserted **Note on** does not get a matching Note off; an unterminated note sustains until the track ends.
+
+Edits apply to the loaded song as you make them (each is undoable), and the viewer keeps your place in the track so a run of edits doesn't lose the row you were on.
 
 #### Replacing One Track from MIDI
 
@@ -357,13 +416,16 @@ When converting a MIDI file to CSEQ, each MIDI track with note events becomes a 
 - If the song has a **paired bank** (converting/replacing in an HWL where the song maps to a known bank), the SPU column prefills from that bank's samples **in bank order** — so a MIDI laid out to mirror the bank maps across untouched. Otherwise it prefills sequentially (0, 1, 2, …) within the SPU range.
 - The **Base pitch** column prefills from the pitch that sample is already played at elsewhere in the file — a value known to work. If you **change an SPU** to one with a known pitch, the column updates to match; if nothing references it, your entered value is left alone (and a brand-new sample falls back to 1024).
 - The prefills are just defaults — override any cell before accepting.
+- An SPU column showing **🆓 free** is pointing at a slot no bank holds a sample in, so that instrument would play silence. It's a hint, not a block — you may be about to fill that slot.
 - **Base pitch is not a sample rate.** It's the speed the sample plays at MIDI note 60: 4096 is 1.0×, halving drops an octave, doubling raises one. The value that sounds *right* depends on the musical pitch of the recording, which nothing in the file records — so there's no number that can be derived for you. Set it by ear. Entering your WAV's sample rate is the classic way to end up an octave or two out of tune. See [Pitch and Frequency](formats/cseq.md#pitch-and-frequency).
 
 **Drum tracks.** Percussion on **MIDI channel 10** is auto-detected and expanded into **one row per unique drum hit**, each labeled with its GM drum name and needing its own SPU sample. If your percussion is on another channel, tick the **Drum** box on that track's row to expand it the same way.
 
 You can spread percussion across **multiple** drum tracks — each unique drum hit across all of them maps to its own percussion slot.
 
-The conversion preserves: note on/off, velocity, pan, pitch bend, program change, and tempo.
+**Pitch ceiling warnings.** Melodic rows are checked against the notes their track actually plays. If the top of a part would ask the SPU for more than 4.0× speed, the pitch cell turns red and a warning under the table names the track, how many notes are affected, whether they come out merely flat or wrap to garbage, and **the highest base pitch at which every note still fits**. Drum rows are skipped — a drum's note picks which percussion rather than transposing it, so it never climbs into the ceiling. The warnings update live as you change a cell.
+
+The conversion preserves: note on/off, velocity (CC#7), pan (CC#10), reverb (CC#91), pitch bend, program change, and tempo. CTR's REVERB opcode has no exact General MIDI equivalent, so CC#91 ("Effects 1 Depth") carries it in both directions — enough for the event to survive a DAW round trip, not a promise that the DAW reproduces the console's reverb.
 
 #### Replacing a Sequence Directly from MIDI
 
@@ -381,6 +443,7 @@ When exporting a song as MIDI:
 
 - Each CSEQ track becomes a MIDI track
 - **Drum tracks** (flag bit 0 set) are routed to MIDI channel 10 (the standard drum channel)
+- **Reverb** events are emitted as CC#91 (and read back from it on import)
 - **Melodic tracks** are assigned channels 1-9 and 11-16, skipping channel 10
 - A tempo track is added with the song's BPM
 - TPQN (ticks per quarter note) is preserved as the MIDI ticks_per_beat
@@ -438,13 +501,16 @@ The console imposes hard limits on audio data. Exceeding one doesn't produce an 
 - **A song is too big.** Each song must fit the fixed buffer the game loads it into. A song over that size overruns the buffer and crashes or corrupts playback.
 - **A level's banks don't fit in sound memory.** The samples of all the banks a race loads together must fit the console's SPU sound RAM. Samples that don't fit are dropped and go silent in game.
 - **The file is too big for its slot on the disc.** The `.HWL` sits at a fixed position in the game's disc image. Growing it past the number of disc sectors it originally occupied shifts every file after it and corrupts the disc layout.
-- **A note asks for more pitch than the SPU can play.** The pitch register saturates at 4.0× speed. Notes past that stop getting higher, so the affected note and every one above it collapse onto the same pitch and the part goes flat. Raising an instrument's base pitch is what brings this into range — doubling it halves the headroom. Stock songs sit about an octave clear of the ceiling.
+- **A note asks for more pitch than the SPU can play.** The pitch register saturates at 4.0× speed. Notes past that stop getting higher, so the affected note and every one above it collapse onto the same pitch and the part goes flat. Worse, a register that also overruns its 16-bit field wraps back under the cap and the note plays dramatically low — garbage rather than merely flat. Lowering an instrument's base pitch is what brings this into range — doubling the base pitch halves the headroom. Stock songs sit about an octave clear of the ceiling.
+- **A sample is placed outside the stock SPU address table.** Only slots 0–527 exist in the retail table that the game and Saphi resolve sample ids against; a higher slot overwrites sound effects in SPU memory and plays silence. The editor won't create one — see [How SPU Indices Are Assigned](#how-spu-indices-are-assigned).
 
 Whenever you make an edit that would break one of these limits - replacing a sequence, importing a MIDI, adding or replacing a sample or bank, or saving a file that has grown too large - the editor warns you and lets you continue anyway (so you can keep working and fix it later, or rebuild the disc image yourself).
 
+The SPU slot ceiling is the one exception: there is no useful “continue anyway”, so a new sample that would need a slot past the table is refused outright, and **Custom Mode does not lift it** — the game resolves sample ids against the stock table whatever your build changes.
+
 Items that currently exceed a limit are marked throughout the editor with a status icon: **❌** for a problem that crashes the game or makes it read garbage data, and **⚠️** for something that loads but won't sound right — for example samples that go silent. The icon appears next to the affected bank, song, or the file itself in the File Browser tree, the Category Browser, and the Music Workshop's song list; selecting the item shows a banner explaining what's wrong (hovering the icon shows the same text). Because the mark reflects the actual data, an item you chose to keep despite a warning stays flagged until you bring it back under the limit.
 
-**Custom Mode** (Settings > Enable custom mode) turns all of this off. For mods where the stock console limits no longer apply, enabling it stops the size warnings when you edit or save and hides the status icons and banners, so you aren't nagged about limits that don't apply to your build. The Diagnose HOWL File tool still works on demand if you want to check sizes. The setting persists across restarts.
+**Custom Mode** (Settings > Enable custom mode) turns the size and pitch checks off. For mods where the stock console limits no longer apply, enabling it stops the size warnings when you edit or save and hides the status icons and banners, so you aren't nagged about limits that don't apply to your build. The Diagnose HOWL File tool still works on demand if you want to check sizes. The setting persists across restarts.
 
 ### Diagnose HOWL File
 
@@ -454,7 +520,7 @@ Diagnose > Diagnose HOWL File runs every engine-limit check over the whole file 
 - Level banks whose combined samples overflow SPU sound memory
 - Songs that reference a sample id that doesn't exist, or one missing from the level's own banks
 - **Banks whose samples are cut at the wrong offset** — the damage left behind when a shared sample was resized on behalf of another bank (see [Replacing a Shared Sample](#replacing-a-shared-sample)). Worth running on any file edited before this check existed, since the symptom shows up in a bank you never opened.
-- **Notes that ask for more pitch than the console can play** — the SPU tops out at 4.0× speed, so a note past that plays flat and drags every higher note onto the same pitch
+- **Notes that ask for more pitch than the console can play** — the SPU tops out at 4.0× speed, so a note past that plays flat and drags every higher note onto the same pitch; one finding per instrument, at the lowest note that overflows, since every note above it overflows too. A register that also overruns its 16-bit field wraps under the cap and plays dramatically low, which the finding calls out separately
 - Banks or songs whose data can't be read
 - A file that has grown past the disc slot it was loaded from
 
@@ -515,10 +581,10 @@ The Saphi Audio Container (`.sca`) bundles a single bank + song pair into one fi
 - A per-sample `spuSize` array extracted from the loaded HWL's SPU Address Table (in bank-header order) — this lets the Saphi runtime use the source HWL's sizes even when they differ from the player's ISO HOWL
 - A small UTF-8 JSON metadata chunk with `name` and `author`
 
-The dialog warns if the selected bank exceeds the Saphi size cap. Bank/song pairing is not validated at export — use [Diagnose > Validate Bank/Song](#bank--cseq-validation) first if you want to confirm the bank contains every sample the CSEQ references.
+The export is **refused** if the bank's samples or the song's descriptors use an SPU slot at or past 528: Move those samples onto slots below 528 and export again. The dialog also warns if the selected bank exceeds the Saphi size cap. Bank/song pairing is not validated at export — use [Diagnose > Validate Bank/Song](#bank--cseq-validation) first if you want to confirm the bank contains every sample the CSEQ references.
 
 #### Import Saphi Audio Container
 
-**Tools > Import Saphi Audio Container...** is the inverse: pick a `.sca` file and the editor appends its bank and CSEQ as new entries on the loaded HWL (the SIZE chunk is ignored on import because the loaded HWL already has authoritative SPU sizes). A status-bar message reports the imported track's name, author, and the new bank/song indices.
+**Tools > Import Saphi Audio Container...** is the inverse: pick a `.sca` file and the editor appends its bank and CSEQ as new entries on the loaded HWL (the SIZE chunk is ignored on import because the loaded HWL already has authoritative SPU sizes). A notification reports the imported track's name, author, and the new bank/song indices.
 
 Unknown chunks in the container are skipped silently for forward compatibility, so newer `.sca` files with extra metadata still import cleanly.
