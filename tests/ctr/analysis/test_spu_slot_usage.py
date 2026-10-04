@@ -10,8 +10,8 @@ from tests.conftest import build_bank_blob, build_cseq_bytes
 
 
 @pytest.fixture
-def usage(bank_reader, cseq_parses):
-    return SpuSlotUsageResolver(bank_reader, cseq_parses)
+def usage(bank_reader, cseq_parse_cache):
+    return SpuSlotUsageResolver(bank_reader, cseq_parse_cache)
 
 
 def _hwl(slots: int, **kwargs) -> HowlFile:

@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from html import escape
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QHeaderView, QLabel, QListWidget, QListWidgetItem,
     QMenu, QPushButton, QScrollArea, QSplitter, QTableWidget,
@@ -15,9 +15,12 @@ from howl_editor.ctr.diagnostics.howl_diagnostics import Target, TargetKind
 from howl_editor.ctr.formats.cseq.models import CseqFile, CseqInstrument, CseqPercussion
 from howl_editor.ctr.formats.cseq.parse_cache import CseqParseCache
 from howl_editor.ctr.formats.cseq.reader import CseqReader
+from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.ctr.sample_lookup import SampleLookup
 from howl_editor.gui.layout import ButtonWidth
+from howl_editor.gui.howl_change import HowlChange
+from howl_editor.gui.scroll_anchor import ScrollAnchor
 from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.player_widget import PlayerWidget
@@ -38,6 +41,13 @@ class SampleActionTarget:
     bank_index: int | None
     sample_index: int | None
     label: str
+
+
+_HAS_BANK_ACTIONS = "hasBankActions"
+
+SEQUENCES = "sequences"
+INSTRUMENTS = "instruments"
+PERCUSSION = "percussion"
 
 
 class MusicWorkshopWidget(QWidget):
@@ -66,24 +76,34 @@ class MusicWorkshopWidget(QWidget):
     def __init__(
         self,
         cseq_reader: CseqReader,
-        cseq_parses: CseqParseCache,
+        cseq_parse_cache: CseqParseCache,
         sample_lookup: SampleLookup,
         drum_names: DrumNameResolver,
         size_formatter: SizeFormatter,
         stylesheet_loader: StylesheetLoader,
+        scroll_anchor: ScrollAnchor,
         severity_presenter=None,
     ):
         super().__init__()
         self._cseq_reader = cseq_reader
-        self._cseq_parses = cseq_parses
+        self._cseq_parse_cache = cseq_parse_cache
         self._sample_lookup = sample_lookup
         self._drum_names = drum_names
         self._sizes = size_formatter
         self._stylesheets = stylesheet_loader
+        self._scroll_anchor = scroll_anchor
         self._severity_presenter = severity_presenter
         self._hwl: HowlFile | None = None
         self._song_count = 0
         self._diag_index = None
+        self._rendered_song: int | None = None
+        self._instrument_table: QTableWidget | None = None
+        self._percussion_table: QTableWidget | None = None
+        self._sequence_table: QTableWidget | None = None
+        self._sections: dict[str, QWidget] = {}
+        self._stats_bar: QWidget | None = None
+        self._banner_holder: QWidget | None = None
+        self._sample_locations: dict[int, tuple[int, int]] = {}
         self._build_ui()
 
     def refresh(self, hwl: HowlFile | None, diag_index=None) -> None:
@@ -103,6 +123,228 @@ class MusicWorkshopWidget(QWidget):
 
         target_row = previous_row if 0 <= previous_row < self._song_count else 0
         self._song_list.setCurrentRow(target_row)
+
+    def apply_change(self, hwl: HowlFile, diag_index, change: HowlChange) -> None:
+        """Show what the edit changed, without rebuilding anything."""
+        self._hwl = hwl
+        self._diag_index = diag_index
+
+        # Any edit can change a song's diagnosis, and so its badge.
+        self._refresh_song_list_rows()
+
+        if self._rendered_song is None or not self._detail_affected_by(change):
+            return
+
+        try:
+            cseq = self._cseq_parse_cache.read(hwl.songs[self._rendered_song])
+        except Exception:
+            self._on_song_selected(self._rendered_song)
+            return
+
+        self._refresh_sample_locations()
+        self._fill_banner(self._rendered_song)
+
+        stale = self._sections_with_changed_counts(cseq)
+
+        if stale:
+            # Row actions capture their index when built, so a section that
+            # gained or lost a row is rebuilt - but only that section, and the
+            # panel around it keeps the user's place.
+            self._rebuild_sections(stale, cseq)
+
+        if INSTRUMENTS not in stale:
+            self._write_instrument_rows(cseq.instruments)
+
+        if PERCUSSION not in stale:
+            self._write_percussion_rows(cseq.percussions)
+
+        if SEQUENCES not in stale:
+            self._write_sequence_rows(cseq)
+
+        # The stats strip reads the tempo, the resolution and the track count
+        # as well as the row counts, so an edit that leaves every count alone
+        # can still move it.
+        self._replace_stats(cseq)
+
+    def _detail_affected_by(self, change: HowlChange) -> bool:
+        """Only a song edit aimed at some other song leaves this panel alone.
+
+        A bank edit renumbers that bank's slots and can take a sample out of
+        every bank, and the descriptor rows name the bank each sample lives
+        in - so the panel is stale even though its song was not touched.
+        """
+        if change.touches(HowlCollection.SONGS, self._rendered_song):
+            return True
+
+        return change.collection == HowlCollection.BANKS
+
+    def _sections_with_changed_counts(self, cseq: CseqFile) -> set[str]:
+        expected = {
+            INSTRUMENTS: (self._instrument_table, len(cseq.instruments)),
+            PERCUSSION: (self._percussion_table, len(cseq.percussions)),
+            SEQUENCES: (self._sequence_table, len(cseq.songs)),
+        }
+
+        return {
+            name for name, (table, count) in expected.items()
+            if self._row_count(table) != count
+        }
+
+    def _row_count(self, table: QTableWidget | None) -> int:
+        """A section with nothing in it builds no table at all, so a missing
+        table means zero rows rather than a section needing a rebuild."""
+        return table.rowCount() if table is not None else 0
+
+    def _rebuild_sections(self, names: set[str], cseq: CseqFile) -> None:
+        """Swap each stale section for a freshly built one, in place.
+
+        Marked rows are re-applied by index: an added instrument leaves the
+        earlier rows where they were, so a selection that still fits is still
+        meaningful.
+        """
+        song_index = self._rendered_song
+        builders = {
+            SEQUENCES: lambda: self._build_sequences_section(song_index, cseq),
+            INSTRUMENTS: lambda: self._build_instruments_section(song_index, cseq.instruments),
+            PERCUSSION: lambda: self._build_percussion_section(song_index, cseq.percussions),
+        }
+        marked = {
+            INSTRUMENTS: self._selected_rows(self._instrument_table) if self._instrument_table else [],
+            PERCUSSION: self._selected_rows(self._percussion_table) if self._percussion_table else [],
+        }
+
+        for name in names:
+            previous = self._sections.get(name)
+
+            if previous is None:
+                self._on_song_selected(song_index)
+                return
+
+            section = builders[name]()
+            self._detail_layout.replaceWidget(previous, section)
+            previous.deleteLater()
+            self._sections[name] = section
+
+        self._restore_marks(INSTRUMENTS, marked, self._instrument_table)
+        self._restore_marks(PERCUSSION, marked, self._percussion_table)
+
+    def _restore_marks(self, name: str, marked: dict, table: QTableWidget | None) -> None:
+        """Re-apply the marks in one go - selectRow would clear the ones
+        before it, leaving only the last."""
+        rows = [r for r in marked.get(name, []) if table is not None and r < table.rowCount()]
+
+        if not rows:
+            return
+
+        model = table.model()
+        selection = QItemSelection()
+
+        for row in rows:
+            selection.select(model.index(row, 0), model.index(row, table.columnCount() - 1))
+
+        table.selectionModel().select(selection, QItemSelectionModel.ClearAndSelect)
+
+    def _build_banner_holder(self) -> QWidget:
+        """A fixed slot for the diagnosis banner.
+
+        The findings on a song change with any edit, so the banner is emptied
+        and refilled in place; inserting or removing the label itself would
+        shift the panel under the user.
+        """
+        holder = QWidget()
+        layout = QVBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        return holder
+
+    def _fill_banner(self, song_index: int) -> None:
+        if self._banner_holder is None:
+            return
+
+        layout = self._banner_holder.layout()
+
+        while layout.count():
+            widget = layout.takeAt(0).widget()
+
+            if widget is not None:
+                widget.setParent(None)
+
+        banner = self._build_diagnosis_banner(song_index)
+
+        if banner is not None:
+            layout.addWidget(banner)
+
+        self._banner_holder.setVisible(banner is not None)
+
+    def _replace_stats(self, cseq: CseqFile) -> None:
+        if self._stats_bar is None:
+            return
+
+        bar = self._build_song_header(cseq)
+        self._detail_layout.replaceWidget(self._stats_bar, bar)
+        self._stats_bar.deleteLater()
+        self._stats_bar = bar
+
+    def _refresh_song_list_rows(self) -> None:
+        for row in range(self._song_list.count()):
+            item = self._song_list.item(row)
+            index = item.data(Qt.UserRole)
+
+            if index is None or index >= len(self._hwl.songs):
+                continue
+
+            item.setText(self._song_list_text(index))
+            _, tooltip = self._song_badge(index)
+            item.setToolTip(tooltip)
+
+    def _write_instrument_rows(self, instruments: list[CseqInstrument]) -> None:
+        table = self._instrument_table
+        song_index = self._rendered_song
+
+        for i, inst in enumerate(instruments):
+            target = self._resolve_sample_target(inst.sample_id, f"Instrument {i}")
+            self._set_cell(table, i, 1, f"SPU #{inst.sample_id}")
+            self._set_cell(table, i, 2, self._bank_label(target.bank_index))
+            self._set_cell(table, i, 3, f"{inst.freq_hz} Hz ({self._pitch_to_note(inst.freq_hz)})")
+            self._set_cell(table, i, 4, f"{inst.volume}/255")
+            self._set_cell(table, i, 5, f"0x{inst.adsr:08X}")
+            # The buttons resolve the descriptor when pressed, so they do not
+            # go stale - but which actions the menu offers depends on the
+            # sample being in a bank at all, so a row whose sample moved in or
+            # out of one is rebuilt.
+            if self._bank_actions_changed(table, i, 6, target):
+                table.setCellWidget(i, 6, self._instrument_row_actions(song_index, i, target))
+
+    def _write_percussion_rows(self, percussions: list[CseqPercussion]) -> None:
+        table = self._percussion_table
+        song_index = self._rendered_song
+
+        for i, perc in enumerate(percussions):
+            midi_note = self._percussion_note_for_index(i)
+            drum_name = self._drum_names.get_label(midi_note)
+            target = self._resolve_sample_target(perc.sample_id, drum_name)
+            self._set_cell(table, i, 2, f"SPU #{perc.sample_id}")
+            self._set_cell(table, i, 3, self._bank_label(target.bank_index))
+            self._set_cell(table, i, 4, f"{perc.freq_hz} Hz")
+
+            if self._bank_actions_changed(table, i, 5, target):
+                table.setCellWidget(i, 5, self._percussion_row_actions(song_index, i, target))
+
+    def _write_sequence_rows(self, cseq: CseqFile) -> None:
+        table = self._sequence_table
+
+        for i, song in enumerate(cseq.songs):
+            drum_indices = [t for t, track in enumerate(song.tracks) if track.is_drum]
+            self._set_cell(table, i, 1, str(song.bpm))
+            self._set_cell(table, i, 2, str(len(song.tracks)))
+            drum_text = ", ".join(str(t) for t in drum_indices) if drum_indices else "—"
+            self._set_cell(table, i, 3, drum_text)
+
+    def _set_cell(self, table: QTableWidget, row: int, column: int, text: str) -> None:
+        item = table.item(row, column)
+
+        if item is not None:
+            item.setText(text)
 
     def _build_ui(self) -> None:
         self.setObjectName("musicWorkshopRoot")
@@ -176,6 +418,7 @@ class MusicWorkshopWidget(QWidget):
 
         self._show_empty_detail()
         self._detail_scroll.setWidget(self._detail_inner)
+        self._scroll_keeper = self._scroll_anchor.hold(self._detail_scroll)
         return self._detail_scroll
 
     def _populate_song_list(self) -> None:
@@ -187,11 +430,10 @@ class MusicWorkshopWidget(QWidget):
             return
 
         for i, blob in enumerate(self._hwl.songs):
-            name = self._cseq_reader.get_name(i)
-            label = f"Song {i} — {name}" if name else f"Song {i}"
+            label = self._song_list_label(i)
 
             try:
-                cseq = self._cseq_parses.read(blob)
+                cseq = self._cseq_parse_cache.read(blob)
                 summary = (
                     f"{cseq.songs[0].bpm} BPM · "
                     f"{len(cseq.songs[0].tracks)} tracks"
@@ -211,13 +453,34 @@ class MusicWorkshopWidget(QWidget):
 
         self._song_list.blockSignals(False)
 
+    def _song_list_label(self, song_index: int) -> str:
+        name = self._cseq_reader.get_name(song_index)
+        return f"Song {song_index} — {name}" if name else f"Song {song_index}"
+
+    def _song_list_summary(self, song_index: int) -> str:
+        try:
+            cseq = self._cseq_parse_cache.read(self._hwl.songs[song_index])
+        except Exception:
+            return "unreadable"
+
+        if not cseq.songs:
+            return "empty"
+
+        return f"{cseq.songs[0].bpm} BPM · {len(cseq.songs[0].tracks)} tracks"
+
+    def _song_list_text(self, song_index: int) -> str:
+        emoji, _ = self._song_badge(song_index)
+        prefix = f"{emoji} " if emoji else ""
+
+        return f"{prefix}{self._song_list_label(song_index)}\n{self._song_list_summary(song_index)}"
+
     def _on_song_selected(self, row: int) -> None:
         if row < 0 or self._hwl is None or row >= len(self._hwl.songs):
             self._show_empty_detail()
             return
 
         try:
-            cseq = self._cseq_parses.read(self._hwl.songs[row])
+            cseq = self._cseq_parse_cache.read(self._hwl.songs[row])
         except Exception as e:
             self._render_error(f"Cannot read song {row}: {e}")
             return
@@ -226,6 +489,8 @@ class MusicWorkshopWidget(QWidget):
 
     def _render_song(self, song_index: int, cseq: CseqFile) -> None:
         self._clear_detail()
+        self._rendered_song = song_index
+        self._refresh_sample_locations()
 
         name = self._cseq_reader.get_name(song_index)
         title_text = f"Song {song_index} — {name}" if name else f"Song {song_index}"
@@ -233,14 +498,22 @@ class MusicWorkshopWidget(QWidget):
         title.setObjectName("workshopTitle")
         self._detail_layout.addWidget(title)
 
-        banner = self._build_diagnosis_banner(song_index)
-        if banner is not None:
-            self._detail_layout.addWidget(banner)
+        self._banner_holder = self._build_banner_holder()
+        self._detail_layout.addWidget(self._banner_holder)
+        self._fill_banner(song_index)
 
-        self._detail_layout.addWidget(self._build_song_header(cseq))
-        self._detail_layout.addWidget(self._build_sequences_section(song_index, cseq))
-        self._detail_layout.addWidget(self._build_instruments_section(song_index, cseq.instruments))
-        self._detail_layout.addWidget(self._build_percussion_section(song_index, cseq.percussions))
+        self._stats_bar = self._build_song_header(cseq)
+        self._detail_layout.addWidget(self._stats_bar)
+
+        self._sections = {
+            SEQUENCES: self._build_sequences_section(song_index, cseq),
+            INSTRUMENTS: self._build_instruments_section(song_index, cseq.instruments),
+            PERCUSSION: self._build_percussion_section(song_index, cseq.percussions),
+        }
+
+        for section in self._sections.values():
+            self._detail_layout.addWidget(section)
+
         self._detail_layout.addStretch(1)
 
     def _song_findings(self, song_index: int) -> list:
@@ -369,6 +642,7 @@ class MusicWorkshopWidget(QWidget):
         layout.addWidget(heading)
 
         table = self._make_table(["#", "BPM", "Tracks", "Drum tracks", ""])
+        self._sequence_table = table
 
         for i, seq in enumerate(cseq.songs):
             drum_indices = [t_idx for t_idx, t in enumerate(seq.tracks) if t.is_drum]
@@ -454,6 +728,10 @@ class MusicWorkshopWidget(QWidget):
     def _build_instruments_section(
         self, song_index: int, instruments: list[CseqInstrument],
     ) -> QWidget:
+        # Dropped first: the section being replaced takes its table with it, so
+        # holding the old pointer past this point would hand a deleted widget
+        # to the next edit.
+        self._instrument_table = None
         section = QWidget()
         layout = QVBoxLayout(section)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -476,6 +754,7 @@ class MusicWorkshopWidget(QWidget):
             ["#", "Sample", "Source bank", "Pitch", "Volume", "ADSR", ""],
             selectable=True,
         )
+        self._instrument_table = table
 
         for i, inst in enumerate(instruments):
             target = self._resolve_sample_target(inst.sample_id, f"Instrument {i}")
@@ -490,21 +769,88 @@ class MusicWorkshopWidget(QWidget):
             ))
             table.setItem(row, 4, self._readonly_item(f"{inst.volume}/255"))
             table.setItem(row, 5, self._readonly_item(f"0x{inst.adsr:08X}"))
-            table.setCellWidget(row, 6, self._build_row_actions(
-                target, inst.frequency,
-                edit_callback=lambda s=song_index, idx=i: self.sig_edit_instrument.emit(s, idx),
-                retarget_callback=lambda s=song_index, idx=i: self.sig_retarget_instrument.emit(s, idx),
-                shift_callback=lambda octaves, s=song_index, idx=i: self.sig_shift_instrument_octaves.emit(s, idx, octaves),
-            ))
+            table.setCellWidget(row, 6, self._instrument_row_actions(song_index, i, target))
 
         self._size_table(table)
         layout.addWidget(table)
         layout.addWidget(self._build_selection_bar(table, song_index, percussion=False))
         return section
 
+    def _instrument_row_actions(
+        self, song_index: int, index: int, target: SampleActionTarget,
+    ) -> QWidget:
+        return self._build_row_actions(
+            target,
+            lambda idx=index: self._instrument_row_state(idx),
+            edit_callback=lambda s=song_index, idx=index: self.sig_edit_instrument.emit(s, idx),
+            retarget_callback=lambda s=song_index, idx=index: self.sig_retarget_instrument.emit(s, idx),
+            shift_callback=lambda octaves, s=song_index, idx=index: self.sig_shift_instrument_octaves.emit(s, idx, octaves),
+        )
+
+    def _percussion_row_actions(
+        self, song_index: int, index: int, target: SampleActionTarget,
+    ) -> QWidget:
+        return self._build_row_actions(
+            target,
+            lambda idx=index: self._percussion_row_state(idx),
+            edit_callback=lambda s=song_index, idx=index: self.sig_edit_percussion.emit(s, idx),
+            retarget_callback=lambda s=song_index, idx=index: self.sig_retarget_percussion.emit(s, idx),
+            shift_callback=lambda octaves, s=song_index, idx=index: self.sig_shift_percussion_octaves.emit(s, idx, octaves),
+        )
+
+    def _instrument_row_state(self, index: int) -> tuple[SampleActionTarget, int] | None:
+        """The row's sample and pitch as they are now. Read when a button is
+        pressed, so an edit cannot leave the button pointing at what the
+        descriptor used to be."""
+        descriptors = self._rendered_descriptors()
+
+        if descriptors is None or index >= len(descriptors.instruments):
+            return None
+
+        inst = descriptors.instruments[index]
+        return (
+            self._resolve_sample_target(inst.sample_id, f"Instrument {index}"),
+            inst.frequency,
+        )
+
+    def _percussion_row_state(self, index: int) -> tuple[SampleActionTarget, int] | None:
+        descriptors = self._rendered_descriptors()
+
+        if descriptors is None or index >= len(descriptors.percussions):
+            return None
+
+        perc = descriptors.percussions[index]
+        drum_name = self._drum_names.get_label(self._percussion_note_for_index(index))
+        return self._resolve_sample_target(perc.sample_id, drum_name), perc.frequency
+
+    def _rendered_descriptors(self) -> CseqFile | None:
+        if self._hwl is None or self._rendered_song is None:
+            return None
+
+        if self._rendered_song >= len(self._hwl.songs):
+            return None
+
+        try:
+            return self._cseq_parse_cache.read(self._hwl.songs[self._rendered_song])
+        except Exception:
+            return None
+
+    def _bank_actions_changed(
+        self, table: QTableWidget, row: int, column: int, target: SampleActionTarget,
+    ) -> bool:
+        """Whether this row's menu has to be built again: it offers the
+        sample actions only while the sample belongs to a bank."""
+        widget = table.cellWidget(row, column)
+
+        if widget is None:
+            return True
+
+        return bool(widget.property(_HAS_BANK_ACTIONS)) != (target.bank_index is not None)
+
     def _build_percussion_section(
         self, song_index: int, percussions: list[CseqPercussion],
     ) -> QWidget:
+        self._percussion_table = None
         section = QWidget()
         layout = QVBoxLayout(section)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -527,6 +873,7 @@ class MusicWorkshopWidget(QWidget):
             ["MIDI Note", "Drum name", "Sample", "Source bank", "Pitch", ""],
             selectable=True,
         )
+        self._percussion_table = table
 
         for i, perc in enumerate(percussions):
             midi_note = self._percussion_note_for_index(i)
@@ -540,17 +887,36 @@ class MusicWorkshopWidget(QWidget):
             table.setItem(row, 2, self._readonly_item(f"SPU #{perc.sample_id}"))
             table.setItem(row, 3, self._readonly_item(self._bank_label(target.bank_index)))
             table.setItem(row, 4, self._readonly_item(f"{perc.freq_hz} Hz"))
-            table.setCellWidget(row, 5, self._build_row_actions(
-                target, perc.frequency,
-                edit_callback=lambda s=song_index, idx=i: self.sig_edit_percussion.emit(s, idx),
-                retarget_callback=lambda s=song_index, idx=i: self.sig_retarget_percussion.emit(s, idx),
-                shift_callback=lambda octaves, s=song_index, idx=i: self.sig_shift_percussion_octaves.emit(s, idx, octaves),
-            ))
+            table.setCellWidget(row, 5, self._percussion_row_actions(song_index, i, target))
 
         self._size_table(table)
         layout.addWidget(table)
         layout.addWidget(self._build_selection_bar(table, song_index, percussion=True))
         return section
+
+    def _play_row(self, state) -> None:
+        resolved = state()
+
+        if resolved is None:
+            return
+
+        target, pitch = resolved
+        self.sig_play_instrument.emit(target.spu_index, pitch, target.label)
+
+    def _emit_for_row(self, signal, state) -> None:
+        """Address the bank slot the row points at now - a retarget or a
+        shared-sample rebuild can move it."""
+        resolved = state()
+
+        if resolved is None:
+            return
+
+        target, _ = resolved
+
+        if target.bank_index is None or target.sample_index is None:
+            return
+
+        signal.emit(target.bank_index, target.sample_index)
 
     def _build_selection_bar(self, table: QTableWidget, song_index: int, percussion: bool) -> QWidget:
         """Act on several descriptors at once. Retuning a part means the same
@@ -594,10 +960,13 @@ class MusicWorkshopWidget(QWidget):
         return sorted({index.row() for index in table.selectedIndexes()})
 
     def _build_row_actions(
-        self, target: SampleActionTarget, pitch: int,
+        self, target: SampleActionTarget, state,
         edit_callback=None, retarget_callback=None, shift_callback=None,
     ) -> QWidget:
+        """`state` returns the row's current (target, pitch) when a button is
+        pressed. `target` is only used to decide which actions to offer."""
         wrap = QWidget()
+        wrap.setProperty(_HAS_BANK_ACTIONS, target.bank_index is not None)
         layout = QHBoxLayout(wrap)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -605,9 +974,7 @@ class MusicWorkshopWidget(QWidget):
         play = QPushButton("▶️")
         play.setObjectName("workshopRowButton")
         play.setToolTip("Audition this sample")
-        play.clicked.connect(
-            lambda: self.sig_play_instrument.emit(target.spu_index, pitch, target.label),
-        )
+        play.clicked.connect(lambda: self._play_row(state))
         layout.addWidget(play)
 
         menu = QMenu(wrap)
@@ -628,15 +995,15 @@ class MusicWorkshopWidget(QWidget):
 
             menu.addAction(
                 "🔄  Replace sample (.vag)…",
-                lambda: self.sig_replace_sample.emit(target.bank_index, target.sample_index),
+                lambda: self._emit_for_row(self.sig_replace_sample, state),
             )
             menu.addAction(
                 "📋  Copy sample to bank…",
-                lambda: self.sig_copy_sample.emit(target.bank_index, target.sample_index),
+                lambda: self._emit_for_row(self.sig_copy_sample, state),
             )
             menu.addAction(
                 "💾  Export sample…",
-                lambda: self.sig_export_sample.emit(target.bank_index, target.sample_index),
+                lambda: self._emit_for_row(self.sig_export_sample, state),
             )
 
         if not menu.isEmpty():
@@ -660,9 +1027,14 @@ class MusicWorkshopWidget(QWidget):
         if self._hwl is None:
             return SampleActionTarget(spu_index, None, None, label)
 
-        location = self._sample_lookup.find_bank_and_sample_index(self._hwl, spu_index)
+        location = self._sample_locations.get(spu_index)
         bank_index, sample_index = location if location else (None, None)
         return SampleActionTarget(spu_index, bank_index, sample_index, label)
+
+    def _refresh_sample_locations(self) -> None:
+        self._sample_locations = (
+            self._sample_lookup.sample_locations(self._hwl) if self._hwl else {}
+        )
 
     def _bank_label(self, bank_index: int | None) -> str:
         if bank_index is None:
@@ -759,6 +1131,14 @@ class MusicWorkshopWidget(QWidget):
         self._detail_layout.addStretch(1)
 
     def _clear_detail(self) -> None:
+        self._rendered_song = None
+        self._instrument_table = None
+        self._percussion_table = None
+        self._sequence_table = None
+        self._sections = {}
+        self._stats_bar = None
+        self._banner_holder = None
+
         while self._detail_layout.count():
             item = self._detail_layout.takeAt(0)
             w = item.widget()

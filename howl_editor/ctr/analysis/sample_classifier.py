@@ -15,8 +15,8 @@ class SampleType(Enum):
 
 class SampleClassifier:
 
-    def __init__(self, cseq_parses: CseqParseCache):
-        self._cseq_parses = cseq_parses
+    def __init__(self, cseq_parse_cache: CseqParseCache):
+        self._cseq_parse_cache = cseq_parse_cache
 
     def classify(self, hwl: HowlFile) -> dict[int, set[SampleType]]:
         result: dict[int, set[SampleType]] = {}
@@ -26,7 +26,7 @@ class SampleClassifier:
 
         for song_data in hwl.songs:
             try:
-                cseq = self._cseq_parses.read(song_data)
+                cseq = self._cseq_parse_cache.read(song_data)
 
                 for inst in cseq.instruments:
                     result.setdefault(inst.sample_id, set()).add(SampleType.INSTRUMENT)

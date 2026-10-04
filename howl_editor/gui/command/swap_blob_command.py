@@ -3,6 +3,7 @@
 from PySide6.QtGui import QUndoCommand
 
 from howl_editor.ctr.formats.howl.collections import HowlCollection
+from howl_editor.gui.howl_change import HowlChange
 from howl_editor.ctr.formats.howl.models import SpuAddrEntry
 
 
@@ -49,12 +50,18 @@ class SwapBlobCommand(QUndoCommand):
     def redo(self):
         self._get_list()[self._index] = self._new_blob
         self._restore(self._new_spu)
-        self._window._rebuild_tree()
+        self._window.apply_change(self._change())
 
     def undo(self):
         self._get_list()[self._index] = self._old_blob
         self._restore(self._old_spu)
-        self._window._rebuild_tree()
+        self._window.apply_change(self._change())
+
+    def _change(self) -> HowlChange:
+        """The blob is swapped in place, so no index moves and the views can
+        repaint the one row this touched. Undo reports the same thing as redo -
+        otherwise undoing would reset the UI the edit just left alone."""
+        return HowlChange(collection=self._collection, index=self._index)
 
     def _restore(self, snapshot: list[SpuAddrEntry] | None) -> None:
         """A sample exists only while its slot entry does, so both directions

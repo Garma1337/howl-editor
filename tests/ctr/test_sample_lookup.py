@@ -87,6 +87,50 @@ class TestFindBankAndSampleIndex:
         assert _lookup().find_bank_and_sample_index(hwl, 0) is None
 
 
+class TestSampleLocations:
+    """One pass for a whole table of descriptors. Resolving each row with
+    find_bank_and_sample_index parsed the bank list once per row, which on a
+    retail file is the bulk of the time a song render costs."""
+
+    def test_maps_every_sample_to_its_bank_and_slot(self):
+        blob = build_bank_blob([0, 1, 2], [bytes([0xAA]) * 16, bytes([0xBB]) * 16, bytes([0xCC]) * 16])
+        hwl = HowlFile(spu_addrs=[SpuAddrEntry(0, 2)] * 3, banks=[blob])
+
+        assert _lookup().sample_locations(hwl) == {0: (0, 0), 1: (0, 1), 2: (0, 2)}
+
+    def test_agrees_with_the_single_lookup(self):
+        blob_a = build_bank_blob([5, 7], [bytes([0x11]) * 16, bytes([0x22]) * 16])
+        blob_b = build_bank_blob([7, 9], [bytes([0x33]) * 16, bytes([0x44]) * 16])
+        hwl = HowlFile(spu_addrs=[SpuAddrEntry(0, 2)] * 10, banks=[blob_a, blob_b])
+        lookup = _lookup()
+
+        locations = lookup.sample_locations(hwl)
+
+        for spu_index in (5, 7, 9):
+            assert locations[spu_index] == lookup.find_bank_and_sample_index(hwl, spu_index)
+
+    def test_the_first_bank_holding_a_sample_wins(self):
+        blob_a = build_bank_blob([5], [bytes([0x11]) * 16])
+        blob_b = build_bank_blob([5], [bytes([0x22]) * 16])
+        hwl = HowlFile(spu_addrs=[SpuAddrEntry(0, 2)] * 6, banks=[blob_a, blob_b])
+
+        assert _lookup().sample_locations(hwl)[5] == (0, 0)
+
+    def test_leaves_out_samples_no_bank_holds(self):
+        hwl = _hwl_with_sample(spu_index=0)
+
+        assert 99 not in _lookup().sample_locations(hwl)
+
+    def test_an_unreadable_bank_does_not_lose_the_others(self):
+        good = build_bank_blob([3], [bytes([0x55]) * 16])
+        hwl = HowlFile(spu_addrs=[SpuAddrEntry(0, 2)] * 4, banks=[bytes([0xFF, 0xFF]), good])
+
+        assert _lookup().sample_locations(hwl)[3] == (1, 0)
+
+    def test_empty_for_an_empty_file(self):
+        assert _lookup().sample_locations(HowlFile()) == {}
+
+
 class TestCollectSongSamples:
 
     def test_collects_instrument_samples(self):

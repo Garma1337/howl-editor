@@ -228,22 +228,25 @@ class SampleHandler:
         so undoing can't leave the file half-propagated."""
         stack = self._window._undo_stack
 
-        if companions:
-            stack.beginMacro(f"Replace Sample in Bank {bank_index} (+{len(companions)} shared)")
+        # Each push redoes immediately, so without one scope around them the
+        # views would update once per bank sharing the sample.
+        with self._window.batched_changes():
+            if companions:
+                stack.beginMacro(f"Replace Sample in Bank {bank_index} (+{len(companions)} shared)")
 
-        stack.push(SwapBlobCommand(
-            self._window, f"Replace Sample in Bank {bank_index}",
-            HowlCollection.BANKS, bank_index, new_blob, old_spu=spu_before,
-        ))
-
-        for other_index, blob in companions.items():
             stack.push(SwapBlobCommand(
-                self._window, f"Update Shared Sample in Bank {other_index}",
-                HowlCollection.BANKS, other_index, blob, snapshot_spu=False,
+                self._window, f"Replace Sample in Bank {bank_index}",
+                HowlCollection.BANKS, bank_index, new_blob, old_spu=spu_before,
             ))
 
-        if companions:
-            stack.endMacro()
+            for other_index, blob in companions.items():
+                stack.push(SwapBlobCommand(
+                    self._window, f"Update Shared Sample in Bank {other_index}",
+                    HowlCollection.BANKS, other_index, blob, snapshot_spu=False,
+                ))
+
+            if companions:
+                stack.endMacro()
 
     def _replace_message(
         self, bank_index: int, sample_index: int, companions: dict[int, bytes],

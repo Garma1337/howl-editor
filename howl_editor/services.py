@@ -28,7 +28,7 @@ container.register_lazy(
 )
 container.register_lazy("cseq_blob_cache", "howl_editor.core.blob_cache:BlobCache")
 container.register_lazy(
-    "cseq_parses", "howl_editor.ctr.formats.cseq.parse_cache:CseqParseCache",
+    "cseq_parse_cache", "howl_editor.ctr.formats.cseq.parse_cache:CseqParseCache",
     "cseq_reader",
     "cseq_blob_cache",
 )
@@ -103,14 +103,14 @@ container.register_lazy(
 container.register_lazy(
     "sample_lookup", "howl_editor.ctr.sample_lookup:SampleLookup",
     "bank_reader",
-    "cseq_parses",
+    "cseq_parse_cache",
 )
 container.register_lazy(
     "version_detector", "howl_editor.ctr.formats.howl.version:HowlVersionDetector",
 )
 container.register_lazy(
     "sample_classifier", "howl_editor.ctr.analysis.sample_classifier:SampleClassifier",
-    "cseq_parses",
+    "cseq_parse_cache",
 )
 container.register_lazy(
     "howl_stats_calculator", "howl_editor.ctr.analysis.howl_stats:HowlStatsCalculator",
@@ -157,7 +157,7 @@ container.register_lazy(
 container.register_lazy(
     "spu_slot_usage", "howl_editor.ctr.analysis.spu_slot_usage:SpuSlotUsageResolver",
     "bank_reader",
-    "cseq_parses",
+    "cseq_parse_cache",
 )
 container.register_lazy(
     "spu_slot_allocator", "howl_editor.ctr.analysis.spu_slot_allocator:SpuSlotAllocator",
@@ -195,7 +195,7 @@ container.register_lazy(
 container.register_lazy(
     "howl_diagnostics", "howl_editor.ctr.diagnostics.howl_diagnostics:HowlDiagnostics",
     "cseq_reader",
-    "cseq_parses",
+    "cseq_parse_cache",
     "cseq_size_validator",
     "bank_reader",
     "spu_residency_calculator",
@@ -243,6 +243,7 @@ container.register_lazy(
     template_dir=_TEMPLATE_DIR,
 )
 container.register_lazy("size_formatter", "howl_editor.gui.size_formatter:SizeFormatter")
+container.register_lazy("scroll_anchor", "howl_editor.gui.scroll_anchor:ScrollAnchor")
 container.register_lazy(
     "howl_detail_formatter", "howl_editor.gui.detail.howl_detail_formatter:HowlDetailFormatter",
     "version_detector",

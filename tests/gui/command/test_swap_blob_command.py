@@ -22,10 +22,10 @@ from howl_editor.gui.command.swap_blob_command import SwapBlobCommand
 class FakeWindow:
     def __init__(self, hwl: HowlFile):
         self.hwl = hwl
-        self.rebuilds = 0
+        self.changes = []
 
-    def _rebuild_tree(self) -> None:
-        self.rebuilds += 1
+    def apply_change(self, change) -> None:
+        self.changes.append(change)
 
 
 @pytest.fixture
@@ -87,3 +87,32 @@ class TestSpuTableAcrossUndoRedo:
         command.undo()
 
         assert [e.size for e in window.hwl.spu_addrs] == [2]
+
+
+class TestWhatTheViewsAreTold:
+    """A command reports what it changed so the views repaint that row instead
+    of rebuilding themselves."""
+
+    def test_an_in_place_swap_names_the_blob_it_replaced(self, window):
+        command = SwapBlobCommand(window, "swap", HowlCollection.BANKS, 0, bytes(32))
+
+        command.redo()
+
+        assert window.changes[-1].collection == HowlCollection.BANKS
+        assert window.changes[-1].index == 0
+
+    def test_it_is_not_structural_so_no_index_moved(self, window):
+        command = SwapBlobCommand(window, "swap", HowlCollection.BANKS, 0, bytes(32))
+
+        command.redo()
+
+        assert not window.changes[-1].structural
+
+    def test_undo_reports_the_same_change_as_redo(self, window):
+        """Otherwise undoing would reset the UI that the edit left alone."""
+        command = SwapBlobCommand(window, "swap", HowlCollection.BANKS, 0, bytes(32))
+
+        command.redo()
+        command.undo()
+
+        assert window.changes[-1] == window.changes[-2]

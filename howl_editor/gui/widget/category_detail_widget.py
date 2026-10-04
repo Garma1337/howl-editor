@@ -9,10 +9,12 @@ from PySide6.QtWidgets import (
 
 from howl_editor.ctr.formats.cseq.adventure_hub_mask_table_query import AdventureHubMaskTableQuery
 from howl_editor.ctr.formats.howl.blob_snapshot import BlobSnapshot
+from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.entries.entry_leaf import EntryLeaf, LeafKind
 from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
+from howl_editor.gui.scroll_anchor import ScrollAnchor
 from howl_editor.gui.entries.semantic_entry import EntryGroup
 from howl_editor.gui.entries.semantic_entry import EntryKind, EntryRow
 from howl_editor.gui.layout import ButtonWidth, IconSize
@@ -56,6 +58,7 @@ class CategoryDetailWidget(QWidget):
         stylesheet_loader: StylesheetLoader,
         hub_mask_table_query: AdventureHubMaskTableQuery,
         icon_resolver: CategoryIconResolver,
+        scroll_anchor: ScrollAnchor,
         badge_resolver=None,
     ):
         super().__init__()
@@ -64,6 +67,7 @@ class CategoryDetailWidget(QWidget):
         self._stylesheets = stylesheet_loader
         self._hub_mask_table_query = hub_mask_table_query
         self._icon_resolver = icon_resolver
+        self._scroll_anchor = scroll_anchor
         self._badge_resolver = badge_resolver
         self._current_group: EntryGroup | None = None
         self._current_hwl: HowlFile | None = None
@@ -91,6 +95,7 @@ class CategoryDetailWidget(QWidget):
         self._scroll_layout.setSpacing(8)
         self._scroll_layout.addStretch(1)
         self._scroll.setWidget(self._scroll_inner)
+        self._scroll_keeper = self._scroll_anchor.hold(self._scroll)
 
     def _build_header(self) -> QFrame:
         header = QFrame()
@@ -115,6 +120,76 @@ class CategoryDetailWidget(QWidget):
         layout.addWidget(self._title, stretch=1)
 
         return header
+
+    def update_rows(
+        self, hwl: HowlFile, group: EntryGroup, diag_index=None, change=None,
+    ) -> bool:
+        """Refresh the open category's rows without rebuilding them.
+
+        False when the rows on screen no longer match the group, which means
+        the page has to be rendered again - row widgets capture their entry
+        when built, so a changed row set cannot be patched.
+        """
+        if self._current_group is None or len(group.rows) != len(self._current_group.rows):
+            return False
+
+        widgets = self._row_widgets()
+
+        if len(widgets) != len(group.rows):
+            return False
+
+        pairs = list(zip(widgets, group.rows))
+
+        if any(self._leaves_moved(hwl, widget, row, change) for widget, row in pairs):
+            return False
+
+        self._current_hwl = hwl
+        self._diag_index = diag_index
+        self._current_group = group
+
+        for widget, row in pairs:
+            widget.show_entry(
+                row,
+                badge=self._row_badge(row),
+                label=self._row_label(row),
+                tooltip=self._row_tooltip(row),
+            )
+
+        return True
+
+    def _leaves_moved(self, hwl: HowlFile, widget, row: EntryRow, change) -> bool:
+        """Whether this entry's leaves are no longer the ones on screen.
+
+        Swapping a blob in place is not structural to the file, but it can
+        still add, drop or renumber the samples in a bank or the sequences in
+        a song - and a leaf row carries the slot it plays, replaces and
+        exports. Stale ones would act on the wrong slot, so the page is
+        rendered again instead.
+        """
+        if change is not None and not self._row_touched(row, change):
+            return False
+
+        return self._leaves_builder.build(hwl, row) != widget.leaves
+
+    def _row_touched(self, row: EntryRow, change) -> bool:
+        if row.bank_index is not None and change.touches(HowlCollection.BANKS, row.bank_index):
+            return True
+
+        return row.song_index is not None and change.touches(HowlCollection.SONGS, row.song_index)
+
+    def _row_widgets(self) -> list:
+        """The entry widgets, in layout order. An FX row is a leaf widget with
+        no entry to show, so a category holding those comes back short and
+        `update_rows` falls back to a re-render."""
+        out = []
+
+        for i in range(self._scroll_layout.count()):
+            widget = self._scroll_layout.itemAt(i).widget()
+
+            if widget is not None and hasattr(widget, "show_entry"):
+                out.append(widget)
+
+        return out
 
     def show_category(self, hwl: HowlFile, group: EntryGroup, diag_index=None) -> None:
         self._current_hwl = hwl

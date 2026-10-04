@@ -3,6 +3,7 @@
 from PySide6.QtGui import QUndoCommand
 
 from howl_editor.ctr.formats.howl.collections import HowlCollection
+from howl_editor.gui.howl_change import HowlChange
 
 
 class MoveItemCommand(QUndoCommand):
@@ -20,14 +21,17 @@ class MoveItemCommand(QUndoCommand):
         item = items.pop(self._from)
         items.insert(self._to, item)
 
-        self._window._rebuild_tree()
+        self._window.apply_change(self._change())
 
     def undo(self):
         items = self._get_list()
         item = items.pop(self._to)
         items.insert(self._from, item)
 
-        self._window._rebuild_tree()
+        self._window.apply_change(self._change())
+
+    def _change(self) -> HowlChange:
+        return HowlChange(collection=self._collection, structural=True)
 
     def _get_list(self) -> list:
         return getattr(self._window.hwl, self._collection)

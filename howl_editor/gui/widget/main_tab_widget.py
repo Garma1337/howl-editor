@@ -16,6 +16,8 @@ from howl_editor.gui.entries.entry_leaf import EntryLeaf
 from howl_editor.gui.entries.entry_leaves_builder import EntryLeavesBuilder
 from howl_editor.gui.entries.semantic_entry import EntryGroup
 from howl_editor.gui.entries.semantic_entry_builder import SemanticEntryBuilder
+from howl_editor.gui.howl_change import HowlChange
+from howl_editor.gui.scroll_anchor import ScrollAnchor
 from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.category_detail_widget import CategoryDetailWidget
@@ -65,6 +67,7 @@ class MainTabWidget(QWidget):
         leaf_info_formatter: LeafInfoFormatter,
         howl_stats_calculator: HowlStatsCalculator,
         size_formatter: SizeFormatter,
+        scroll_anchor: ScrollAnchor,
         badge_resolver=None,
         banner_formatter=None,
     ):
@@ -78,8 +81,10 @@ class MainTabWidget(QWidget):
         self._leaf_info = leaf_info_formatter
         self._stats_calculator = howl_stats_calculator
         self._size_formatter = size_formatter
+        self._scroll_anchor = scroll_anchor
         self._badge_resolver = badge_resolver
         self._banner_formatter = banner_formatter
+        self._open_group_name: str | None = None
         self._hwl: HowlFile | None = None
         self._groups: list[EntryGroup] = []
         self._diag_index = None
@@ -125,13 +130,15 @@ class MainTabWidget(QWidget):
 
         self._grid = CategoryGridWidget(
             self._stylesheets, self._icon_resolver, self._size_formatter,
+            self._scroll_anchor,
         )
         self._grid.sig_category_clicked.connect(self._on_category_clicked)
         self._stack.addWidget(self._grid)
 
         self._detail = CategoryDetailWidget(
             self._leaves_builder, self._snapshot, self._stylesheets,
-            self._hub_mask, self._icon_resolver, self._badge_resolver,
+            self._hub_mask, self._icon_resolver, self._scroll_anchor,
+            self._badge_resolver,
         )
         self._detail.sig_back.connect(self._on_back)
         self._detail.sig_replace_parent.connect(self.sig_row_replace)
@@ -238,8 +245,45 @@ class MainTabWidget(QWidget):
     def clear(self) -> None:
         self._hwl = None
         self._groups = []
+        self._open_group_name = None
         self._stack.setCurrentIndex(_PAGE_EMPTY)
         self._clear_info_panel()
+
+    def apply_change(self, hwl: HowlFile, diag_index, change: HowlChange) -> None:
+        """Repaint the cards and the open category's rows."""
+        self._hwl = hwl
+        self._diag_index = diag_index
+        previous = {group.name for group in self._groups}
+        self._groups = self._builder.build(hwl, self._snapshot.banks, self._snapshot.songs)
+
+        if {group.name for group in self._groups} != previous:
+            # Categories appeared or disappeared; the grid has to be rebuilt.
+            self.refresh(hwl, diag_index)
+            return
+
+        badges = self._group_badges()
+
+        for group in self._groups:
+            modified = sum(1 for row in group.rows if row.is_modified)
+
+            if not self._grid.update_card(group, modified, badges.get(group.name, "")):
+                self.refresh(hwl, diag_index)
+                return
+
+        self._grid.show_stats(self._stats_calculator.compute(hwl, self._snapshot))
+
+        if self._stack.currentIndex() != _PAGE_DETAIL:
+            return
+
+        group = self._open_group()
+
+        if group is None or not self._detail.update_rows(hwl, group, diag_index, change):
+            self.refresh(hwl, diag_index)
+
+    def _open_group(self) -> EntryGroup | None:
+        return next(
+            (g for g in self._groups if g.name == self._open_group_name), None,
+        )
 
     def refresh(self, hwl: HowlFile | None, diag_index=None) -> None:
         self._diag_index = diag_index
@@ -264,8 +308,7 @@ class MainTabWidget(QWidget):
         self._grid.show_stats(self._stats_calculator.compute(hwl, self._snapshot))
 
         if self._stack.currentIndex() == _PAGE_DETAIL:
-            current_title = self._detail._title.text()
-            match = next((g for g in self._groups if g.name == current_title), None)
+            match = self._open_group()
 
             if match is not None:
                 self._detail.show_category(hwl, match, diag_index)
@@ -286,11 +329,13 @@ class MainTabWidget(QWidget):
         if self._hwl is None:
             return
 
+        self._open_group_name = group.name
         self._detail.show_category(self._hwl, group, self._diag_index)
         self._stack.setCurrentIndex(_PAGE_DETAIL)
         self._clear_info_panel()
 
     def _on_back(self) -> None:
+        self._open_group_name = None
         self._stack.setCurrentIndex(_PAGE_GRID)
         self._clear_info_panel()
 

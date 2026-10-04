@@ -12,9 +12,9 @@ _DEFAULT_SAMPLE_RATE = 11025
 class SampleLookup:
     """Searches HWL data structures to locate sample data and playback rates."""
 
-    def __init__(self, bank_reader: BankReader, cseq_parses: CseqParseCache):
+    def __init__(self, bank_reader: BankReader, cseq_parse_cache: CseqParseCache):
         self._bank_reader = bank_reader
-        self._cseq_parses = cseq_parses
+        self._cseq_parse_cache = cseq_parse_cache
 
     def find_sample_data(self, hwl: HowlFile, spu_index: int) -> bytes | None:
         """Search all banks for the raw sample data of a given SPU index."""
@@ -32,7 +32,11 @@ class SampleLookup:
         self, hwl: HowlFile, spu_index: int,
     ) -> tuple[int, int] | None:
         """Return (bank_index, sample_slot) for the first bank that contains
-        a sample with the requested SPU index."""
+        a sample with the requested SPU index.
+
+        For one lookup: this parses the bank list per call, so a whole table of
+        descriptors wants `sample_locations` instead.
+        """
         for bank_index, bank_blob in enumerate(hwl.banks):
             try:
                 for slot, s in enumerate(self._bank_reader.parse(bank_blob, hwl.spu_addrs)):
@@ -42,6 +46,27 @@ class SampleLookup:
                 continue
 
         return None
+
+    def sample_locations(self, hwl: HowlFile) -> dict[int, tuple[int, int]]:
+        """Every sample's (bank_index, sample_slot), in one pass over the banks.
+
+        Same answer as `find_bank_and_sample_index` for each key - the first
+        bank holding a sample wins. Slots come from the parse rather than the
+        header, so a bank whose blob is cut short numbers its slots the way the
+        rest of the UI does.
+        """
+        locations: dict[int, tuple[int, int]] = {}
+
+        for bank_index, bank_blob in enumerate(hwl.banks):
+            try:
+                samples = self._bank_reader.parse(bank_blob, hwl.spu_addrs)
+            except Exception:
+                continue
+
+            for slot, sample in enumerate(samples):
+                locations.setdefault(sample.spu_index, (bank_index, slot))
+
+        return locations
 
     def bank_spu_order(self, hwl: HowlFile, bank_index: int) -> list[int]:
         """Return the SPU indices of a bank's samples in bank order.
@@ -98,7 +123,7 @@ class SampleLookup:
 
         for song_data in hwl.songs:
             try:
-                cseq = self._cseq_parses.read(song_data)
+                cseq = self._cseq_parse_cache.read(song_data)
 
                 for inst in cseq.instruments:
                     if inst.sample_id == spu_index and inst.frequency > 0:
@@ -137,7 +162,7 @@ class SampleLookup:
 
         for song_data in hwl.songs:
             try:
-                cseq = self._cseq_parses.read(song_data)
+                cseq = self._cseq_parse_cache.read(song_data)
             except Exception:
                 continue
 

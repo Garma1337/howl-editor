@@ -99,12 +99,12 @@ def vag_decoder():
     return VagDecoder(WavWriter())
 
 @pytest.fixture
-def cseq_parses(cseq_reader):
+def cseq_parse_cache(cseq_reader):
     return CseqParseCache(cseq_reader, BlobCache())
 
 @pytest.fixture
-def sample_classifier(cseq_parses):
-    return SampleClassifier(cseq_parses)
+def sample_classifier(cseq_parse_cache):
+    return SampleClassifier(cseq_parse_cache)
 
 @pytest.fixture
 def validator(bank_reader, cseq_reader):

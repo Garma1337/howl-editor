@@ -2,6 +2,9 @@
 
 from PySide6.QtGui import QUndoCommand
 
+from howl_editor.ctr.formats.howl.collections import HowlCollection
+from howl_editor.gui.howl_change import HowlChange
+
 
 class MoveSequenceCommand(QUndoCommand):
 
@@ -18,8 +21,15 @@ class MoveSequenceCommand(QUndoCommand):
             self._window.hwl.songs[self._song_index], self._from, self._to,
         )
 
-        self._window._rebuild_tree()
+        self._window.apply_change(self._change())
 
     def undo(self):
         self._window._services.resolve("howl_editor").replace_song(self._window.hwl, self._song_index, self._old_song)
-        self._window._rebuild_tree()
+        self._window.apply_change(self._change())
+
+    def _change(self) -> HowlChange:
+        """Sequences within one song are renumbered, so that song's rows have
+        to be built again - but no other song moved."""
+        return HowlChange(
+            collection=HowlCollection.SONGS, index=self._song_index, structural=True,
+        )

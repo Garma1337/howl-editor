@@ -83,7 +83,7 @@ class HowlDiagnostics:
     def __init__(
         self,
         cseq_reader: CseqReader,
-        cseq_parses: CseqParseCache,
+        cseq_parse_cache: CseqParseCache,
         cseq_size_validator: CseqSizeValidator,
         bank_reader: BankReader,
         residency: SpuResidencyCalculator,
@@ -94,7 +94,7 @@ class HowlDiagnostics:
         pitch_ceiling_validator: PitchCeilingValidator,
     ):
         self._cseq_reader = cseq_reader
-        self._cseq_parses = cseq_parses
+        self._cseq_parse_cache = cseq_parse_cache
         self._cseq_size = cseq_size_validator
         self._bank_reader = bank_reader
         self._residency = residency
@@ -139,7 +139,7 @@ class HowlDiagnostics:
                 ))
 
             try:
-                cseq = self._cseq_parses.read(blob)
+                cseq = self._cseq_parse_cache.read(blob)
             except Exception as e:
                 out.append(Finding(
                     Severity.ERROR, Category.UNREADABLE_SONG, Target(TargetKind.SONG, i),

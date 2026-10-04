@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSettings
@@ -30,6 +31,7 @@ from howl_editor.gui.handler.bank_handler import BankHandler
 from howl_editor.gui.handler.entry_row_handler import EntryRowHandler
 from howl_editor.gui.handler.export_handler import ExportHandler
 from howl_editor.gui.handler.music_workshop_handler import MusicWorkshopHandler
+from howl_editor.gui.howl_change import HowlChange
 from howl_editor.gui.handler.playback_handler import PlaybackHandler
 from howl_editor.gui.handler.sample_handler import SampleHandler
 from howl_editor.gui.handler.song_handler import SongHandler
@@ -70,6 +72,9 @@ class MainWindow(QMainWindow):
         self._original_howl_size: int | None = None
         self._diag_index = None
         self._sample_types: dict[int, set] = {}
+        self._nodes: dict[tuple, QTreeWidgetItem] = {}
+        self._batch_depth = 0
+        self._pending_change: HowlChange | None = None
 
         self.hwl: HowlFile | None = None
         self.file_path: str | None = None
@@ -114,6 +119,7 @@ class MainWindow(QMainWindow):
                 self._services.resolve("stylesheet_loader"), self._services.resolve("adventure_hub_mask_table_query"), self._services.resolve("category_icon_resolver"),
                 self._services.resolve("leaf_info_formatter"),
                 self._services.resolve("howl_stats_calculator"), self._services.resolve("size_formatter"),
+                self._services.resolve("scroll_anchor"),
                 self._services.resolve("entry_badge_resolver"),
                 self._services.resolve("diagnosis_banner_formatter"),
             )
@@ -126,8 +132,9 @@ class MainWindow(QMainWindow):
             self.main_tab = None
 
         self.music_workshop = MusicWorkshopWidget(
-            self._services.resolve("cseq_reader"), self._services.resolve("cseq_parses"), self._services.resolve("sample_lookup"), self._services.resolve("gm_drum_names"),
+            self._services.resolve("cseq_reader"), self._services.resolve("cseq_parse_cache"), self._services.resolve("sample_lookup"), self._services.resolve("gm_drum_names"),
             self._services.resolve("size_formatter"), self._services.resolve("stylesheet_loader"),
+            self._services.resolve("scroll_anchor"),
             self._services.resolve("severity_presenter"),
         )
         self._music_workshop_handler = MusicWorkshopHandler(self)
@@ -255,6 +262,9 @@ class MainWindow(QMainWindow):
         self.tree.currentItemChanged.connect(self._on_selection_changed)
         self.tree.itemClicked.connect(self._on_item_clicked)
         self.tree.itemExpanded.connect(self._ensure_children)
+        # Per-pixel so the keeper below can work in pixels, and smoother.
+        self.tree.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self._tree_scroll_keeper = self._services.resolve("scroll_anchor").hold(self.tree)
 
         # Drag-and-drop for reordering banks, songs, and sequences
         self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -466,6 +476,7 @@ class MainWindow(QMainWindow):
             self._services.resolve("blob_snapshot").clear()
 
         self.tree.clear()
+        self._nodes.clear()
         self.details.clear()
         self.waveform.clear()
         self.waveform.setVisible(False)
@@ -474,6 +485,9 @@ class MainWindow(QMainWindow):
 
         if self.main_tab:
             self.main_tab.clear()
+
+        # Without this the Workshop keeps listing the closed file's songs.
+        self.music_workshop.refresh(None)
 
         self._set_file_actions_enabled(False)
         self._update_title()
@@ -660,23 +674,23 @@ class MainWindow(QMainWindow):
         return "/".join(reversed(parts))
 
     def _rebuild_tree(self):
+        """Throw the whole UI away and build it again.
+
+        Correct for anything that renumbers or replaces the file - open, new,
+        close, a reorder, a bank or song added or removed. An ordinary edit
+        goes through `apply_change`, which updates the rows it touched and
+        leaves the user's place alone.
+        """
         expanded, selected_path = self._save_tree_state()
 
         self.tree.clear()
+        self._nodes.clear()
         self.details.clear()
 
         if not self.hwl:
             return
 
-        if self._services.resolve("sample_classifier"):
-            self._sample_types = self._services.resolve("sample_classifier").classify(self.hwl)
-        else:
-            self._sample_types = {}
-
-        self._diag_index = (
-            self._services.resolve("diagnostics_status_provider").index_for(self.hwl, self._original_howl_size)
-            if self._services.resolve("diagnostics_status_provider") and not self._custom_mode else None
-        )
+        self._refresh_derived()
 
         root = self._tree_item(None, f"HOWL (v{self.hwl.version})", f"{len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs", NODE_ROOT)
         root.setExpanded(True)
@@ -721,6 +735,171 @@ class MainWindow(QMainWindow):
 
         self.music_workshop.refresh(self.hwl, self._diag_index)
 
+    def _refresh_derived(self) -> None:
+        """Sample classification and the diagnosis index, both whole-file.
+
+        Wholesale on purpose: a finding can depend on more than the blob that
+        changed (a level's SPU residency pairs banks with songs, the file size
+        and the summary move on any edit), and the pair costs about 3 ms with
+        the parse caches doing the work.
+        """
+        classifier = self._services.resolve("sample_classifier")
+        self._sample_types = classifier.classify(self.hwl) if classifier else {}
+
+        provider = self._services.resolve("diagnostics_status_provider")
+        self._diag_index = (
+            provider.index_for(self.hwl, self._original_howl_size)
+            if provider and not self._custom_mode else None
+        )
+
+    @contextmanager
+    def batched_changes(self):
+        """Collapse the changes pushed inside into one update."""
+        self._batch_depth += 1
+        try:
+            yield
+        finally:
+            self._batch_depth -= 1
+
+            if self._batch_depth == 0 and self._pending_change is not None:
+                change, self._pending_change = self._pending_change, None
+                self.apply_change(change)
+
+    def apply_change(self, change: HowlChange) -> None:
+        """Update what `change` touched, and nothing else."""
+        if self._batch_depth:
+            self._pending_change = (
+                change if self._pending_change is None
+                else self._pending_change.merged_with(change)
+            )
+            return
+
+        if not self.hwl or change.structural:
+            # Indices moved, so every row below the edit now means something
+            # else and the lists have to be built again.
+            self._rebuild_tree()
+            return
+
+        self._refresh_derived()
+        self._update_tree_rows(change)
+
+        if self.main_tab:
+            self.main_tab.apply_change(self.hwl, self._diag_index, change)
+
+        self.music_workshop.apply_change(self.hwl, self._diag_index, change)
+        self._on_selection_changed(self.tree.currentItem())
+
+    def _update_tree_rows(self, change: HowlChange) -> None:
+        """Re-label the changed bank or song row, and rebuild its children only
+        if they had been built. Everything else - expansion, selection, scroll -
+        is left where the user put it."""
+        self._rebadge_summary_rows()
+
+        if change.is_file_wide:
+            for index in range(len(self.hwl.banks)):
+                self._update_bank_row(index)
+
+            for index in range(len(self.hwl.songs)):
+                self._update_song_row(index)
+
+            return
+
+        if change.collection == HowlCollection.BANKS:
+            self._update_bank_row(change.index)
+        else:
+            self._update_song_row(change.index)
+
+    def _update_bank_row(self, index: int) -> None:
+        item = self._nodes.get((NODE_BANK, index, None))
+        if item is None or index >= len(self.hwl.banks):
+            return
+
+        info = self._services.resolve("detail_formatter").bank.format_tree_info(self.hwl.banks[index])
+        label = self._get_item_label("Bank", index, self._services.resolve("bank_reader").get_name(index))
+        self._relabel(item, label, info, Target(TargetKind.BANK, index))
+        self._rebuild_children(item, LAZY_BANK_SAMPLES)
+
+    def _update_song_row(self, index: int) -> None:
+        item = self._nodes.get((NODE_SONG, index, None))
+        if item is None or index >= len(self.hwl.songs):
+            return
+
+        info = self._services.resolve("detail_formatter").song.format_tree_info(self.hwl.songs[index])
+        label = self._get_item_label("Song", index, self._services.resolve("cseq_reader").get_name(index))
+        self._relabel(item, label, info, Target(TargetKind.SONG, index))
+        self._rebuild_children(item, LAZY_SONG_SEQUENCES)
+
+    def _relabel(self, item, label: str, info: str, target) -> None:
+        """The badge is a prefix on the label, so the label has to be written
+        whole rather than patched."""
+        item.setText(0, label)
+        item.setText(1, info)
+        item.setToolTip(0, "")
+        self._badge_target(item, target)
+
+    def _rebuild_children(self, item, lazy_kind: str) -> None:
+        """A changed blob's children are stale. Rebuild them if the user had
+        opened them, otherwise just mark them as needing building again."""
+        was_built = item.data(0, ROLE_LAZY_KIND) is None
+        expanded = item.isExpanded()
+        # Taking the children destroys them, the selected one included, so the
+        # row the user was on has to be found again afterwards.
+        selected = self._node_key(self.tree.currentItem())
+
+        for child in item.takeChildren():
+            self._nodes.pop(self._node_key(child), None)
+
+        self._defer_children(item, lazy_kind)
+
+        if not was_built:
+            return
+
+        self._ensure_children(item)
+        item.setExpanded(expanded)
+
+        restored = self._nodes.get(selected) if selected is not None else None
+
+        if restored is not None:
+            self.tree.setCurrentItem(restored)
+
+    def _node_key(self, item) -> tuple | None:
+        if item is None:
+            return None
+
+        return (
+            item.data(0, Qt.UserRole),
+            item.data(0, Qt.UserRole + 1),
+            item.data(0, Qt.UserRole + 2),
+        )
+
+    def _rebadge_summary_rows(self) -> None:
+        """The file root and the Banks / Songs rows show the worst of what is
+        below them, so any edit can change them."""
+        labels = {
+            NODE_ROOT: lambda: (
+                f"HOWL (v{self.hwl.version})",
+                f"{len(self.hwl.banks)} banks, {len(self.hwl.songs)} songs",
+            ),
+            NODE_BANKS: lambda: ("Banks", str(len(self.hwl.banks))),
+            NODE_SONGS: lambda: ("Songs", str(len(self.hwl.songs))),
+        }
+        rows = (
+            (NODE_ROOT, Target(TargetKind.FILE), self._worst_overall()),
+            (NODE_BANKS, Target(TargetKind.BANK), self._worst_for_kind(TargetKind.BANK)),
+            (NODE_SONGS, Target(TargetKind.SONG), self._worst_for_kind(TargetKind.SONG)),
+        )
+
+        for node_type, target, rollup in rows:
+            item = self._nodes.get((node_type, None, None))
+            if item is None:
+                continue
+
+            label, info = labels[node_type]()
+            item.setText(0, label)
+            item.setText(1, info)
+            item.setToolTip(0, "")
+            self._badge_target(item, target, rollup=rollup)
+
     def _get_item_label(self, prefix: str, index: int, name: str) -> str:
         if name:
             return f"{prefix} {index} - {name}"
@@ -729,6 +908,7 @@ class MainWindow(QMainWindow):
 
     def _tree_item(self, parent, text, info, node_type, index=None, sub_index=None):
         item = QTreeWidgetItem(parent or self.tree, [text, info])
+        self._nodes[(node_type, index, sub_index)] = item
         item.setData(0, Qt.UserRole, node_type)
 
         if index is not None:
@@ -816,7 +996,7 @@ class MainWindow(QMainWindow):
 
     def _populate_song_sequences(self, song_node, song_index: int) -> None:
         try:
-            cseq = self._services.resolve("cseq_parses").read(self.hwl.songs[song_index])
+            cseq = self._services.resolve("cseq_parse_cache").read(self.hwl.songs[song_index])
 
             for j, seq in enumerate(cseq.songs):
                 label = f"Sequence {j}"

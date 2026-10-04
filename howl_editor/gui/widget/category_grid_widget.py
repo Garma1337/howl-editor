@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QGridLayout, QScrollArea, QVBoxLayout, QWidget
 from howl_editor.ctr.analysis.howl_stats import HowlStats
 from howl_editor.gui.category_icon_resolver import CategoryIconResolver
 from howl_editor.gui.entries.semantic_entry import EntryGroup
+from howl_editor.gui.scroll_anchor import ScrollAnchor
 from howl_editor.gui.size_formatter import SizeFormatter
 from howl_editor.gui.stylesheet_loader import StylesheetLoader
 from howl_editor.gui.widget.category_card_widget import CategoryCardWidget
@@ -24,11 +25,14 @@ class CategoryGridWidget(QWidget):
         stylesheet_loader: StylesheetLoader,
         icon_resolver: CategoryIconResolver,
         size_formatter: SizeFormatter,
+        scroll_anchor: ScrollAnchor,
     ):
         super().__init__()
         self._stylesheets = stylesheet_loader
         self._icon_resolver = icon_resolver
         self._size_formatter = size_formatter
+        self._scroll_anchor = scroll_anchor
+        self._cards: dict[str, CategoryCardWidget] = {}
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -49,6 +53,7 @@ class CategoryGridWidget(QWidget):
         self._grid.setContentsMargins(24, 20, 24, 24)
         self._grid.setSpacing(14)
         self._scroll.setWidget(self._inner)
+        self._scroll_keeper = self._scroll_anchor.hold(self._scroll)
 
     def show_stats(self, stats: HowlStats) -> None:
         self._stats.show_stats(stats)
@@ -60,6 +65,7 @@ class CategoryGridWidget(QWidget):
         badges: dict[str, str] | None = None,
     ) -> None:
         self._clear()
+        self._cards.clear()
         badges = badges or {}
 
         for index, group in enumerate(groups):
@@ -72,10 +78,24 @@ class CategoryGridWidget(QWidget):
                 badge=badges.get(group.name, ""),
             )
             card.sig_clicked.connect(self.sig_category_clicked)
+            self._cards[group.name] = card
             self._grid.addWidget(card, row, col)
 
         # Add a stretch row at the bottom so cards don't expand to fill height.
         self._grid.setRowStretch(self._grid.rowCount(), 1)
+
+    def update_card(
+        self, group, modified_count: int, badge: str,
+    ) -> bool:
+        """Refresh one card's chips. False when there is no such card, which
+        means the grid has to be populated instead."""
+        card = self._cards.get(group.name)
+
+        if card is None:
+            return False
+
+        card.show_counts(len(group.rows), modified_count, badge)
+        return True
 
     def _clear(self) -> None:
         while self._grid.count():

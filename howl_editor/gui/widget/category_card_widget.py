@@ -57,23 +57,40 @@ class CategoryCardWidget(QFrame):
         chips.setSpacing(6)
         chips.addStretch(1)
 
-        count = QLabel(f"{len(self._group.rows)}")
-        count.setObjectName("categoryCount")
-        chips.addWidget(count)
+        self._count_label = QLabel(f"{len(self._group.rows)}")
+        self._count_label.setObjectName("categoryCount")
+        chips.addWidget(self._count_label)
 
-        if self._modified_count > 0:
-            modified = QLabel(f"{self._modified_count} modified")
-            modified.setObjectName("categoryModified")
-            chips.addWidget(modified)
+        # Built whether or not they are needed, so an edit can show them
+        # without the card being rebuilt around them.
+        self._modified_label = QLabel(self._modified_text(self._modified_count))
+        self._modified_label.setObjectName("categoryModified")
+        self._modified_label.setVisible(self._modified_count > 0)
+        chips.addWidget(self._modified_label)
 
-        if self._badge:
-            warning = QLabel(self._badge)
-            warning.setObjectName("categoryWarning")
-            warning.setToolTip("This category has items that exceed an engine limit.")
-            chips.addWidget(warning)
+        self._badge_label = QLabel(self._badge)
+        self._badge_label.setObjectName("categoryWarning")
+        self._badge_label.setToolTip("This category has items that exceed an engine limit.")
+        self._badge_label.setVisible(bool(self._badge))
+        chips.addWidget(self._badge_label)
 
         chips.addStretch(1)
         outer.addLayout(chips)
+
+    def show_counts(self, row_count: int, modified_count: int, badge: str) -> None:
+        """Only the set of categories changing rebuilds a card; an ordinary
+        edit arrives here instead."""
+        self._count_label.setText(str(row_count))
+
+        self._modified_label.setText(self._modified_text(modified_count))
+        self._modified_label.setVisible(modified_count > 0)
+
+        self._badge_label.setText(badge)
+        self._badge_label.setVisible(bool(badge))
+
+    @staticmethod
+    def _modified_text(count: int) -> str:
+        return f"{count} modified"
 
     def _build_icon_label(self) -> QLabel:
         """Prefer a custom image if one is registered for this category;

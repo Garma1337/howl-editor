@@ -13,9 +13,9 @@ class SpuSlotUsageResolver:
     Free means no bank, no OtherFX or EngineFX entry and no song descriptor
     references it — any of those would sound the new sample in its place."""
 
-    def __init__(self, bank_reader: BankReader, cseq_parses: CseqParseCache):
+    def __init__(self, bank_reader: BankReader, cseq_parse_cache: CseqParseCache):
         self._bank_reader = bank_reader
-        self._cseq_parses = cseq_parses
+        self._cseq_parse_cache = cseq_parse_cache
 
     def free_slots(self, hwl: HowlFile) -> set[int]:
         used = self._used(hwl)
@@ -43,7 +43,7 @@ class SpuSlotUsageResolver:
 
     def _song_ids(self, blob: bytes) -> set[int]:
         try:
-            cseq = self._cseq_parses.read(blob)
+            cseq = self._cseq_parse_cache.read(blob)
         except Exception:
             return set()
 

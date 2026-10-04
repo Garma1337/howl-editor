@@ -69,7 +69,7 @@ class PlaybackHandler:
             label = f"Song {song_index} Seq {seq_index}"
 
             def render_args():
-                cseq = self._window._services.resolve("cseq_parses").read(song_blob)
+                cseq = self._window._services.resolve("cseq_parse_cache").read(song_blob)
                 if seq_index >= len(cseq.songs):
                     return None
 
@@ -106,7 +106,7 @@ class PlaybackHandler:
             track_key = tuple(active_tracks)
 
             def render_args():
-                cseq = self._window._services.resolve("cseq_parses").read(song_blob)
+                cseq = self._window._services.resolve("cseq_parse_cache").read(song_blob)
 
                 return (
                     cseq, sub_song_index, self._collect_samples(cseq),

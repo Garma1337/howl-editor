@@ -24,9 +24,9 @@ from tests.conftest import build_bank_blob, build_cseq_bytes
 
 
 @pytest.fixture
-def diagnostics(bank_reader, cseq_reader, cseq_parses, validator, stock_layout):
+def diagnostics(bank_reader, cseq_reader, cseq_parse_cache, validator, stock_layout):
     return HowlDiagnostics(
-        cseq_reader, cseq_parses, CseqSizeValidator(), bank_reader,
+        cseq_reader, cseq_parse_cache, CseqSizeValidator(), bank_reader,
         SpuResidencyCalculator(bank_reader), validator, stock_layout,
         HowlSizeGuard(),
         BankSliceValidator(bank_reader, VagStructureValidator(), BlobCache()),

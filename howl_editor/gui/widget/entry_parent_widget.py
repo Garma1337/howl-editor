@@ -80,6 +80,9 @@ class EntryParentWidget(QFrame):
         self._diagnostic_label = diagnostic_label
         self._diagnostic_tooltip = diagnostic_tooltip
         self._hub_combo: QComboBox | None = None
+        self._can_reset = can_reset
+        self._badge_box: QWidget | None = None
+        self._actions_btn: QPushButton | None = None
         self.setObjectName("entryParent")
         self._build_ui(can_reset, default_expanded)
 
@@ -263,8 +266,12 @@ class EntryParentWidget(QFrame):
         name.setObjectName("entryParentName")
         header.addWidget(name, stretch=1)
 
-        for badge in self._build_badges():
-            header.addWidget(badge)
+        self._badge_box = QWidget()
+        self._badge_layout = QHBoxLayout(self._badge_box)
+        self._badge_layout.setContentsMargins(0, 0, 0, 0)
+        self._badge_layout.setSpacing(6)
+        self._fill_badges()
+        header.addWidget(self._badge_box)
 
         is_adventure_hub = self._row.kind == EntryKind.ADVENTURE_HUB
 
@@ -296,13 +303,81 @@ class EntryParentWidget(QFrame):
             play_hub_btn.clicked.connect(self._on_play_hub_clicked)
             header.addWidget(play_hub_btn)
 
-        actions_btn = self._build_actions_button(can_reset)
-        if actions_btn is not None:
-            header.addWidget(actions_btn)
+        self._actions_btn = self._build_actions_button(can_reset)
+        if self._actions_btn is not None:
+            header.addWidget(self._actions_btn)
 
         return header
 
+    @property
+    def row(self) -> EntryRow:
+        return self._row
+
+    @property
+    def leaves(self) -> list[EntryLeaf]:
+        """The body is built once, so a caller holding a different list has to
+        render the page again."""
+        return self._leaves
+
+    def show_entry(
+        self, row: EntryRow, badge: str = "", label: str = "", tooltip: str = "",
+    ) -> None:
+        """Adopt a freshly built entry for the same thing.
+
+        Only what an edit can change is rewritten: the badges, and whether
+        Reset is on offer. The name and the leaves come from the file's layout,
+        which an in-place edit does not touch.
+        """
+        self._row = row
+        self._diagnostic_badge = badge
+        self._diagnostic_label = label
+        self._diagnostic_tooltip = tooltip
+        self.setToolTip(tooltip)
+
+        self._fill_badges()
+        self._refresh_actions_menu()
+
+    def _fill_badges(self) -> None:
+        while self._badge_layout.count():
+            item = self._badge_layout.takeAt(0)
+            widget = item.widget()
+
+            if widget is not None:
+                widget.setParent(None)
+
+        for badge in self._build_badges():
+            self._badge_layout.addWidget(badge)
+
+    def _refresh_actions_menu(self) -> None:
+        """Reset only appears on a modified entry, so the menu follows the
+        entry's state."""
+        if self._actions_btn is None:
+            return
+
+        # The menu is a child of this widget, so the one being dropped has to
+        # go with it - otherwise every edit leaves another menu behind.
+        previous = self._actions_btn.menu()
+        menu = self._build_actions_menu(self._can_reset)
+        self._actions_btn.setMenu(menu)
+        self._actions_btn.setVisible(menu is not None)
+
+        if previous is not None:
+            previous.deleteLater()
+
     def _build_actions_button(self, can_reset: bool) -> QPushButton | None:
+        menu = self._build_actions_menu(can_reset)
+
+        if menu is None:
+            return None
+
+        button = QPushButton("⚙️")
+        button.setObjectName("parentActions")
+        button.setToolTip("Actions")
+        button.setFixedWidth(ButtonWidth.ENTRY_ACTIONS)
+        button.setMenu(menu)
+        return button
+
+    def _build_actions_menu(self, can_reset: bool) -> QMenu | None:
         menu = QMenu(self)
 
         if self._row.accepts:
@@ -318,14 +393,10 @@ class EntryParentWidget(QFrame):
             menu.addAction("↩️  Reset", lambda: self.sig_reset_parent.emit(self._row))
 
         if menu.isEmpty():
+            menu.deleteLater()
             return None
 
-        button = QPushButton("⚙️")
-        button.setObjectName("parentActions")
-        button.setToolTip("Actions")
-        button.setFixedWidth(ButtonWidth.ENTRY_ACTIONS)
-        button.setMenu(menu)
-        return button
+        return menu
 
     def _can_export(self) -> bool:
         # FX entries ARE leaves; they have no separate file to export. Every
