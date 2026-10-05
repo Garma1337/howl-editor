@@ -1,6 +1,5 @@
 # coding: utf-8
 
-from howl_editor.ctr.formats.cseq import format as cseq_fmt
 from howl_editor.ps1 import spu
 
 SEMITONES_PER_OCTAVE = 12
@@ -15,7 +14,13 @@ class PitchStepper:
     instrument an octave down' awkward."""
 
     def octaves(self, register: int, octaves: int) -> int:
-        """Shift by whole octaves. Exact: an octave up then down round-trips."""
+        """Shift by whole octaves, stopping at the highest pitch the SPU plays.
+
+        Exact while there is room: an octave up then down round-trips. A step
+        held at the ceiling is not a whole octave, so one taken from there and
+        back lands a register short - inaudibly, and the caller is told the
+        step was held.
+        """
         return self._clamp(register, self._doubled(register, octaves), octaves)
 
     def semitones(self, register: int, semitones: int) -> int:
@@ -38,17 +43,19 @@ class PitchStepper:
         return register << octaves if octaves >= 0 else register >> -octaves
 
     def _clamp(self, register: int, shifted: int, direction: int) -> int:
-        """Hold the result inside the field, keep a sounding pitch off 0 (where
-        the sample stops advancing), and never let a step cross back past its
-        starting point — on a tiny register that floor would otherwise bounce a
-        downward step above the original."""
+        """Keep a step inside what the console can play, keep a sounding pitch
+        off 0 (where the sample stops advancing), and never let a step cross
+        back past its starting point — on a tiny register that floor would
+        otherwise bounce a downward step above the original."""
+        if direction == 0:
+            return register
+
         floor = 1 if register > 0 else 0
-        result = max(floor, min(cseq_fmt.MAX_PITCH_REGISTER, shifted))
+        result = max(floor, min(spu.MAX_PITCH, shifted))
 
         if direction < 0:
             return min(result, register)
 
-        if direction > 0:
-            return max(result, register)
-
-        return result
+        # A register already above what the SPU plays - a modded file - is left
+        # where it is rather than dragged down by a step upwards.
+        return max(result, register)

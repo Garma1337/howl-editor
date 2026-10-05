@@ -82,12 +82,21 @@ class TestOctaveButtonClicks:
         assert dlg.chosen().frequency == UNITY // 2
 
     def test_clicks_accumulate(self, qt_app):
+        dlg = _dialog(frequency=UNITY // 4)
+
+        _octave_button(dlg, "up").click()
+        _octave_button(dlg, "up").click()
+
+        assert dlg.chosen().frequency == UNITY
+
+    def test_clicking_up_stops_at_the_ceiling(self, qt_app):
+        """Clamping to the on-disc field instead let this climb to 16x."""
         dlg = _dialog()
 
-        _octave_button(dlg, "up").click()
-        _octave_button(dlg, "up").click()
+        for _ in range(5):
+            _octave_button(dlg, "up").click()
 
-        assert dlg.chosen().frequency == 4 * UNITY
+        assert dlg.chosen().frequency == spu.MAX_PITCH
 
 
 class TestLifetime:
@@ -111,17 +120,26 @@ class TestCeilingWarning:
     def test_quiet_below_the_ceiling(self, qt_app):
         assert _dialog(frequency=spu.MAX_PITCH)._ceiling_label.text() == ""
 
-    def test_warns_once_an_octave_shift_passes_the_ceiling(self, qt_app):
-        dlg = _dialog(frequency=UNITY * 3)
+    def test_warns_about_a_register_typed_above_the_ceiling(self, qt_app):
+        """Stepping cannot pass the ceiling, but the field holds four times
+        what the console plays, so a typed value still can."""
+        dlg = _dialog()
 
-        dlg._frequency.shift_octaves(1)
+        dlg._frequency.setValue(spu.MAX_PITCH + 1)
 
         assert "4.0" in dlg._ceiling_label.text()
 
-    def test_clears_again_when_brought_back_down(self, qt_app):
+    def test_stepping_up_never_raises_the_warning(self, qt_app):
         dlg = _dialog(frequency=UNITY * 3)
 
         dlg._frequency.shift_octaves(1)
+
+        assert dlg._ceiling_label.text() == ""
+
+    def test_clears_again_when_brought_back_down(self, qt_app):
+        dlg = _dialog()
+
+        dlg._frequency.setValue(spu.MAX_PITCH + 1)
         dlg._frequency.shift_octaves(-1)
 
         assert dlg._ceiling_label.text() == ""

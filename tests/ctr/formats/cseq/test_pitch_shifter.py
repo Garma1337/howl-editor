@@ -61,24 +61,35 @@ class TestReporting:
         assert _pitches(cseq_reader, result.blob)[0] == [UNITY // 2, 300]
         assert result.shifted == 2
 
-    def test_reports_entries_pushed_past_the_playable_ceiling(self, shifter):
+    def test_a_shift_cannot_push_a_pitch_past_the_ceiling(self, shifter, cseq_reader):
         blob = _song(instruments=[
-            CseqInstrument(frequency=spu.MAX_PITCH // 2 + 1),   # crosses when doubled
+            CseqInstrument(frequency=spu.MAX_PITCH // 2 + 1),   # would cross when doubled
             CseqInstrument(frequency=1000),                     # stays well under
         ])
 
         result = shifter.shift_instruments(blob, [0, 1], 1)
 
-        assert result.above_ceiling == 1
+        assert _pitches(cseq_reader, result.blob)[0] == [spu.MAX_PITCH, 2000]
         assert result.is_clean is False
 
-    def test_reports_entries_the_field_could_not_take(self, shifter, cseq_reader):
-        blob = _song(instruments=[CseqInstrument(frequency=cseq_fmt.MAX_PITCH_REGISTER)])
+    def test_reports_entries_held_at_the_ceiling(self, shifter, cseq_reader):
+        blob = _song(instruments=[CseqInstrument(frequency=spu.MAX_PITCH)])
 
         result = shifter.shift_instruments(blob, [0], 1)
 
         assert result.clamped == 1
-        assert _pitches(cseq_reader, result.blob)[0] == [cseq_fmt.MAX_PITCH_REGISTER]
+        assert result.shifted == 0
+        assert _pitches(cseq_reader, result.blob)[0] == [spu.MAX_PITCH]
+
+    def test_leaves_a_pitch_already_above_the_ceiling_alone(self, shifter, cseq_reader):
+        """A modded file can hold one. Stepping up must not retune it."""
+        above = cseq_fmt.MAX_PITCH_REGISTER
+        blob = _song(instruments=[CseqInstrument(frequency=above)])
+
+        result = shifter.shift_instruments(blob, [0], 1)
+
+        assert _pitches(cseq_reader, result.blob)[0] == [above]
+        assert result.shifted == 0
 
     def test_clean_when_everything_landed_where_it_was_asked(self, shifter):
         blob = _song(instruments=[CseqInstrument(frequency=1000)])

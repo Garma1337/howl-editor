@@ -376,7 +376,9 @@ class SongHandler:
             result = shift(self._w.hwl.songs[song_index])
 
             if result.shifted == 0:
-                self._w._notify(f"Nothing to shift {direction} in song {song_index}")
+                self._w._notify_warning(
+                    self._nothing_moved_message(result, direction, song_index),
+                )
                 return
 
             self._w._undo_stack.push(SwapBlobCommand(
@@ -388,16 +390,20 @@ class SongHandler:
         except Exception as e:
             QMessageBox.critical(self._w, "Error", f"Octave shift failed:\n{e}")
 
+    def _nothing_moved_message(self, result, direction: str, song_index: int) -> str:
+        if result.clamped and direction == "up":
+            return (
+                f"Already at the SPU's 4.0× ceiling in song {song_index} — "
+                f"another octave up would play no higher"
+            )
+
+        return f"Nothing to shift {direction} in song {song_index}"
+
     def _shift_message(self, result, direction: str, song_index: int) -> str:
         message = f"Shifted {result.shifted} pitch(es) {direction} an octave in song {song_index}"
 
         if result.clamped:
-            message += f" — {result.clamped} could not move that far"
-
-        if result.above_ceiling:
-            message += (
-                f" — {result.above_ceiling} now above the SPU's 4.0× ceiling and will play flat"
-            )
+            message += f" — {result.clamped} held at the SPU's 4.0× ceiling"
 
         return message
 

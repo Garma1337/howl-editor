@@ -16,6 +16,8 @@ from howl_editor.ctr.formats.howl.collections import HowlCollection
 from howl_editor.ctr.formats.howl.models import HowlFile, OtherFX, SpuAddrEntry
 from howl_editor.gui.howl_change import HowlChange
 from howl_editor.gui.main_window import MainWindow, NODE_SONG
+from howl_editor.gui.widget.notification_bar import SUCCESS, WARNING
+from howl_editor.ps1 import spu
 from howl_editor.services import container
 from tests.conftest import build_bank_blob, build_cseq_bytes
 
@@ -376,3 +378,28 @@ class TestRowActionsFollowTheDescriptor:
         window.apply_change(_song_change(1))
 
         assert _instrument_table(window).cellWidget(0, 6) is cell
+
+
+class TestShiftReporting:
+
+    def _severities(self, window) -> list[str]:
+        return [row.property("severity") for row in window.notifications._rows]
+
+    def test_a_shift_that_moved_nothing_warns(self, window):
+        at_ceiling = build_cseq_bytes(
+            instruments=[CseqInstrument(sample_id=0, frequency=spu.MAX_PITCH, volume=200)],
+        )
+        window.hwl.songs[1] = at_ceiling
+        window.notifications.clear()
+
+        window._song_handler.shift_instrument_octaves(1, 0, 1)
+
+        assert self._severities(window) == [WARNING]
+        assert "4.0" in window.notifications.messages()[0]
+
+    def test_a_shift_that_moved_something_confirms(self, window):
+        window.notifications.clear()
+
+        window._song_handler.shift_instrument_octaves(1, 0, 1)
+
+        assert self._severities(window) == [SUCCESS]

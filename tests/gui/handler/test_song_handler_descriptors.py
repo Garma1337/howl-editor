@@ -90,8 +90,8 @@ class TestShiftMessage:
     """The report after an octave shift — the only feedback the user gets that
     a transpose pushed something out of range."""
 
-    def _result(self, shifted=3, clamped=0, above_ceiling=0):
-        return PitchShiftResult(blob=b"", shifted=shifted, clamped=clamped, above_ceiling=above_ceiling)
+    def _result(self, shifted=3, clamped=0):
+        return PitchShiftResult(blob=b"", shifted=shifted, clamped=clamped)
 
     def test_plain_count_when_everything_moved(self, handler):
         message = handler._shift_message(self._result(), "up", 14)
@@ -99,13 +99,18 @@ class TestShiftMessage:
         assert "3 pitch(es) up an octave in song 14" in message
         assert "ceiling" not in message
 
-    def test_mentions_pitches_that_could_not_move_that_far(self, handler):
+    def test_mentions_pitches_held_at_the_ceiling(self, handler):
         message = handler._shift_message(self._result(clamped=2), "up", 0)
 
-        assert "2 could not move that far" in message
+        assert "2 held" in message and "4.0" in message
 
-    def test_warns_about_pitches_pushed_past_the_ceiling(self, handler):
-        message = handler._shift_message(self._result(above_ceiling=1), "up", 0)
+    def test_explains_a_shift_that_moved_nothing(self, handler):
+        message = handler._nothing_moved_message(self._result(shifted=0, clamped=1), "up", 7)
 
-        assert "4.0" in message and "flat" in message
+        assert "4.0" in message and "song 7" in message
+
+    def test_a_shift_with_nothing_to_move_says_so_plainly(self, handler):
+        message = handler._nothing_moved_message(self._result(shifted=0), "down", 7)
+
+        assert "Nothing to shift down in song 7" in message
 
